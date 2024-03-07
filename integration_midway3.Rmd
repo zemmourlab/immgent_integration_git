@@ -2168,24 +2168,26 @@ annot
 so = so_orig[,!(so_orig$organ %in% c("thymus") | so_orig$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "non_T"]))]
 
 #Resting CD4
-rcd4 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD4"])]
-rcd4[["RNA"]]$counts = as(rcd4[["RNA"]]$counts, Class = "dgCMatrix")
-rcd4[["ADT"]]$counts = as(rcd4[["ADT"]]$counts, Class = "dgCMatrix")
-rcd4[["umap_totalvi_20231030"]] = rcd4[["umap_totalvi"]]
-rcd4[["totalvi_20231030"]] = rcd4[["totalvi"]]
+SubsetData = function(so = so, to_subset = "resting_CD4") {
+    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
+    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
+    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
+    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
+    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
+    dir.create(to_subset)
+    message("Saving Rds")
+    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
+}
 
-dir.create("resting_cd4")
-saveRDS(so, file = "resting_cd4/immgent_IGT1_56_resting_cd4.Rds")
+SubsetData(so, "resting_CD4")
 
-#Resting CD8
-rcd8 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD8"])]
-rcd8[["RNA"]]$counts = as(rcd8[["RNA"]]$counts, Class = "dgCMatrix")
-rcd8[["ADT"]]$counts = as(rcd8[["ADT"]]$counts, Class = "dgCMatrix")
-rcd8[["umap_totalvi_20231030"]] = rcd8[["umap_totalvi"]]
-rcd8[["totalvi_20231030"]] = rcd8[["totalvi"]]
-
-dir.create("resting_cd8")
-saveRDS(so, file = "resting_cd8/immgent_IGT1_56_resting_cd8.Rds")
+#rcd4 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD4"])]
+#rcd4[["RNA"]]$counts = as(rcd4[["RNA"]]$counts, Class = "dgCMatrix")
+#rcd4[["ADT"]]$counts = as(rcd4[["ADT"]]$counts, Class = "dgCMatrix")
+#rcd4[["umap_totalvi_20231030"]] = rcd4[["umap_totalvi"]]
+#rcd4[["totalvi_20231030"]] = rcd4[["totalvi"]]
+#dir.create("resting_cd4")
+#saveRDS(rcd4, file = "resting_cd4/immgent_IGT1_56_resting_cd4.Rds")
 
 ```
 
@@ -2195,8 +2197,8 @@ see github immgent_integration_git for latest code
 prefix = "totalvi_igt1_56_allgenes_resting_cd4_20240306"
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_resting_cd4.sh #run the 2 following scripts: 
-#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle immgent_IGT22_56_shanelle.Rds totalvi_igt22_56_shanelle_20231119
-#Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle totalvi_igt22_56_shanelle_20231119
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_cd4/ immgent_IGT1_56_resting_cd4.Rds totalvi_igt1_56_allgenes_resting_cd4_20240306
+#Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_cd4/ totalvi_igt1_56_allgenes_resting_cd4_20240306
 
 
 ```
