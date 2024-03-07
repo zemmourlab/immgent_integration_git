@@ -18,10 +18,10 @@ module load hdf5/1.12.0 #for BPCells but also others
 
 source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
 
-Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ immgent_IGT1_56_resting_cd4.Rds totalvi_igt1_56_allgenes_resting_cd4_20240306
+Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ immgent_IGT1_56_resting_CD4.Rds totalvi_igt1_56_allgenes_resting_CD4_20240306
 
 #python run_totalvi_denoising.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration totalvi_igt1_48_20230706_allgenes 
 
-Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ totalvi_igt1_56_allgenes_resting_cd4_20240306
+Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ totalvi_igt1_56_allgenes_resting_CD4_20240306
 
 

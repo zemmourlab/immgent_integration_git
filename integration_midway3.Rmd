@@ -2168,6 +2168,7 @@ annot
 so = so_orig[,!(so_orig$organ %in% c("thymus") | so_orig$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "non_T"]))]
 
 #Resting CD4
+to_subset = "resting_CD4"
 SubsetData = function(so = so, to_subset = "resting_CD4") {
     tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
     tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
@@ -2179,7 +2180,8 @@ SubsetData = function(so = so, to_subset = "resting_CD4") {
     saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
 }
 
-SubsetData(so, "resting_CD4")
+to_subset = "resting_CD4"
+SubsetData(so, to_subset)
 
 #rcd4 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD4"])]
 #rcd4[["RNA"]]$counts = as(rcd4[["RNA"]]$counts, Class = "dgCMatrix")
@@ -2194,10 +2196,12 @@ SubsetData(so, "resting_CD4")
 INTEGRATION AND PLOTS
 see github immgent_integration_git for latest code
 ```{bash}
-prefix = "totalvi_igt1_56_allgenes_resting_cd4_20240306"
+prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_resting_cd4.sh #run the 2 following scripts: 
-#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_cd4/ immgent_IGT1_56_resting_cd4.Rds totalvi_igt1_56_allgenes_resting_cd4_20240306
+sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
+sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
+sprintf("Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ immgent_IGT1_56_resting_CD4.Rds totalvi_igt1_56_allgenes_resting_CD4_20240306
 #Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_cd4/ totalvi_igt1_56_allgenes_resting_cd4_20240306
 
 
