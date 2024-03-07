@@ -1,0 +1,944 @@
+---
+title: "composition_analysis"
+output: html_document
+date: "2023-11-27"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+
+libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+options(Seurat.object.assay.version = 'v5')
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
+  newpal = c()
+  for (c in 1:length(splitvector)){
+    #print(c)
+    n = splitvector[c]
+    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
+    newcol[4,] = seq(50, 255, length.out = n)
+    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+  }
+  return(newpal)
+}
+sp = SplitColors
+#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
+
+library(org.Hs.eg.db)
+hs = org.Hs.eg.db
+go2eg = as.list(org.Hs.egGO2ALLEGS)
+symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+```
+
+
+**Most up-to-date data**
+
+```{r}
+#setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+prefix = "totalvi_igt1_56_20231030_allgenes"
+#so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
+
+```
+
+**Clusters**
+
+```{r}
+pdf(file = sprintf("%s_umap_ClusterTOTALVI.pdf", prefix), 10, 10, useDingbats = F)
+p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.25", raster = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.5", raster = T) + scale_color_manual(values = mypal)
+p3 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res1", raster = T) + scale_color_manual(values = mypal)
+p4 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res2", raster = T) + scale_color_manual(values = mypal)
+p5 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res3", raster = T) + scale_color_manual(values = mypal)
+p6 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res4", raster = T, label = T) + scale_color_manual(values = mypal)
+p1
+p2
+p3
+p4
+p5
+p6
+
+p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.25", raster = T, label = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.5", raster = T, label = T) + scale_color_manual(values = mypal)
+p3 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + scale_color_manual(values = mypal)
+p4 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res2", raster = T, label = T) + scale_color_manual(values = mypal)
+p5 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res3", raster = T, label = T) + scale_color_manual(values = mypal)
+p6 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res4", raster = T, label = T) + scale_color_manual(values = mypal)
+p1 + NoLegend()
+p2 + NoLegend()
+p3 + NoLegend()
+p4 + NoLegend()
+p5 + NoLegend()
+p6 + NoLegend()
+
+dev.off()
+
+```
+
+**Cluster composition**
+Question: cluster composition in each IGT
+Question: IGT composition in each cluster
+
+```{r}
+library(pheatmap)
+
+res = "ClusterTOTALVI_Res1"
+#1. Composition of each cluster
+CompositionOfEachCLuster = function(df) {
+    tmp = table(df$cluster, df$sample)
+    #tmp = tmp[,!grepl("postHSCT|Mother|MOTHER",colnames(tmp))]
+    colnames(tmp)
+    tmp2 = t(t(tmp) / colSums(tmp)) # normalize the number of cells per IGT
+    colSums(tmp2)
+    tmp3 = tmp2 / rowSums(tmp2) # normalize the number of cells per cluster
+    rowSums(tmp3)
+    tmp4 = melt(tmp3)
+    head(tmp4)
+    tmp4$sample = df$sample[match(tmp4$Var2, df$sample)]#factor(ifelse(test = grepl("HD", x = tmp4$Var2), yes = "wt", no = "scurfy"), levels = c("wt", "scurfy"))
+    return(tmp4)
+}
+
+pdf(file = sprintf("%s_ClusterComposition_%s.pdf", prefix, res), width =15, height =10)
+df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), sample = factor(so$IGT, levels = sort(unique(so$IGT))) )
+tmp4 = CompositionOfEachCLuster(df)
+ggplot(tmp4) + geom_bar(aes(Var1, value, fill = sample), stat = "identity") + scale_fill_manual(values = mypal) + theme_bw() + ggtitle(label = "IGT composition in each cluster") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), 
+                sample = factor(so$organ, levels = sort(unique(so$organ))) )
+tmp4 = CompositionOfEachCLuster(df)
+ggplot(tmp4) + geom_bar(aes(Var1, value, fill = sample), stat = "identity") + scale_fill_manual(values = mypal) + theme_bw() + ggtitle(label = "Organ composition in each cluster") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ColorRamp = rev(viridis(100))
+tmp3[tmp3==0] = NA
+labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
+#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
+pheatmap(mat = signif(tmp3,2)*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 15, main = "Percent of cells in each Organ", na_col = "#FDE725")
+
+dev.off()
+
+
+##2. Composition of each IGT 
+df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), 
+                sample = factor(so$IGT, levels = unique(so$IGT)) )
+tmp = table(df$cluster, df$sample)
+tmp2 = t(t(tmp) / colSums(tmp)) # normalize the number of cells per sample
+colSums(tmp2)
+tmp3 = tmp2
+rowSums(tmp3)
+tmp4 = melt(tmp3)
+head(tmp4)
+tmp4$sample = df$sample[match(tmp4$Var2, df$sample)]
+
+pdf(file = sprintf("%s_IGTComposition_%s.pdf", prefix, res), width =30, height =20)
+ColorRamp = rev(viridis(100))
+tmp3[tmp3==0] = NA
+labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
+#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
+pheatmap(mat = signif(tmp3,2)*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 15, main = "Percent of cells in each IGT", na_col = "#FDE725")
+
+ggplot(tmp4) + geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0 ) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw()+ ggtitle(label = "Cluster composition in each  IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    theme_bw()+ ggtitle(label = "Cluster composition in each  IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample)  + NoLegend()
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + theme_bw()+ ggtitle(label = "Cluster composition in each IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample) + NoLegend()
+
+dev.off()
+
+##2. Composition of each organ 
+df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), 
+                sample = factor(so$organ, levels = sort(unique(so$organ))) )
+tmp = table(df$cluster, df$sample)
+tmp2 = t(t(tmp) / colSums(tmp)) # normalize the number of cells per sample
+colSums(tmp2)
+tmp3 = tmp2
+rowSums(tmp3)
+tmp4 = melt(tmp3)
+head(tmp4)
+tmp4$sample = df$sample[match(tmp4$Var2, df$sample)]
+
+pdf(file = sprintf("%s_OrganComposition_%s.pdf", prefix, res), width =30, height =20)
+ColorRamp = rev(viridis(100))
+tmp3[tmp3==0] = NA
+labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
+#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
+pheatmap(mat = signif(tmp3,2)*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 15, main = "Percent of cells in each IGT", na_col = "#FDE725")
+
+ggplot(tmp4) + geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0 ) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample)  + NoLegend()
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample) + NoLegend()
+
+dev.off()
+
+
+```
+
+**Simplified dataset / Theory**
+
+Pick 2 IGT with different organ composition and sex
+IGT20, 21: colon, SI, spleen. M and F
+
+$$ Y_i = \beta_0 + \beta_1 x_i + \varepsilon_i, i=1,\dots,N \\
+Y_i = cluster_i proportion \\ 
+x_1 = organ \\
+x_2 = sex \\
+Y_i = X \beta + \epsilon 
+$$
+
+
+$$ \hat{\boldsymbol{\beta}} = (\mathbf{X}^\top \mathbf{X})^{-1} \mathbf{X}^\top \mathbf{Y} \\
+\hat{Y} = X \hat{\boldsymbol{\beta}} \\ 
+residuals = r = \epsilon = Y - \hat{Y} \\
+var(\hat{\boldsymbol{\beta}}) = \sigma^2\mathbf{(X^\top X)^{-1}}
+$$
+The diagonal of this matrix contain the standard errors of our estimates!
+
+$$ s^2 \equiv \hat{\sigma}^2 = \frac{1}{N-p}\mathbf{r}^\top\mathbf{r} = \frac{1}{N-p}\sum_{i=1}^N r_i^2$$
+Here $N$ is the sample size and $p$ is the number of columns in $\mathbf{X}$ or number of parameters (including the intercept term $\beta_0$). The reason we divide by $N-p$ is because mathematical theory tells us that this will give us a better (unbiased) estimate.
+
+If N is large, then LSE will be normally distributed with mean $beta_hat$ and SE as described. for small samples, r are normally distributed and beta_hat -beta follow a t-distribution.
+
+Linear combinations of estimates (contrasts), see book p. 192
+
+$$ \mbox{var}(\mathbf{AY}) = \mathbf{A}\mbox{var}(\mathbf{Y}) \mathbf{A}^\top, \\
+\mbox{var}(\boldsymbol{\hat{\beta}}) = \mbox{var}( \mathbf{(X^\top X)^{-1}X^\top Y} ) = \sigma^2\mathbf{(X^\top X)^{-1}}$$
+
+
+```{r}
+table(integrated_sc$organ, integrated_sc$IGT)
+table(integrated_sc$IGT, integrated_sc$sex)
+```
+
+```{r}
+so = integrated_sc[,integrated_sc$IGT %in% c("IGT20", "IGT21") & integrated_sc$organ %in% c("spleen", "colon")] #& integrated_sc$organ %in% c("spleen", "lung") & integrated_sc$genetics == "B6"
+table(so$organ, so$IGT)
+table(so$sample_name.1, so$IGT)
+so = so[,!(so$IGT %in% c("IGT21") & so$organ %in% c("spleen")) & !(so$sample_name.1 %in% "Colon IEL M")] 
+table(so$sample_name.1, so$IGT)
+so$sample = sprintf("%s_%s", so$IGT, so$sample_name.1)
+so$sample = factor(so$sample)
+sample_col = "sample" #individual samples
+
+so$groups = factor(so$organ)#factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other")) #male sure it is a factor
+so$groups = relevel(so$groups , "spleen")
+condition_col = "groups" #enrichment to analyze
+
+sample_col = "sample" #individual samples
+batch_col = NULL #c("genetics", "IGT")
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+rownames(design_df) = design_df$sample
+
+if (is.null(batch_col)) {
+    design <- formula(paste('~', condition_col, collapse = ' '))  #could add 0+ to have a coefficient for each group
+  } else {
+    design <- formula(paste('~', batch_col, "+", condition_col, collapse = ' ')) #could add 0+
+  }
+design
+  
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+model = model.matrix(design, data=design_df)
+model = model[colnames(louvain.count), ]
+model
+
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+colSums(louvain.count)
+
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+louvain.count.norm = t(t(louvain.count) / colSums(louvain.count))
+colSums(louvain.count.norm )
+louvain.count.norm.melt = melt(louvain.count.norm)
+louvain.count.norm.melt$organ = ifelse(grepl(pattern = "Colon", louvain.count.norm.melt$Var2), "colon", "spleen")
+p = ggplot(louvain.count.norm.melt[louvain.count.norm.melt$Var1 == "cl0",]) + geom_point(aes(organ, value)) + facet_wrap(~Var1) + theme_bw()
+
+X = model[colnames(louvain.count.norm), ]
+
+y = louvain.count.norm[1,]
+betahat = solve(crossprod(X, X)) %*% crossprod(X,y) #solve(t(X) %*% X) %*% t(X) %*% y
+fit = lm(y~X)
+#fit = lm(y~X+0) #also works
+summary(fit)
+yhat = X %*% betahat
+plot(y, yhat)
+r = y - yhat
+plot(y, yhat+e)
+
+var(betahat) #!! NO we want the estimate of each beta_i!!
+sigma2 = crossprod(r,r) / (length(y) - ncol(X))
+sigma2 == sum(r^2)/ (length(y) - ncol(X))
+sigma = sqrt(sigma2)
+betahat_ses = sqrt(diag(solve(crossprod(X,X)))) %*% sigma
+
+# for all clusters at once
+ys = louvain.count.norm
+betahats = apply(louvain.count.norm, 1, function(y) solve(t(X) %*% X) %*% t(X) %*% y)
+yhats = X %*% betahats
+rownames(ys) == colnames(yhats)
+colnames(ys) == rownames(yhats)
+rs = ys - t(yhats)
+
+```
+
+Add sex as a second variable
+```{r}
+so$groups = factor(so$organ)#factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other")) #male sure it is a factor
+so$groups = relevel(so$groups , "spleen")
+so$group2 = factor(so$sex)#factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other")) #male sure it is a factor
+so$group2 = relevel(so$group2 , "male")
+condition_col = "groups" #enrichment to analyze
+condition_col2 = "group2" 
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, condition_col2, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+rownames(design_df) = design_df$sample
+
+design <- formula(paste('~', condition_col, "+", condition_col2, collapse = ' '))
+
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]),
+                      Condition2 = as.character(so@meta.data[,condition_col2]))
+ 
+model = model.matrix(design, data=design_df)
+model = model[colnames(louvain.count), ]
+model
+
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+colSums(louvain.count)
+
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+louvain.count.norm = t(t(louvain.count) / colSums(louvain.count))
+colSums(louvain.count.norm )
+louvain.count.norm.melt = melt(louvain.count.norm)
+louvain.count.norm.melt$organ = ifelse(grepl(pattern = "Colon", louvain.count.norm.melt$Var2), "colon", "spleen")
+p = ggplot(louvain.count.norm.melt[louvain.count.norm.melt$Var1 == "cl0",]) + geom_point(aes(organ, value)) + facet_wrap(~Var1) + theme_bw()
+
+X = model[colnames(louvain.count.norm), ]
+
+y = louvain.count.norm[1,]
+betahat = solve(crossprod(X, X)) %*% crossprod(X,y) #solve(t(X) %*% X) %*% t(X) %*% y
+fit = lm(y~X)
+#fit = lm(y~X+0) #also works
+summary(fit)
+yhat = X %*% betahat
+plot(y, yhat)
+e = y - yhat
+plot(y, yhat+e)
+
+# for all clusters
+ys = louvain.count.norm
+betahats = apply(louvain.count.norm, 1, function(y) solve(t(X) %*% X) %*% t(X) %*% y)
+yhats = X %*% betahats
+rownames(ys) == colnames(yhats)
+colnames(ys) == rownames(yhats)
+es = ys - t(yhats)
+
+
+
+#Variance calculation
+mean = mean(y)
+var(y) == t(y - mean(y)) %*% (y - mean(y)) / (length(y)-1)
+crossprod(y - mean(y), y - mean(y)) / (length(y)-1)
+```
+
+
+```{r}
+so = integrated_sc[,integrated_sc$IGT %in% c("IGT20", "IGT21") & integrated_sc$organ %in% c("spleen", "colon")] #& integrated_sc$organ %in% c("spleen", "lung") & integrated_sc$genetics == "B6"
+table(so$organ, so$IGT)
+table(so$sample_name.1, so$IGT)
+so = so[,!(so$IGT %in% c("IGT21") & so$organ %in% c("spleen")) & !(so$sample_name.1 %in% "Colon IEL M")] 
+table(so$sample_name.1, so$IGT)
+so$sample = sprintf("%s_%s", so$IGT, so$sample_name.1)
+so$sample = factor(so$sample)
+sample_col = "sample" #individual samples
+
+so$groups = factor(so$organ)#factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other"))
+so$groups = relevel(so$groups , "spleen")
+condition_col = "groups" #enrichment to analyze
+
+sample_col = "sample" #individual samples
+batch_col = NULL #c("genetics", "IGT")
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+rownames(design_df) = design_df$sample
+
+if (is.null(batch_col)) {
+    design <- formula(paste('~', condition_col, collapse = ' '))  
+  } else {
+    design <- formula(paste('~', batch_col, "+", condition_col, collapse = ' '))
+  }
+design
+  
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+colSums(louvain.count)
+
+model = model.matrix(design, data=design_df)
+model
+#rownames(model) = as.character(design_df$sample)
+#colnames(model) = levels(so$groups)
+model = model[colnames(louvain.count), ]
+  
+dge = DGEList(counts=louvain.count, lib.size=colSums(louvain.count))
+#dge = calcNormFactors(dge, method="RLE")
+dge = calcNormFactors(dge, method="TMM")
+dge = estimateDisp(dge, model)
+fit = glmQLFit(dge, model, robust=TRUE)
+
+n.coef = ncol(model)
+fit2 = glmQLFTest(fit, coef = n.coef)
+plot(fit2$table$logFC, -log10(fit2$table$PValue), pch = ".")
+text(fit2$table$logFC, -log10(fit2$table$PValue), labels = rownames(fit2$table))
+louvain.res = as.data.frame(topTags(fit2, sort.by='none', n=Inf)) #to have FDR
+plot(louvain.res$logFC, -log10(louvain.res$FDR))
+
+clust.df$logFC = louvain.res[clust.df$Louvain.Clust, 'logFC']
+clust.df$PValue = louvain.res[clust.df$Louvain.Clust, 'PValue']
+
+all(clust.df$cell_id == colnames(so))
+so$enrichment_logFC = ifelse(clust.df$PValue < 1 & abs(clust.df$logFC) > 0, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+p2 = DimPlot(so, group.by = "organ", raster = T)
+p3 = DimPlot(so, group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + NoLegend()
+p1 | p2 | p3
+DimPlot(so, group.by = "ClusterTOTALVI_Res1", split.by = "organ", raster = T, label = T) + NoLegend()
+
+## Do it myself
+louvain.count
+colSums(louvain.count)
+tmp = t(t(louvain.count) / colSums(louvain.count))
+colSums(tmp)
+grepl(pattern = "spleen", x = colnames(tmp))
+fc = -log(rowMeans(tmp[,!grepl(pattern = "spleen", x = colnames(tmp))]) / mean(tmp[,grepl(pattern = "spleen", x = colnames(tmp))]) )
+plot(fit2$table$logFC, fc)
+
+
+##
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+louvain.count.norm = t(t(louvain.count) / colSums(louvain.count))
+colSums(louvain.count.norm )
+louvain.count.norm.melt = melt(louvain.count.norm)
+louvain.count.norm.melt$organ = ifelse(grepl(pattern = "Colon", louvain.count.norm.melt$Var2), "colon", "spleen")
+p = ggplot(louvain.count.norm.melt[louvain.count.norm.melt$Var1 == "cl0",]) + geom_point(aes(organ, value)) + facet_wrap(~Var1) + theme_bw()
+
+X = model[colnames(louvain.count.norm), ]
+
+y = louvain.count.norm[1,]
+betahat = solve(crossprod(X, X)) %*% crossprod(X,y) #solve(t(X) %*% X) %*% t(X) %*% y
+fit = lm(y~X)
+summary(fit)
+yhat = X %*% betahat
+plot(yhat, y)
+e = y - yhat
+
+ys = louvain.count.norm
+betahats = apply(louvain.count.norm, 1, function(y) solve(t(X) %*% X) %*% t(X) %*% ys)
+yhats = X %*% betahats
+rownames(ys) == colnames(yhats)
+colnames(ys) == rownames(yhats)
+es = ys - t(yhats)
+
+#Variance calculation
+mean = mean(y)
+var(y) == t(y - mean(y)) %*% (y - mean(y)) / (length(y)-1)
+crossprod(y - mean(y), y - mean(y)) / (length(y)-1)
+
+
+
+```
+
+
+
+**GLM for sex and organ-specific cluster enrichment**
+https://github.com/MarioniLab/milo_analysis_2020/blob/main/benchmark/benchmark_utils.R
+
+example: Which clusters are enriched in lung vs spleen
+example: Freq ~ IGT + genetics + organ + offset(log(N_s))
+without contrasts, compare 2 groups, intercept = reference here
+```{r}
+so = integrated_sc[,integrated_sc$IGT == "IGT24"] #& integrated_sc$organ %in% c("spleen", "lung") & integrated_sc$genetics == "B6" 
+so$groups = factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other"))
+#so$groups  <- relevel(groups, "spleen")
+condition_col = "groups" #enrichment to analyze
+sample_col = "sample_name.1" #individual samples
+batch_col = c("genetics") #c("genetics", "IGT")
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+rownames(design_df) = design_df$sample
+
+if (is.null(batch_col)) {
+    design <- formula(paste('~', condition_col, collapse = ' '))  
+  } else {
+    design <- formula(paste('~', batch_col, "+", condition_col, collapse = ' '))
+  }
+design
+  
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+colSums(louvain.count)
+
+model = model.matrix(design, data=design_df)
+model
+#rownames(model) = as.character(design_df$sample)
+#colnames(model) = levels(so$groups)
+#model = model[colnames(louvain.count), ]
+
+  
+dge = DGEList(counts=louvain.count, lib.size=colSums(louvain.count))
+#dge = calcNormFactors(dge, method="RLE")
+dge = calcNormFactors(dge, method="TMM")
+dge = estimateDisp(dge, model)
+fit = glmQLFit(dge, model, robust=TRUE)
+#ncol(fit$design)
+
+n.coef = ncol(model)
+fit2 = glmQLFTest(fit, coef = n.coef)
+plot(fit2$table$logFC, -log10(fit2$table$PValue), pch = ".")
+text(fit2$table$logFC, -log10(fit2$table$PValue), labels = rownames(fit2$table))
+louvain.res = as.data.frame(topTags(fit2, sort.by='none', n=Inf)) #to have FDR
+plot(louvain.res$logFC, -log10(louvain.res$FDR))
+
+clust.df$logFC = louvain.res[clust.df$Louvain.Clust, 'logFC']
+clust.df$PValue = louvain.res[clust.df$Louvain.Clust, 'PValue']
+
+all(clust.df$cell_id == colnames(so))
+so$enrichment_logFC = ifelse(clust.df$PValue < 1 & abs(clust.df$logFC) > 0, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+p2 = DimPlot(so, group.by = "organ", raster = T)
+p3 = DimPlot(so, group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + NoLegend()
+p1 | p2 | p3
+DimPlot(so, group.by = "ClusterTOTALVI_Res1", split.by = "organ", raster = T, label = T) + NoLegend()
+
+## Do it myself
+louvain.count
+colSums(louvain.count)
+tmp = t(t(louvain.count+1) / colSums(louvain.count+1))
+colSums(tmp)
+grepl(pattern = "SPL", x = colnames(tmp))
+fc = -log(rowMeans(tmp[,grepl(pattern = "SPL", x = colnames(tmp))]) / rowMeans(tmp[,!grepl(pattern = "SPL", x = colnames(tmp))]) )
+rowttest
+plot(fit2$table$logFC, fc)
+
+
+#########Code with contrasts: add 0 in the formula
+contrasts = c("spleen-other")#c("spleen-colon", "spleen-lung", "spleen-c(colon+lung)/2" ) #sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = c("Spleen_vs_Other") #"Spleen_vs_Lung", "Spleen_vs_ColonLung"
+#namescontrasts = paste(x, "_vs_OtherClustersInHD", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+
+if (is.null(batch_col)) {
+    design <- formula(paste('~0+', condition_col, collapse = ' '))  
+  } else {
+    design <- formula(paste('~0', batch_col, "+", condition_col, collapse = ' '))
+  }
+
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+
+n.coef = ncol(model)
+fit2 = glmQLFTest(fit, coef = n.coef)
+plot(fit2$table$logFC, -log10(fit2$table$PValue))
+louvain.res = as.data.frame(topTags(fit2, sort.by='none', n=Inf)) #to have FDR
+plot(louvain.res$logFC, -log10(louvain.res$FDR))
+  
+
+
+
+  clust.df$logFC = louvain.res[clust.df$Louvain.Clust, 'logFC']
+  clust.df$FDR = louvain.res[clust.df$Louvain.Clust, 'PValue']
+
+  all(clust.df$cell_id == colnames(so))
+  so$enrichment_logFC = ifelse(clust.df$PValue < 0.1 & abs(clust.df$logFC) > 0.5, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+  p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+  p2 = DimPlot(so, group.by = "organ", raster = T)
+  p3 = DimPlot(so, group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + NoLegend()
+  p1 | p2 | p3
+
+  #Method 2
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>%
+    distinct() %>%
+    dplyr::rename(sample=sample_col)
+
+  if (is.null(batch_col)) {
+    design <- formula(paste('~', condition_col, collapse = ' '))  
+  } else {
+    design <- formula(paste('~', batch_col, "+", condition_col, collapse = ' '))
+  }
+  
+  clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+#louvain.count = louvain.count[rowSums(louvain.count > 10) > 0,]
+  
+  norm.method = "TMM"
+  if(norm.method %in% c("TMM")){
+    message("Using TMM normalisation")
+    dge <- DGEList(counts=louvain.count,
+                   lib.size=colSums(louvain.count))
+    dge <- calcNormFactors(dge, method="TMM")
+  } else if(norm.method %in% c("logMS")){
+    message("Using logMS normalisation")
+    dge <- DGEList(counts=louvain.count,
+                   lib.size=colSums(louvain.count))
+  }
+  
+ 
+  model = model.matrix(design, data=design_df)
+  rownames(model) = design_df$sample
+  model = model[colnames(louvain.count), ]
+  
+  dge <- estimateDisp(dge, model)
+  fit <- glmQLFit(dge, model, robust=TRUE)
+  n.coef <- ncol(model)
+  #louvain.res <- as.data.frame(topTags(glmQLFTest(fit, coef=n.coef), sort.by='none', n=Inf))
+  louvain.res <- as.data.frame(topTags(glmQLFTest(fit, coef=1), sort.by='none', n=Inf))
+  
+  clust.df$logFC = louvain.res[clust.df$Louvain.Clust, 'logFC']
+  clust.df$FDR = louvain.res[clust.df$Louvain.Clust, 'FDR']
+
+  all(clust.df$cell_id == colnames(so))
+  so$enrichment_logFC = ifelse(clust.df$FDR < 0.1 & abs(clust.df$logFC) > 0.5, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+  p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+  p2 = DimPlot(so, group.by = "organ", raster = T)
+  p3 = DimPlot(so, group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + NoLegend()
+  p1 | p2 | p3
+  
+  
+#Other method
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>%
+    distinct() %>%
+    dplyr::rename(sample=sample_col)
+  if (is.null(batch_col)) {
+    design <- formula(paste('Freq ~', condition_col, "+ offset(log(N_s))", collapse = ' '))  
+  } else {
+    design <- formula(paste('Freq ~', batch_col, "+", condition_col, "+ offset(log(N_s))", collapse = ' '))
+  }
+design
+
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+
+df = melt(louvain.count, varnames=c("cluster", "sample"),  value.name="Freq") %>%
+    mutate(cluster=factor(cluster)) %>%
+    left_join(design_df, by="sample") %>%
+    group_by(sample) %>%
+    mutate(N_s=sum(Freq)) %>%
+    ungroup() %>%
+    group_by(cluster) %>%
+    do(model=glm(design, data=., family="poisson")) 
+  
+  res_df = t(sapply(df$model, function(x) summary(x)$coefficients[nrow(summary(x)$coefficients),]))
+  colnames(res_df) = c("logFC","Std. Error", "z value",    "Pval" )
+  louvain.res = cbind(df, res_df) %>%
+    mutate(FDR=p.adjust(Pval, method = "BH"))
+  rownames(louvain.res) = louvain.res$cluster
+  
+  clust.df$logFC <- louvain.res[clust.df$Louvain.Clust, 'logFC']
+  clust.df$FDR <- louvain.res[clust.df$Louvain.Clust, 'FDR']
+  
+  all(clust.df$cell_id == colnames(so))
+  so$enrichment_logFC = ifelse(clust.df$FDR < 0.1 & abs(clust.df$logFC) > 1, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+  p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+  p2 = DimPlot(so, group.by = "organ", raster = T)
+  p1 | p2
+
+```
+
+with contrasts
+```{r}
+so = integrated_sc[,integrated_sc$IGT == "IGT24" ] #& integrated_sc$organ %in% c("spleen", "lung") & integrated_sc$genetics == "B6" 
+so$groups = factor(ifelse(so$organ == "spleen", yes = "spleen", no = "other"))
+#so$groups  <- relevel(groups, "spleen")
+condition_col = "groups" #enrichment to analyze
+sample_col = "sample_name.1" #individual samples
+batch_col = NULL#c("genetics", "IGT")
+
+design_df = as.data.frame(so@meta.data[,c(sample_col, condition_col, batch_col)]) %>% distinct() %>% dplyr::rename(sample=sample_col)
+
+if (is.null(batch_col)) {
+    design <- formula(paste('~0+', condition_col, collapse = ' '))  
+  } else {
+    design <- formula(paste('~0+', batch_col, "+", condition_col, collapse = ' '))
+  }
+  
+clust.df = data.frame(cell_id=colnames(so), 
+                      Louvain.Clust=as.character(sprintf("cl%s", so$ClusterTOTALVI_Res1)),
+                      Sample = so@meta.data[,sample_col],
+                      Condition = as.character(so@meta.data[,condition_col]))
+  
+louvain.count = table(clust.df$Louvain.Clust, clust.df$Sample)
+attributes(louvain.count)$class <- "matrix"
+louvain.count
+
+library("edgeR")
+contrasts = c("spleen-other")#c("spleen-colon", "spleen-lung", "spleen-c(colon+lung)/2" ) #sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = c("Spleen_vs_Other") #"Spleen_vs_Lung", "Spleen_vs_ColonLung"
+#namescontrasts = paste(x, "_vs_OtherClustersInHD", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = unique(design_df$groups))
+
+model = model.matrix(design, data=design_df)
+model
+rownames(model) = as.character(design_df$sample)
+colnames(model) = levels(so$groups)
+  #model = model[colnames(louvain.count), ]
+model
+  
+dge = DGEList(counts=louvain.count, lib.size=colSums(louvain.count))
+dge = calcNormFactors(dge, method="TMM")
+dge = estimateDisp(dge, model)
+fit = glmQLFit(dge, model, robust=TRUE)
+  #ncol(fit$design)
+  
+fit2 = glmQLFTest(fit, contrast = cont.matrix[,1])
+louvain.res = as.data.frame(topTags(fit2, sort.by='none', n=Inf))
+plot(louvain.res$logFC, -log10(louvain.res$PValue))
+plot(louvain.res$logFC, -log10(louvain.res$FDR))
+
+clust.df$logFC = louvain.res[clust.df$Louvain.Clust, 'logFC']
+clust.df$FDR = louvain.res[clust.df$Louvain.Clust, 'PValue']
+
+all(clust.df$cell_id == colnames(so))
+so$enrichment_logFC = ifelse(clust.df$PValue < 0.1 & abs(clust.df$logFC) > 0.5, ifelse(clust.df$logFC > 0, "PosLFC", 'NegLFC'), "NotDA")
+  
+p1 = DimPlot(so, group.by = "enrichment_logFC", raster = T) + scale_color_manual(values = c("red", "grey", "blue"))
+p2 = DimPlot(so, group.by = "organ", raster = T)
+p3 = DimPlot(so, group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + NoLegend()
+p1 | p2 | p3
+
+
+```
+
+

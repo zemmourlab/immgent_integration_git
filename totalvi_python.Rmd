@@ -1,0 +1,99 @@
+---
+title: "totalvi_python"
+output: html_document
+date: "2023-08-27"
+---
+
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=184GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration
+
+python
+
+```
+
+Notes on Anndata. Not really made for CITEseq. Protein data stored in obsm
+!!Indexing into AnnData will assume that integer arguments to [] behave like .iloc in pandas, whereas string arguments behave like .loc. AnnData always assumes string indices.
+```{python}
+adata = model.adata
+adata.X #sparse gene matrix
+adata.obs #metadata cells (panda df)
+adata.obs_names # cell names
+adata.var #metadata genes (panda df)
+adata.var_names # gene names
+
+adata.layers #transformed X such as log norm etc
+
+adata2.X.toarray()[0:10,0:10]
+
+#aligned metadata: adata.obsm for cells (e.g. add protein expression)
+adata.obsm["protein"]["B220"]
+adata.obsm["protein"].loc['AAACCTGAGGCTCTTA_1'] #.loc because names!
+adata.obsm["protein"].loc["AAACCTGAGGCTCTTA_1","B220"]
+adata.obsm["protein"].iloc[0:10,0:10] #iloc because integers!
+adata.obsm["protein"].to_numpy()  
+model.adata.obsm["protein"].columns.tolist()
+
+
+```
+
+
+```{python}
+import os
+import tempfile
+
+import scanpy as sc
+import scvi
+import torch
+import scanpy as sc
+import anndata as ad
+
+os.getcwd()
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration")
+
+scvi.settings.seed = 0
+print("Last run with scvi-tools version:", scvi.__version__)
+
+sc.set_figure_params(figsize=(4, 4))
+torch.set_float32_matmul_precision("high")
+
+# for white background of figures (only for docs rendering)
+#%config InlineBackend.print_figure_kwargs={'facecolor' : "w"}
+#%config InlineBackend.figure_format='retina'
+
+#prefix = "totalvi_igt1_48_20230706_allgenes"
+prefix = "totalvi_20230508" #spleen standard only, 2000 genes as a test
+
+model = scvi.model.TOTALVI.load(prefix+"/")
+
+denoised = model.get_normalized_expression() 
+#denoised = model.get_normalized_expression(gene_list = ["Cd8a", "Cd4"], protein_list = ['CD3', 'CD4']) #didn't work: TypeError: tuple indices must be integers or slices, not list
+
+#add denoised RNA to layer
+model.adata.layers["X.denoised"] = denoised[0]
+#add denoised protein in obsm["protein_denoised"]
+model.adata.obsm["protein_denoised"] = denoised[1]
+
+model.adata.write(prefix+"denoised.h5ad", compression="gzip")
+
+#adata2 = ad.read(prefix+"denoised.h5ad")
+
+
+```
+

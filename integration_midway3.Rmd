@@ -1,0 +1,2325 @@
+---
+title: "integration"
+output: html_document
+date: "2023-04-26"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+
+R
+options(max.print=1000)
+options(Seurat.object.assay.version = 'v5')
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration")
+setwd("/scratch/midway3/zemmour/")
+
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal = mypal[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+
+
+#PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
+
+    so = seurat_object
+    so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    
+    alpha = 0.5
+    sample_name_colors = mypal[1:length(unique(so@meta.data[,split_by]))]
+    names(sample_name_colors) = levels(so$sample_name)
+    sample_name_colors2 = sample_name_colors
+    sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    p1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = split_by), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal)
+    print(p1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point(data = tmp, aes(dim1, dim2, color = split_by), size = 1,  alpha = alpha) 
+    
+    q = p + p2 + scale_color_manual(values = sample_name_colors)  + theme_bw() + facet_wrap(~ split_by)
+    print(q)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+        
+        p3 = p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_wrap(~split_by) + ggtitle(g)
+        print(p3)
+    }
+    
+
+    message("Plot 4: UMAP Clusters") 
+    for (i in colnames(so@meta.data)[grepl("cluster_key", colnames(so@meta.data))]) {
+        print(i)
+        p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+            geom_point_rast(aes(dim1, dim2), color = so@meta.data[,i], alpha = I(alpha), raster.dpi = 100) + scale_color_manual(values = mypal) + ggtitle(i) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+        print(p + facet_wrap(~split_by))
+    }
+    
+}
+
+SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
+  newpal = c()
+  for (c in 1:length(splitvector)){
+    #print(c)
+    n = splitvector[c]
+    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
+    newcol[4,] = seq(50, 255, length.out = n)
+    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+  }
+  return(newpal)
+}
+sp = SplitColors
+#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
+
+library(org.Hs.eg.db)
+hs = org.Hs.eg.db
+go2eg = as.list(org.Hs.egGO2ALLEGS)
+symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+```
+
+**Function: UMAP plots function after integration PlotsAfterIntegration()**
+
+```{r}
+prefix = "NoIntegration"
+pdf(sprintf("%s_PlotsAfterIntegration.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegration(seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam"), cluster_key = "Cluster_Res")
+dev.off()
+
+
+#######
+
+alpha = 0.5
+sample_name_colors = mypal[1:length(unique(so$IGT))]
+names(sample_name_colors) = levels(so$sample_name)
+sample_name_colors2 = sample_name_colors
+sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+
+all(rownames(so@reductions$umap@cell.embeddings) == rownames(so@meta.data))
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 20, 20)
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = IGT), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal)
+p
+  
+dev.off()
+
+pdf(sprintf("%s_UMAP_split.pdf", prefix), 15, 10)
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = IGT), size = 1,  alpha = alpha) 
+
+q = p + p2 + scale_color_manual(values = sample_name_colors)  + theme_bw() + facet_wrap(~IGT)
+q
+
+dev.off()
+
+pdf(sprintf("%s_UMAP_genes.pdf", prefix), 15, 15)
+genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam")
+for (g in genes) {
+    print(g)
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA@counts[rownames(so@assays$RNA@counts) %in% g,])
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+    p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+#p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+
+    p3 = p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_wrap(~IGT) + ggtitle(g)
+    print(p3)
+}
+
+dev.off()
+
+
+pdf(sprintf("%s_Clusters_split.pdf", prefix), 15, 20)
+
+for (i in colnames(so@meta.data)[grepl("ClusterSCVI_Res", colnames(so@meta.data))]) {
+    print(i)
+    p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2), color = so@meta.data[,i], alpha = I(alpha), raster.dpi = 100) + scale_color_manual(values = mypal) + ggtitle(i) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+    print(p + facet_wrap(~IGT))
+}
+
+dev.off()
+
+
+```
+
+INTEGRATE SPLEEN STANDARDS IGT 2,3,5,13,14,19,20,21,24
+**Merge all samples in one seurat object**
+
+```{r}
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+
+so_list = list()
+for (f in files) {
+    print(f)
+    IGT = gsub(f, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/spleen_data/", replacement = "")
+    print(IGT)
+    tmp = readRDS(sprintf("%s/spleen.Rds", f))
+    tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+    tmp2[["ADT"]] = tmp@assays$ADT
+    print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+    tmp2$IGT = IGT
+    so_list  = c(so_list, tmp2)
+}
+names(so_list) = sprintf("IGT%s", c(2,3,5,13,14,19,20,21,24))
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), add.cell.ids = names(so_list), project = "immgent_spleen_standard")
+so$sample_type = "spleen_standard" 
+saveRDS(so, file = "spleen_standards.Rds")
+
+```
+
+**Non integrated data**
+--> spleen_standards.Rds, NoIntegration_Plots.pdf
+```{r}
+message("Run UMAP")
+so = SCTransform(so, vst.flavor = "v2", verbose = T)
+#so = NormalizeData(so, verbose = T, normalization.method = "LogNormalize", scale.factor = 10000)
+#so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000, verbose = T)
+#so = ScaleData(so, assay = "RNA")
+so = RunPCA(so, npcs = 100, ndims.print = 1:5, nfeatures.print = 5, reduction.name = "pca", verbose = T)
+x = cumsum((so@reductions$pca@stdev**2 / sum(so@reductions$pca@stdev**2)))
+ndims = min(which(x >= 0.8))
+so = RunUMAP(so, dims = 1:ndims, reduction = "pca", reduction.name = "umap")
+
+so = FindNeighbors(so, reduction = "pca", dims = 1:ndims, k.param = 20, verbose = T)
+so = FindClusters(so, resolution = 0.25, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res0.25")
+so = FindClusters(so, resolution = 0.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res0.5")
+so = FindClusters(so, resolution = 1, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res1")
+so = FindClusters(so, resolution = 1.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res1.5")
+so = FindClusters(so, resolution = 2, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res2")
+so = FindClusters(so, resolution = 3, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res3")
+so = FindClusters(so, resolution = 4, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "Cluster_Res4")
+
+saveRDS(so, file = "spleen_standards.Rds")
+
+prefix = "NoIntegration"
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegration(seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam"), cluster_key = "Cluster_Res")
+dev.off()
+
+
+
+```
+
+**Integrate using scvi-tools**
+
+-->scvi_202304272_so.Rds, scvi_202304272_PlotsAfterIntegration.pdf
+
+```{r}
+so$cell_id = colnames(so)
+so = so[,so$IGT != "IGT21"]
+so_orig = so
+s = so@meta.data %>% group_by(IGT) %>% sample_n(ifelse(n() < 500,yes = n(), no =500), replace = F)%>% pull(cell_id)
+length(s)
+so = so_orig[,s]
+
+DefaultAssay(so) = "RNA"
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = 10000) #scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+#Another important thing to keep in mind is highly-variable gene selection. While scVI and scANVI both accomodate for large gene sets in terms of runtime, we usually recommend filtering genes for best performance when the dataset has few number of cells. As a rule of thumb, performance starts to decrease when number of cells and number of genes are comparable. This point is emphasized in this comparative analysis of data integration algorithms for scRNA-seq data.
+#top2000 = head(VariableFeatures(so), 2000) #Find variable genes for integration: method 1
+#method 2 FIND COMMON VARIABLE GENES ACROSS SAMPLES FOR BETTER INTEGRATION?
+so.list = SplitObject(so, split.by = "sample_name")
+so.list = lapply(X = so.list, FUN = function(x) {
+    x = NormalizeData(x)
+    x = FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+top2000 = SelectIntegrationFeatures(object.list = so.list)
+VariableFeatures(so) = top2000
+
+# plot variable features with and without labels
+plot1 = VariableFeaturePlot(so)
+plot2 = LabelPoints(plot = plot1, points = head(VariableFeatures(so), 100), repel = TRUE)
+
+prefix = "scvi_20230427"
+
+pdf(file = sprintf("%s_HVG.pdf", prefix), 20, 20, useDingbats = F)
+plot2
+dev.off()
+
+so2 = so[VariableFeatures(so)]
+DefaultAssay(so2) = "RNA"
+
+#Convert to AnnData
+library(reticulate)
+library(sceasy)
+
+sc = import("scanpy", convert = FALSE)
+scvi = import("scvi", convert = FALSE)
+
+adata = convertFormat(so2, from = "seurat", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+# run setup_anndata: https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.SCVI.html#scvi.model.SCVI.setup_anndata
+
+scvi$model$SCVI$setup_anndata(adata, categorical_covariate_keys = list("IGT")) #prefix = "scvi_20230426"
+## SAYS NO GPU EVEN IF THERE IS!!
+
+# create the model
+n_latent = as.integer(30)
+n_hidden = as.integer(128)
+n_layers = as.integer(2)
+model = scvi$model$SCVI(adata, n_latent = n_latent, n_hidden = n_hidden, n_layers = n_layers, gene_likelihood = "nb")
+
+# train the model
+max_epochs = min(round((20000 / as.numeric(as.character(adata$n_obs))) * 400), 400)
+model$train(max_epochs = as.integer(max_epochs)) #use_gpu = T
+# to specify the number of epochs when training:
+# model$train(max_epochs = as.integer(400))
+
+model$save(sprintf("%s/", prefix)) 
+
+#model = scvi$model$SCVI$load("scvi_model_20230419_2/", adata=adata)
+
+# get the latent represenation
+latent = model$get_latent_representation()
+
+# put it back in our original Seurat object
+latent = as.matrix(latent)
+rownames(latent) = colnames(so)
+so[["scvi"]] = CreateDimReducObject(embeddings = latent, key = "scvi_", assay = DefaultAssay(so))
+
+#so = RunUMAP(so, dims = 1:10, reduction = "scvi", n.components = 2)
+so = RunUMAP(so, dims = 1:n_latent, reduction = "scvi", n.components = 2, reduction.name = "umap_scvi")
+
+so = FindNeighbors(so, dims = 1:n_latent, reduction = "scvi")
+so = FindClusters(so, resolution = 0.25, cluster.name = "ClusterSCVI_Res0.25")
+so = FindClusters(so, resolution = 0.5, cluster.name = "ClusterSCVI_Res0.5")
+so = FindClusters(so, resolution = 1, cluster.name = "ClusterSCVI_Res1")
+so = FindClusters(so, resolution = 2, cluster.name = "ClusterSCVI_Res2")
+so = FindClusters(so, resolution = 3, cluster.name = "ClusterSCVI_Res3")
+so = FindClusters(so, resolution = 4, cluster.name = "ClusterSCVI_Res4")
+#colnames(so@meta.data) = gsub(x = colnames(so@meta.data), pattern = "scvi_res", replacement = "ClusterSCVI_Res")
+
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm230419.Rds")
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm2304192.Rds")
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm230425.Rds")
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+#PLOTS
+prefix = "scvi_202304272"
+pdf(sprintf("%s_PlotsAfterIntegration.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegration(seurat_object = so, dim1 = so@reductions$umap_scvi@cell.embeddings[,1], dim2 = so@reductions$umap_scvi@cell.embeddings[,2], split_by = "IGT", genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam"), cluster_key = "ClusterSCVI_Res")
+dev.off()
+
+
+#conversion using seurat-disk
+#library(SeuratDisk)
+#SaveH5Seurat(so, filename = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering.h5Seurat")
+#Convert("pbmc3k.h5Seurat", dest = "h5ad")
+```
+
+**Integrate using CCA** 
+--> CCAIntegration_so_withSCVI_SeuratV5.Rds
+CCAIntegration_PlotsAfterIntegration.pdf
+
+```{r}
+prefix = "CCAIntegration"
+so_orig = so
+so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so
+
+so = NormalizeData(so)
+so = FindVariableFeatures(so)
+so = ScaleData(so)
+so = RunPCA(so, reduction.name = "pca2")
+
+so = IntegrateLayers( object = so, method = CCAIntegration, orig.reduction = "pca2", new.reduction = "integrated.cca", verbose = T)
+
+so = ScaleData(so, assay = "integrated.cca")
+
+#so = RunPCA(so, npcs = 100, ndims.print = 1:5, nfeatures.print = 5, reduction.name = "pca_cca")
+#x = cumsum((so@reductions$pca@stdev**2 / sum(so@reductions$pca@stdev**2)))
+#ndims = min(which(x >= 0.8))
+so = RunUMAP(so, dims = 1:ndims, reduction = "integrated.cca", reduction.name = "umap_cca")
+
+# Clustering
+so = FindNeighbors(so, reduction = "integrated.cca", dims = 1:ndims, k.param = 20, verbose = T)
+so = FindClusters(so, resolution = 0.25, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res0.25")
+so = FindClusters(so, resolution = 0.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res0.5")
+so = FindClusters(so, resolution = 1, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res1")
+so = FindClusters(so, resolution = 1.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res1.5")
+so = FindClusters(so, resolution = 2, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res2")
+so = FindClusters(so, resolution = 3, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res3")
+so = FindClusters(so, resolution = 4, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res4")
+
+so = JoinLayers(so)
+
+#saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+saveRDS(so, file = "CCAIntegration_so_withSCVI_SeuratV5.Rds")
+
+#PLOTS
+prefix = "CCAIntegration"
+pdf(sprintf("%s_PlotsAfterIntegration.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegration(seurat_object = so, dim1 = so@reductions$umap_cca@cell.embeddings[,1], dim2 = so@reductions$umap_cca@cell.embeddings[,2], split_by = "IGT", genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam"), cluster_key = "ClusterCCA_Res")
+dev.off()
+
+
+###########
+
+so.list = SplitObject(so, split.by = "IGT")
+
+so.list = lapply(X = so.list, FUN = function(x) {
+  #x = NormalizeData(x, normalization.method =  "LogNormalize", scale.factor = 10000)
+  #x = FindVariableFeatures(x, selection.method = "vst", nfeatures = 1000)
+    x = SCTransform(x, verbose = T, variable.features.n = 500, return.only.var.genes = T, new.assay.name = "SCT_CCA") #vst.flavor = "v2"
+  #x = SCTransform(x, vars.to.regress = c("percent_mito", "nCount_RNA") , verbose = T, variable.features.n = 500, return.only.var.genes = T, new.assay.name = "SCT_CCA")
+})
+
+#reference_dataset = grepl(pattern = "IGT20", names(so.list))
+
+features = SelectIntegrationFeatures(object.list = so.list, nfeatures = 500, assay = "SCT_CCA")
+so.list = PrepSCTIntegration(object.list = so.list, anchor.features = features, verbose = T)
+
+anchors_cca = FindIntegrationAnchors(object.list = so.list, normalization.method = "SCT", anchor.features = features, verbose = T, reduction = "cca") #reference = reference_dataset
+
+save(so.list, features, anchors_cca, file = sprintf("%s_solist_features_anchorscca.Rda", prefix))
+
+integrated_cca = IntegrateData(anchorset = anchors_cca, verbose = T, new.assay.name = "integrated_cca")
+
+integrated_cca = IntegrateData(anchorset = anchors_cca, normalization.method = "SCT", verbose = T, eps = 0, new.assay.name = "integrated_cca")
+
+saveRDS(integrated_cca, file = sprintf("%s.Rds", prefix))
+
+prefix = "CCAIntegration"
+so = readRDS(sprintf("%s.Rds", prefix))
+so = ScaleData(so, assay = "integrated_cca")
+
+so = RunPCA(so, npcs = 100, ndims.print = 1:5, nfeatures.print = 5, reduction.name = "pca_ccaintegrated")
+x = cumsum((so@reductions$pca@stdev**2 / sum(so@reductions$pca@stdev**2)))
+ndims = min(which(x >= 0.8))
+so = RunUMAP(so, dims = 1:ndims, reduction = "pca_ccaintegrated", reduction.name = "umap_ccaintegrated")
+
+# Clustering
+so = FindNeighbors(so, reduction = "pca_ccaintegrated", dims = 1:ndims, k.param = 20, verbose = T)
+so = FindClusters(so, resolution = 0.25, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res0.25")
+so = FindClusters(so, resolution = 0.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res0.5")
+so = FindClusters(so, resolution = 1, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res1")
+so = FindClusters(so, resolution = 1.5, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res1.5")
+so = FindClusters(so, resolution = 2, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res2")
+so = FindClusters(so, resolution = 3, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res3")
+so = FindClusters(so, resolution = 4, n.start = 10, algorithm = 1, n.iter = 10, cluster.name = "ClusterCCA_Res4")
+
+saveRDS(so, file = sprintf("%s.Rds", prefix))
+
+#PLOTS
+prefix = "CCAIntegration"
+pdf(sprintf("%s_PlotsAfterIntegration.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegrationV5(seurat_object = so, dim1 = so@reductions$umap_ccaintegrated@cell.embeddings[,1], dim2 = so@reductions$umap_ccaintegrated@cell.embeddings[,2], split_by = "IGT")
+dev.off()
+
+```
+
+**Integrate using totalVI** 
+test on spleen standards only
+totalvi_20230508
+```{r}
+so = readRDS("spleen_standards.Rds")
+
+so$colnames = colnames(so)
+so = so[,so$IGT != "IGT21"]
+#so_orig = so
+#s = so@meta.data %>% group_by(IGT) %>% sample_n(ifelse(n() < 500,yes = n(), no =500), replace = F)%>% pull(colnames)
+#length(s)
+#so = so_orig[,s]
+
+#scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
+#Another important thing to keep in mind is highly-variable gene selection. While scVI and scANVI both accomodate for large gene sets in terms of runtime, we usually recommend filtering genes for best performance when the dataset has few number of cells. As a rule of thumb, performance starts to decrease when number of cells and number of genes are comparable. This point is emphasized in this comparative analysis of data integration algorithms for scRNA-seq data.
+DefaultAssay(so) = "RNA"
+so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so = NormalizeData(so)
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+
+# plot variable features with and without labels
+plot1 = VariableFeaturePlot(so)
+plot2 = LabelPoints(plot = plot1, points = head(VariableFeatures(so), 100), repel = TRUE)
+
+prefix = "totalvi_20230508"
+
+pdf(file = sprintf("%s_HVG.pdf", prefix), 20, 20, useDingbats = F)
+plot2
+dev.off()
+
+#convert back to Seurat V3
+so2 = so[VariableFeatures(so)]
+so2 = JoinLayers(so2)
+DefaultAssay(so2) = "RNA"
+so2.v3 = CreateAssayObject(counts = so2[["RNA"]]$counts)
+so2.v3 = CreateSeuratObject(so2.v3)
+so2.v3[["ADT"]] = CreateAssayObject(counts = so[["ADT"]]$counts) #samples@assays$ADT$counts
+print(all(colnames(so2.v3@assays$RNA$counts) == colnames(so2.v3@assays$ADT$counts)))
+all(colnames(so2.v3) == colnames(so2))
+so2.v3@meta.data = so2@meta.data
+
+#Convert to AnnData
+library(reticulate)
+library(sceasy)
+library(SingleCellExperiment)
+library(anndata)
+
+sc = import("scanpy", convert = FALSE)
+scvi = import("scvi", convert = FALSE)
+sys = import ("sys", convert = FALSE)
+np = import("numpy", convert=FALSE)
+
+DefaultAssay(so2.v3) = "RNA"
+library(SingleCellExperiment)
+sce = so2.v3 %>% Seurat::as.SingleCellExperiment()
+
+#adata_protein = convertFormat(altExp(sce.pbmc), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+
+adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+adata$obsm[["protein"]] = adata_protein$to_df()
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+# run setup_anndata: https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.SCVI.html#scvi.model.SCVI.setup_anndata
+
+scvi$model$TOTALVI$setup_anndata(adata, protein_expression_obsm_key="protein", categorical_covariate_keys = list("IGT"))
+## SAYS NO GPU EVEN IF THERE IS!!
+
+# create the model
+n_latent = as.integer(20)
+model = scvi$model$TOTALVI(adata, n_latent = n_latent, gene_likelihood = "nb")
+
+# train the model
+#max_epochs = min(round((20000 / as.numeric(as.character(adata$n_obs))) * 400), 400)
+model$train() #use_gpu = T
+# to specify the number of epochs when training:
+# model$train(max_epochs = as.integer(400))
+
+model$save(sprintf("%s/", prefix), save_anndata = T) 
+
+#model = scvi$model$SCVI$load("scvi_model_20230419_2/", adata=adata)
+
+# get the latent represenation
+latent = model$get_latent_representation()
+latent = as.matrix(latent)
+rownames(latent) = colnames(so)
+so[["totalvi"]] = CreateDimReducObject(embeddings = latent, key = "totalvi_", assay = DefaultAssay(so))
+
+# get denoised protein expression
+denoised = model$get_normalized_expression()
+denoised_protein = t(denoised[[1]])
+all(colnames(denoised_protein) == colnames(so))
+so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein) #samples@assays$ADT$counts denoised_protein
+denoised_rna = t(denoised[[0]])
+all(colnames(denoised_rna) == colnames(so))
+so[["denoised_rna"]] = CreateAssayObject(data = denoised_rna)
+
+#so = RunUMAP(so, dims = 1:10, reduction = "scvi", n.components = 2)
+so = RunUMAP(so, dims = 1:n_latent, reduction = "totalvi", n.components = 2, reduction.name = "umap_totalvi")
+
+so = FindNeighbors(so, dims = 1:n_latent, reduction = "totalvi")
+so = FindClusters(so, resolution = 0.25, cluster.name = "ClusterTOTALVI_Res0.25")
+so = FindClusters(so, resolution = 0.5, cluster.name = "ClusterTOTALVI_Res0.5")
+so = FindClusters(so, resolution = 1, cluster.name = "ClusterTOTALVI_Res1")
+so = FindClusters(so, resolution = 2, cluster.name = "ClusterTOTALVI_Res2")
+so = FindClusters(so, resolution = 3, cluster.name = "ClusterTOTALVI_Res3")
+so = FindClusters(so, resolution = 4, cluster.name = "ClusterTOTALVI_Res4")
+#colnames(so@meta.data) = gsub(x = colnames(so@meta.data), pattern = "scvi_res", replacement = "ClusterSCVI_Res")
+
+#so = JoinLayers(so)
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+#PLOTS
+prefix = "totalvi_20230508"
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 10, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "IGT",
+        split_by2 =  NULL, 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+#conversion using seurat-disk
+#library(SeuratDisk)
+#SaveH5Seurat(so, filename = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering.h5Seurat")
+#Convert("pbmc3k.h5Seurat", dest = "h5ad")
+
+so = readRDS(sprintf("%s_so.Rds", prefix))
+
+# visualize one or the other
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 2000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 2000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "CLR")
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+g = "CD19"
+sort(rownames(so))
+
+pdf(sprintf("%s_FeaturePlots.pdf", prefix), 20, 10, useDingbats = F)
+DefaultAssay(so) = "ADT"
+#denoised_protein = so@assays$protein_denoised$data
+#so[["protein_denoised"]] = NULL
+#so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein)
+p1 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s ADT", g))
+DefaultAssay(so) = "protein_denoised"
+p2 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s protein denoised", g))
+p1 | p2
+dev.off()
+
+gene_pair_list = list(
+    c("CD19", "THY1.2"),
+    c("ITAX.CD11C", "THY1.2" ),
+    c("TCRB", "TCRGD"),
+     c("CD4", "CD8A"),
+     c("CD62L","CD44"),
+     c("IL7RA.CD127","IL2RA.CD25") 
+)
+
+pdf(sprintf("%s_FeatureScatter.pdf", prefix), 40, 20, useDingbats = F)
+for(pair in gene_pair_list) {
+    print(pair)
+   DefaultAssay(so) = "ADT"
+    g1 = pair[1]
+    g2 = pair[2]
+    p3 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT") + ggtitle("ADT")  + facet_wrap(~so$IGT)
+    DefaultAssay(so) = "protein_denoised"
+    p4 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT") + ggtitle("protein denoised") + facet_wrap(~so$IGT)
+    print(p3 | p4)
+}
+
+dev.off()
+
+```
+
+PART2: INTEGRATE IGT 2,3,5,13,14,19,20,21,24 + spleen standards
+
+**Merge all samples in one seurat object**
+
+```{r}
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+#files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(1,2,3,5,6,10,11,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31))
+
+so_list = list()
+for (f in files) {
+    print(f)
+    IGT = gsub(f, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    print(IGT)
+    
+    tmp = readRDS(sprintf("%s/spleen.Rds", f))
+    tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+    tmp2[["ADT"]] = CreateAssayObject(counts = tmp@assays$ADT$counts)
+    print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+    tmp2$IGT = IGT
+    tmp2$is_spleen_standard = T
+    
+    samples = readRDS(sprintf("%s/dataset_clean.Rds", f))
+    DefaultAssay(samples) = "RNA"
+    samples2 = CreateSeuratObject(counts = samples@assays$RNA$counts, meta.data = samples@meta.data, assay = "RNA")
+    samples2[["ADT"]] = CreateAssayObject(counts = samples@assays$ADT$counts) #samples@assays$ADT$counts
+    print(all(colnames(samples2@assays$RNA$counts) == colnames(samples2@assays$ADT$counts)))
+    samples2$IGT = IGT
+    samples2$is_spleen_standard = F
+    
+    int = intersect(colnames(samples2), colnames(tmp2))
+    print(length(int))
+    if (length(int) != 0) {
+        message("removing spleen from the samples")
+        samples2 = samples2[,!colnames(samples2) %in% int]
+    }
+    
+    #table(samples2[,int]@meta.data$HTO_classification.simplified)
+    #table(tmp2[,int]@meta.data$HTO_classification.simplified)
+    
+    m = merge(tmp2, samples2)
+    
+    meta = m@meta.data
+    meta$hashtag_id = meta$HTO_classification.simplified
+    meta = meta[,!grepl("HTO|hash.ID|outliers|singler|lowCountADT|orig.ident", colnames(meta))]
+    
+    metadata_sample = read.table(file = sprintf("%s/%s_specific_Sample_metadata.csv", f, IGT), sep = ",", header = T, as.is = T)
+    metadata_sample$hashtag_id = paste("HT", metadata_sample$hashtag_id, sep = "")
+    
+    message("IGT in seurat object match IGT in specific_Sample_metadata.csv ")
+    unique(metadata_sample[,grepl("IGT_10xlane_id", colnames(metadata_sample))]) %in% unique(gsub("IGT", "", meta$IGT))
+    
+    message("metadata_sample$hashtag_id match specific_Sample_metadata.csv hashtag_id")
+    all(metadata_sample$hashtag_id[match(meta$hashtag_id, metadata_sample$hashtag_id)] == meta$hashtag_id)
+
+    meta = data.frame(meta, metadata_sample[match(meta$hashtag_id, metadata_sample$hashtag_id),])
+    meta$sample_name = NULL
+    meta$hashtag_id.1 = NULL
+    meta[,grepl("IGT_10xlane_id", colnames(meta))] = NULL
+    colnames(meta)[colnames(meta) == "RNA_clusters"] = "Rosetta_RNA_clusters"
+    colnames(meta)[colnames(meta) == "Protein_clusters"] = "Rosetta_Protein_clusters"
+    colnames(meta) = gsub("First.Of.|Avg.Of.","", colnames(meta))
+    
+    m@meta.data = meta
+    so_list[[IGT]]  = m
+
+}
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), project = "immgent_20230503")
+so = JoinLayers(so)
+saveRDS(so, file = "immgent_20230503.Rds")
+
+```
+
+**Unintegrated analysis**
+-->notintegrated_20230507
+```{r}
+prefix = "notintegrated_20230507"
+
+#so = readRDS("immgent_20230503.Rds")
+all(so$Cell_ID == colnames(so))
+so$colnames = colnames(so)
+so_orig = so
+#s = so@meta.data %>% group_by(IGT) %>% sample_n(ifelse(n() < 2000,yes = n(), no =2000), replace = F)%>% pull(colnames)
+#length(s)
+#so = so_orig[,s]
+so = JoinLayers(so)
+
+DefaultAssay(so) = "RNA"
+so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so = NormalizeData(so)
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+so = ScaleData(so)
+so = RunPCA(so, npcs = 100, ndims.print = 1:5, nfeatures.print = 5, reduction.name = "pca_unintegrated", verbose = T)
+x = cumsum((so@reductions$pca_unintegrated@stdev**2 / sum(so@reductions$pca_unintegrated@stdev**2)))
+ndims = min(which(x >= 0.8))
+so = RunUMAP(so, dims = 1:ndims, reduction = "pca_unintegrated", reduction.name = "umap_unintegrated")
+
+so$IGT = factor(so$IGT, levels = paste("IGT", c(2,3,5,13,14,19,20,21,24), sep = ""))
+#so = JoinLayers(so)
+
+pdf(sprintf("%s_Plots.pdf", prefix), width = 10, 30, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], 
+        color_by = "is_spleen_standard", 
+        split_by1 = "IGT", 
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"),
+        cluster_key = NULL, mypal = glasbey())
+
+dev.off()
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+  
+####
+
+
+    message("Plot 4: UMAP Clusters") 
+    for (i in colnames(so@meta.data)[grepl(cluster_key, colnames(so@meta.data))]) {
+        print(i)
+        p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+            geom_point_rast(aes(dim1, dim2), color = so@meta.data[,i], alpha = I(alpha), raster.dpi = 100) + scale_color_manual(values = mypal) + ggtitle(i) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+        print(p + facet_wrap(~split_by))
+    }
+    
+
+
+```
+
+**Integrate using scvi-tools**
+
+--> test data with 500 cells per IGT: scvi_20230503_so.Rds, scvi_20230503_PlotsAfterIntegration.pdf
+--> all cells: scvi_20230507
+
+```{r}
+prefix = "scvi_20230507"
+
+so = readRDS("notintegrated_20230507_so.Rds")#notintegrated_20230503_so.Rds
+so_orig = so
+#all(so$colnames == colnames(so))
+#so$colnames = colnames(so)
+#so_orig = so
+#s = so@meta.data %>% group_by(IGT) %>% sample_n(ifelse(n() < 500,yes = n(), no =500), replace = F)%>% pull(colnames)
+#length(s)
+#so = so_orig[,s]
+#so = JoinLayers(so)
+
+#scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
+#Another important thing to keep in mind is highly-variable gene selection. While scVI and scANVI both accomodate for large gene sets in terms of runtime, we usually recommend filtering genes for best performance when the dataset has few number of cells. As a rule of thumb, performance starts to decrease when number of cells and number of genes are comparable. This point is emphasized in this comparative analysis of data integration algorithms for scRNA-seq data.
+#DefaultAssay(so) = "RNA"
+#so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+#so = NormalizeData(so)
+#so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+
+#Seurat V3:
+#so.list = SplitObject(so, split.by = "IGT")
+#so.list = lapply(X = so.list, FUN = function(x) {
+#    x = NormalizeData(x)
+#    x = FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+#})
+#top2000 = SelectIntegrationFeatures(object.list = so.list)
+#VariableFeatures(so) = top2000
+
+# plot variable features with and without labels
+plot1 = VariableFeaturePlot(so)
+plot2 = LabelPoints(plot = plot1, points = head(VariableFeatures(so), 100), repel = TRUE)
+
+pdf(file = sprintf("%s_HVG.pdf", prefix), 20, 20, useDingbats = F)
+plot2
+dev.off()
+
+so2 = so[VariableFeatures(so)]
+DefaultAssay(so2) = "RNA"
+#so2 = JoinLayers(so2)
+
+so2.v3 = CreateAssayObject(counts = so2[["RNA"]]$counts)
+so2.v3 = CreateSeuratObject(so2.v3)
+all(colnames(so2.v3) == colnames(so2))
+so2.v3@meta.data = so2@meta.data
+
+#Convert to AnnData
+library(reticulate)
+library(sceasy)
+
+sc = import("scanpy", convert = FALSE)
+scvi = import("scvi", convert = FALSE)
+
+adata = convertFormat(so2.v3, from = "seurat", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+# run setup_anndata: https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.SCVI.html#scvi.model.SCVI.setup_anndata
+
+scvi$model$SCVI$setup_anndata(adata, categorical_covariate_keys = list("IGT")) #prefix = "scvi_20230426"
+## SAYS NO GPU EVEN IF THERE IS!!
+
+# create the model
+n_latent = as.integer(10)
+n_hidden = as.integer(128)
+n_layers = as.integer(2)
+model = scvi$model$SCVI(adata, n_latent = n_latent, n_hidden = n_hidden, n_layers = n_layers, gene_likelihood = "nb")
+
+# train the model
+max_epochs = min(round((20000 / as.numeric(as.character(adata$n_obs))) * 400), 400)
+model$train(max_epochs = as.integer(max_epochs)) #use_gpu = T
+# to specify the number of epochs when training:
+# model$train(max_epochs = as.integer(400))
+
+model$save(sprintf("%s_2/", prefix), save_anndata=T) 
+
+#model = scvi$model$SCVI$load("scvi_model_20230419_2/", adata=adata)
+
+# get the latent represenation
+latent = model$get_latent_representation()
+
+# put it back in our original Seurat object
+latent = as.matrix(latent)
+rownames(latent) = colnames(so)
+so[["scvi"]] = CreateDimReducObject(embeddings = latent, key = "scvi_", assay = DefaultAssay(so))
+
+#so = RunUMAP(so, dims = 1:10, reduction = "scvi", n.components = 2)
+so = RunUMAP(so, dims = 1:n_latent, reduction = "scvi", n.components = 2, reduction.name = "umap_scvi")
+
+so = FindNeighbors(so, dims = 1:n_latent, reduction = "scvi")
+so = FindClusters(so, resolution = 0.25, cluster.name = "ClusterSCVI_Res0.25")
+so = FindClusters(so, resolution = 0.5, cluster.name = "ClusterSCVI_Res0.5")
+so = FindClusters(so, resolution = 1, cluster.name = "ClusterSCVI_Res1")
+so = FindClusters(so, resolution = 2, cluster.name = "ClusterSCVI_Res2")
+so = FindClusters(so, resolution = 3, cluster.name = "ClusterSCVI_Res3")
+so = FindClusters(so, resolution = 4, cluster.name = "ClusterSCVI_Res4")
+#colnames(so@meta.data) = gsub(x = colnames(so@meta.data), pattern = "scvi_res", replacement = "ClusterSCVI_Res")
+
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm230419.Rds")
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm2304192.Rds")
+#saveRDS(so, file = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering_SCVIm230425.Rds")
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+pdf(sprintf("%s_Plots.pdf", prefix), 10, 10, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_scvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_scvi"]]@cell.embeddings[,2], 
+        color_by = "is_spleen_standard", 
+        split_by1 = "IGT", 
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+
+dev.off()
+
+pdf(sprintf("%s_Plots_2.pdf", prefix), 20, 10, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_scvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_scvi"]]@cell.embeddings[,2], 
+        color_by = "is_spleen_standard", 
+        split_by1 = "is_spleen_standard",
+        split_by2 =  NULL, 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+
+#PLOTS
+prefix = "scvi_202304272"
+pdf(sprintf("%s_PlotsAfterIntegration.pdf", prefix), 20, 20, useDingbats = F)
+PlotsAfterIntegration(seurat_object = so, dim1 = so@reductions$umap_scvi@cell.embeddings[,1], dim2 = so@reductions$umap_scvi@cell.embeddings[,2], split_by = "IGT", genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Itgax", "Itgam"), cluster_key = "ClusterSCVI_Res")
+dev.off()
+
+
+#conversion using seurat-disk
+#library(SeuratDisk)
+#SaveH5Seurat(so, filename = "fc07803_scurfy_foxp1_stat5ca_CCAAnalysis_integrated_withUMAPClustering.h5Seurat")
+#Convert("pbmc3k.h5Seurat", dest = "h5ad")
+```
+
+
+**TOTAL-VI**
+
+All cells
+totalvi_20230509 --> all cells, top 2000 genes
+totalvi_20230509_allgenes --> all cells, all genes! i.e. not using VariableFeatures
+
+should we do on filtered genes, i.e. 0.01CP10K in 1% cells? Required at least for DGE (see below). So it means that parameter estimations are not so good for low expressed genes.  It didn't make a big difference between totalvi_20230509 and totalvi_20230509_allgenes, so maybe the latent space isn't as sensitive as DGE to low expressed genes. 
+
+```{r}
+so = readRDS("notintegrated_20230507_so.Rds")
+prefix = "totalvi_20230509_allgenes"
+
+so$colnames = colnames(so)
+
+#Find Variable features
+#scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
+#Another important thing to keep in mind is highly-variable gene selection. While scVI and scANVI both accomodate for large gene sets in terms of runtime, we usually recommend filtering genes for best performance when the dataset has few number of cells. As a rule of thumb, performance starts to decrease when number of cells and number of genes are comparable. This point is emphasized in this comparative analysis of data integration algorithms for scRNA-seq data.
+DefaultAssay(so) = "RNA"
+so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so = NormalizeData(so)
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+plot1 = VariableFeaturePlot(so)
+plot2 = LabelPoints(plot = plot1, points = VariableFeatures(so), repel = TRUE)
+
+pdf(file = sprintf("%s_HVG.pdf", prefix), 20, 20, useDingbats = F)
+plot2
+dev.off()
+
+so = JoinLayers(so)
+
+
+#Convert Seurat V5 object to Anndata
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    message("same colnames between 2 assays")
+    print(all(colnames(so.v3[[assay1]]$counts) == colnames(so.v3[[assay2]]$counts)))
+    message("same colnames between S3 and S5")
+    print(all(colnames(so.v3) == colnames(so)))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+so.v3 = ConvertS5toS3(so) #so[VariableFeatures(so)]
+sce = Seurat::as.SingleCellExperiment(so.v3)
+
+#Convert to AnnData
+library(reticulate)
+library(sceasy)
+library(SingleCellExperiment)
+library(anndata)
+
+sc = import("scanpy", convert = FALSE)
+scvi = import("scvi", convert = FALSE)
+sys = import ("sys", convert = FALSE)
+np = import("numpy", convert=FALSE)
+
+DefaultAssay(so2.v3) = "RNA"
+sce = Seurat::as.SingleCellExperiment(so2.v3)
+
+#adata_protein = convertFormat(altExp(sce.pbmc), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+
+adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+adata$obsm[["protein"]] = adata_protein$to_df()
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+# run setup_anndata: https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.SCVI.html#scvi.model.SCVI.setup_anndata
+
+scvi$model$TOTALVI$setup_anndata(adata, protein_expression_obsm_key="protein", categorical_covariate_keys = list("IGT"))
+## SAYS NO GPU EVEN IF THERE IS!!
+
+# create the model
+n_latent = as.integer(30)
+model = scvi$model$TOTALVI(adata, n_latent = n_latent, gene_likelihood = "nb")
+
+# train the model
+#max_epochs = min(round((20000 / as.numeric(as.character(adata$n_obs))) * 400), 400)
+model$train() #use_gpu = T
+# to specify the number of epochs when training:
+# model$train(max_epochs = as.integer(400))
+
+#model$save(sprintf("%s/", prefix), save_anndata = T) 
+#model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
+
+# get the latent represenation
+latent = model$get_latent_representation()
+latent = as.matrix(latent)
+rownames(latent) = colnames(so)
+so[["totalvi"]] = CreateDimReducObject(embeddings = latent, key = "totalvi_", assay = DefaultAssay(so))
+
+# get denoised protein expression
+denoised = model$get_normalized_expression() #protein_list = rownames(so[["ADT"]]), transform_batch = as.character(unique(so$IGT))
+denoised_protein = py_to_r(denoised[[1]]) %>% t()
+all(colnames(denoised_protein) == colnames(so))
+so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein) #samples@assays$ADT$counts denoised_protein
+#Denoised RNA on all genes and all cells is too much, skip
+#denoised_rna = py_to_r(denoised[[0]]) %>% t()
+#all(colnames(denoised_rna) == colnames(so))
+#so[["denoised_rna"]] = CreateAssayObject(data = denoised_rna)
+
+#so = RunUMAP(so, dims = 1:10, reduction = "scvi", n.components = 2)
+so = RunUMAP(so, dims = 1:n_latent, reduction = "totalvi", n.components = 2, reduction.name = "umap_totalvi")
+
+so = FindNeighbors(so, dims = 1:n_latent, reduction = "totalvi")
+so = FindClusters(so, resolution = 0.25, cluster.name = "ClusterTOTALVI_Res0.25")
+so = FindClusters(so, resolution = 0.5, cluster.name = "ClusterTOTALVI_Res0.5")
+so = FindClusters(so, resolution = 1, cluster.name = "ClusterTOTALVI_Res1")
+so = FindClusters(so, resolution = 2, cluster.name = "ClusterTOTALVI_Res2")
+so = FindClusters(so, resolution = 3, cluster.name = "ClusterTOTALVI_Res3")
+so = FindClusters(so, resolution = 4, cluster.name = "ClusterTOTALVI_Res4")
+#colnames(so@meta.data) = gsub(x = colnames(so@meta.data), pattern = "scvi_res", replacement = "ClusterSCVI_Res")
+
+#so = JoinLayers(so)
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+#PLOTS
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 30, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "IGT",
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+
+
+# FeaturePlots
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+#so = NormalizeData(so, assay = "protein_denoised", normalization.method = "CLR")
+#so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+g = "CD19"
+#sort(rownames(so))
+
+pdf(sprintf("%s_FeaturePlots.pdf", prefix), 20, 10, useDingbats = F)
+DefaultAssay(so) = "ADT"
+#denoised_protein = so@assays$protein_denoised$data
+#so[["protein_denoised"]] = NULL
+#so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein)
+p1 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s ADT", g))
+DefaultAssay(so) = "protein_denoised"
+p2 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s protein denoised", g))
+p1 | p2
+dev.off()
+
+gene_pair_list = list(
+    c("CD19", "THY1.2"),
+    c("ITAX.CD11C", "THY1.2" ),
+    c("TCRB", "TCRGD"),
+     c("CD4", "CD8A"),
+     c("CD62L","CD44"),
+     c("IL7RA.CD127","IL2RA.CD25") 
+)
+
+pdf(sprintf("%s_FeatureScatter.pdf", prefix), 20, 20, useDingbats = F)
+for(pair in gene_pair_list) {
+    print(pair)
+   DefaultAssay(so) = "ADT"
+    g1 = pair[1]
+    g2 = pair[2]
+    p3 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("ADT, %s x %s, IGT x spleen standard", g1, g2))  + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    DefaultAssay(so) = "protein_denoised"
+    p4 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("Protein Denoised, %s x %s, IGT x spleen standard", g1, g2)) + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    print(p3 | p4)
+}
+
+dev.off()
+
+```
+
+**Integration evaluation: intra-batch differential expression preservation**
+- does is put together all the spleen controls? yes
+- broad sctructure makes sense? CD4, CD8, TCRgd: yes, see plot in previous block: prefix_Plots.pdf
+- Does it maintain the scurfy signature before and after integration? yes, see below
+- Does it maintain HVG in IGT24?
+
++++Gene expression differences looking at genes with 0.01 CP10K in at least 10% or 1% of cells in cells in either group -->  robust FC estimation and gene expression differences compared to unintegrated.
+
+https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.TOTALVI.html#scvi.model.TOTALVI.differential_expression
+https://github.com/WormBase/scdefg
+```{r}
+prefix = "totalvi_20230509_allgenes"
+so = readRDS(sprintf("%s_so.Rds", prefix))
+so = NormalizeData(so, assay = "RNA", normalization.method = "RC", scale.factor = 10000)
+so_orig = so
+so = so_orig
+#Do the analysis only on genes expressed in at least 25% of cells at level of 0.01 CPK10K
+so = NormalizeData(so, assay = "RNA", normalization.method = "RC", scale.factor = 10000)
+
+group1 = "WT D19 SPL"
+group2 = "Foxp3.p327fs SPL D 19"
+cells = so$sample_name.1 %in% c(group1, group2)
+length(which(cells))
+ncol(so[,cells])
+features_filt = rowSums(so[["RNA"]]$data[,cells] >= 0.01) / ncol(so[,cells])
+features_filt = names(features_filt[features_filt > 0.05])
+length(features_filt)
+so = so_orig[features_filt,]
+so
+
+#1. Convert Seurat V5 object to Anndata
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+so.v3 = ConvertS5toS3(so)
+sce = Seurat::as.SingleCellExperiment(so.v3)
+
+adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+adata$obsm[["protein"]] = adata_protein$to_df()
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+#2. DGE on unintegrated data using Wilcoxon test (default Seurat)
+
+Idents(so) = "sample_name.1"
+dge1 = FindMarkers(so, assay = "RNA", subset.ident = "IGT24", ident.1 = group1, ident.2 = group2, logfc.threshold = 0, min.pct = 0)
+dge1$feature = rownames(dge1)
+table(dge1$p_val_adj<0.05)
+saveRDS(dge1, file = "totalvi_20230509_allgenes_seurat_wilcoxon_dge.Rds")
+
+i = "IGT24: seurat wilcoxon test"
+
+pdf("totalvi_20230509_allgenes_dge_seurat_filt_notfilt.pdf", width = 10, height = 10)
+vplot = data.frame(SYMBOL = dge1$feature, fc = 2^dge1$avg_log2FC, pval = dge1$p_val+10^-50)
+
+p = Vplot(vplot = vplot, xlab = sprintf("%s vs %s", group1, group2), xlimits = c(1/30,30), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+library(ggrepel)
+#p = VplotAddSig(p, vplot,y_text = 10^-30 )
+#p
+q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+q
+dev.off()
+
+
+#DGE on TOTALVI
+
+model = scvi$model$TOTALVI$load(sprintf("%s/", prefix)) #If None, will check for and load anndata saved with the model.
+#group1 = colnames(so)[so$sample_name %in% "WT D19 SPL"]
+#group2 = colnames(so)[so$sample_name %in% "Foxp3.p327fs SPL D 19"]
+de_df = model$differential_expression(groupby="sample_name.1", group1 = group1, group2 = group2, batch_correction=T, all_stats = T, include_protein_background = T, fdr_target=0.05, mode = "change") # delta=0.25,
+de_df = de_df %>% py_to_r()
+de_df$feature = rownames(de_df)
+de_df_orig = de_df
+
+de_df = de_df_orig[features_filt,]
+
+table(de_df$is_de_fdr_0.05)
+min(de_df$proba_not_de[de_df$is_de_fdr_0.05 == T])
+table(de_df$proba_not_de < 0.0596, de_df$is_de_fdr_0.05)
+de_df[de_df$feature == "Foxp3",]
+de_df[de_df$is_de_fdr_0.05 ==T,] %>% head(10)
+
+#Use is_de_fdr_0.05 for totalvi or find the pv min for is_de_fdr_0.05==T
+# BF to pval: 10^(-abs(de_df$bayes_factor))
+pdf("totalvi_20230509_allgenes_dge_totalvi_notfilt.pdf", width = 10, height = 10)
+vplot = data.frame(SYMBOL = de_df$feature, fc = 2^de_df$lfc_mean, pval = de_df$proba_not_de, pval_bf = 10^(-abs(de_df$bayes_factor)), is_de_fdr_0.05 = de_df$is_de_fdr_0.05)
+min(de_df$proba_not_de[de_df$is_de_fdr_0.05 == T])
+## calculate the -log10(p-value) for the volcano
+#de["minuslog10pval"] = -np.log10(de["proba_not_de"] + 0.00001)
+#de["log10mean_expression"] = np.log10((de["scale1"] + de['scale2']) / 2)
+
+p = Vplot(vplot = vplot, xlab = sprintf("%s vs %s", group1, group2), xlimits = c(1/30,30), ylimits = c(10^-3, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+#sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+sub = vplot$is_de_fdr_0.05 == T
+sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+library(ggrepel)
+#p = VplotAddSig(p, vplot,y_text = 10^-30 )
+#p
+q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+q
+
+q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+q = p + geom_point( data = vplot[vplot$is_de_fdr_0.05 ==T, ], aes(fc,pval, color = "red"))
+q
+dev.off()
+
+#compare both with FC/FC
+de_df %>% arrange(lfc_mean) %>% head(5)
+dge1 %>% arrange(avg_log2FC) %>% head(5)
+
+m = merge(x = dge1[,c("feature", "avg_log2FC", "p_val", "p_val_adj")], y = de_df[,c("feature", "lfc_mean", "proba_not_de", "is_de_fdr_0.05")], by = "feature", all = T)
+#m$p_val[is.na(m$p_val)] = 1
+#m = m[m$p_val < 0.05 | m$is_de_fdr_0.05 == T,] #othewise bunch of crap around the axis because of non significant point
+#m$avg_log2FC[is.na(m$avg_log2FC)] = 0
+#m$lfc_mean[is.na(m$lfc_mean)] = 0
+head(m)
+m %>% filter(2^m$avg_log2FC < 1.1 & 2^m$lfc_mean > 3) %>% summarize(n())
+m %>% filter(abs(m$avg_log2FC) < log2(1.1) & 2^m$lfc_mean < 0.25) %>% pull(feature)
+
+vplot = data.frame(SYMBOL = m$feature, fc1 = 2^m$avg_log2FC, fc2 = 2^m$lfc_mean, is_de_fdr_0.05 = m$is_de_fdr_0.05, p_val_adj = m$p_val_adj)
+vplot$fcmax = apply(vplot[,c("fc1", "fc2")],1, max)
+sub2 = vplot %>% arrange(desc(abs(log2(fcmax))))
+sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+
+pdf("totalvi_20230509_allgenes_DGE_FCFCnotintegrated_vs_totalvi_notfilt.pdf", 10, 10, useDingbats = F)
+p = FCFCplot(vplot, xlab = "not integrated", ylab = "totalvi", ylimits = c(1/30, 30), xlimits = c(1/30, 30))
+p
+
+library(ggrepel)
+q = p + 
+  geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+  geom_point( data = vplot[vplot$is_de_fdr_0.05 ==T, ], aes(fc1,fc2, color = "red")) +
+  #scale_color_manual(values = c("blue", "red"))
+  ggtitle(label = "IGT24: not integrated (seurat wilcoxon) vs totalVI DGE; color is FDR<0.05 in totalVI" )
+q
+
+q = p + 
+  geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+  geom_point( data = vplot[vplot$p_val_adj <0.05, ], aes(fc1,fc2, color = "red")) +
+  #scale_color_manual(values = c("blue", "red"))
+  ggtitle(label = "IGT24: not integrated (seurat wilcoxon) vs totalVI DGE; color is FDR<0.05 in seurat" )
+q
+dev.off()
+```
+
+
+**TOTAL-VI INTEGRATION IGT 1-48 all cells, all genes**
+
+*Merge all samples in one seurat object*
+
+```{r}
+dir = dirs[38]
+print(dir)
+IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+print(IGT)
+m = ImportIGTData(dir, IGT)
+
+
+ImportIGTData = function(dir, IGT) {
+    
+    spleen_test = file.exists(sprintf("%s/spleen.Rds", dir))
+    sample_test = file.exists(sprintf("%s/dataset_clean.Rds", dir))
+    
+    if (!sample_test) {
+        stop("no data")
+    }
+    
+    if (spleen_test) {
+        message("Loading spleen standard")
+        tmp = readRDS(sprintf("%s/spleen.Rds", dir))
+        tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+        tmp2[["ADT"]] = CreateAssayObject(counts = tmp@assays$ADT$counts)
+        print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+        tmp2$IGT = IGT
+        tmp2$is_spleen_standard = T
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(tmp2), split = "\\."))[,1])
+        message("IGT in spleen standard match IGT")
+        print(all(igt_incolnames %in% IGT))
+    }    
+    
+    if (sample_test) {
+        message("Loading samples")
+        samples = readRDS(sprintf("%s/dataset_clean.Rds", dir))
+        DefaultAssay(samples) = "RNA"
+        samples2 = CreateSeuratObject(counts = samples@assays$RNA$counts, meta.data = samples@meta.data, assay = "RNA")
+        samples2[["ADT"]] = CreateAssayObject(counts = samples@assays$ADT$counts) #samples@assays$ADT$counts
+        print(all(colnames(samples2@assays$RNA$counts) == colnames(samples2@assays$ADT$counts)))
+        samples2$IGT = IGT
+        samples2$is_spleen_standard = F
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(samples2), split = "\\."))[,1])
+        message("IGT in sample match IGT")
+        print(all(igt_incolnames %in% IGT))
+    }
+    
+    if (spleen_test) {
+        message("Spleen standard present to merge")
+        int = intersect(colnames(samples2), colnames(tmp2))
+        #print(length(int))
+        if (length(int) != 0) {
+            message(sprintf("removing %s spleen standard cells from the samples", length(int)))
+            samples2 = samples2[,!colnames(samples2) %in% int]
+        }
+    
+        #table(samples2[,int]@meta.data$HTO_classification.simplified)
+        #table(tmp2[,int]@meta.data$HTO_classification.simplified)
+    
+        m = merge(tmp2, samples2)
+        m = JoinLayers(m)
+    } else {
+        message("No spleen standard to merge")
+        m = samples2
+    }
+    
+    meta = m@meta.data
+    meta$hashtag_number = meta$HTO_classification.simplified
+    meta = meta[,!grepl("HTO|hash.ID|outliers|singler|lowCountADT|orig.ident", colnames(meta))]
+    
+    metadata_sample = read.table(file = sprintf("%s/%s_sample_specific_metadata.csv", dir, IGT), sep = ",", header = T, as.is = T)
+    metadata_sample = metadata_sample[,!colnames(metadata_sample) %in% "X"]
+    metadata_sample$hashtag_number = paste("HT", metadata_sample$hashtag_number, sep = "")
+    
+    message("IGT in seurat object match IGT in specific_Sample_metadata.csv")
+    print(unique(metadata_sample[,grepl("IGT_10xlane_id", colnames(metadata_sample))]) %in% unique(gsub("IGT", "", meta$IGT)))
+    
+    message("metadata_sample$hashtag_number match specific_Sample_metadata.csv hashtag_number")
+    print(all(metadata_sample$hashtag_number[match(meta$hashtag_number, metadata_sample$hashtag_number)] == meta$hashtag_number))
+
+    meta = data.frame(meta, metadata_sample[match(meta$hashtag_number, metadata_sample$hashtag_number),])
+    meta$sample_name = NULL
+    meta$hashtag_number.1 = NULL
+    meta[,grepl("IGT_10xlane_id", colnames(meta))] = NULL
+    colnames(meta)[colnames(meta) == "RNA_clusters"] = "Rosetta_RNA_clusters"
+    colnames(meta)[colnames(meta) == "Protein_clusters"] = "Rosetta_Protein_clusters"
+    colnames(meta) = gsub("First.Of.|Avg.Of.","", colnames(meta))
+    
+    m@meta.data = meta
+
+    return(m)
+}
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+#files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+dirs = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(1:48))
+
+so_list = list()
+for (dir in dirs[1:48]) {
+    print(dir)
+    IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    print(IGT)
+    so_list[[IGT]]  = tryCatch(ImportIGTData(dir, IGT), error = function(e) {message("no data")})
+}
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), project = "immgent_20230705")
+so = JoinLayers(so)
+saveRDS(so, file = "immgent_20230705.Rds")
+
+```
+
+see github immgent_integration_git for latest code
+run_totalvi_wrapper.sh
+run_totalvi.R [path_to_wd] [immgent_20230705.Rds] [prefix for output] see github immgent_integration_git for latest code
+Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration immgent_20230705.Rds totalvi_igt1_48_20230706_allgenes
+
+```{bash}
+sbatch run_totalvi_wrapper.sh
+
+Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration immgent_20230705.Rds totalvi_igt1_48_20230706_allgenes
+```
+
+run_totalvi_plot_wrapper.R
+run_totalvi_plot.R [path_to_wd] [prefix for output] 
+```{bash}
+sbatch run_totalvi_plot_wrapper.R
+
+Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration totalvi_igt1_48_20230706_allgenes
+```
+
+```{r}
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+so = readRDS(file = sprintf("%s_so.Rds", prefix))
+
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 30, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "IGT",
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+
+```
+
+make BPCells object
+```{r}
+library(BPCells)
+so = readRDS(file = "totalvi_igt1_48_20230706_allgenes_so.Rds")
+write_matrix_dir(mat = so[["RNA"]]$counts, dir = "bpcells/totalvi_igt1_48_20230706_allgenes_counts")
+counts.mat = open_matrix_dir(dir = "bpcells/totalvi_igt1_48_20230706_allgenes_counts")
+
+so[["RNA"]]$counts = counts.mat
+
+```
+
+Get denoised protein
+GPU needed
+run on jfkfloor2 with lots of memory
+```{r}
+message("loading R libraries and custom functions")
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "scales", "reticulate", "sceasy", "SingleCellExperiment", "anndata") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+message("Loading python library")
+sc = tryCatch(import("scanpy", convert = FALSE), error = function(e) {message("scanpy error usually not a problem undefined symbol: cblas_cdotc_sub")})
+scvi = import("scvi", convert = FALSE)
+sys = import ("sys", convert = FALSE)
+np = import("numpy", convert=FALSE)
+
+prefix = "totalvi_igt1_48_20230706_allgenes"
+model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
+
+# get denoised protein expression
+
+#denoised = model$get_normalized_expression() #protein_list = rownames(so[["ADT"]]), transform_batch = as.character(unique(so$IGT))
+#saveRDS(denoised, file = sprintf("%s_denoised.Rds", prefix))
+denoised = readRDS(sprintf("%s_denoised.Rds", prefix))
+
+denoised_protein = py_to_r(denoised[[1]]) %>% t()
+saveRDS(denoised_protein, file = sprintf("%s_denoised_protein_matrix.Rds", prefix))
+
+model$adata$obsm[["protein_denoised"]] = denoised[1]
+model$adata$layers["X_denoised"] = denoised[0]
+write_h5ad(anndata = model$adata, filename = "totalvi_igt1_48_20230706_allgenes_denoised.h5ad")
+#model$adata$layers[TOTALVI_NORMALIZED_KEY] = denoised[1]
+#saveRDS(denoised, file = sprintf("%s_denoised.Rds", prefix))
+
+denoised_protein = py_to_r(denoised[[1]]) %>% t()
+saveRDS(denoised_protein, file = sprintf("%s_denoised_protein_matrix.Rds", prefix))
+
+post_adata = anndata.AnnData(X=dataset.X)
+adata$obsm[["protein_denoised"]] = adata_protein$to_df()
+denoised_rna = py_to_r(denoised[[0]]) #%>% t()
+
+all(colnames(denoised_protein) == colnames(so))
+so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein) #samples@assays$ADT$counts denoised_protein
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+#Denoised RNA on all genes and all cells is too much, skip
+#denoised_rna = py_to_r(denoised[[0]]) %>% t()
+#all(colnames(denoised_rna) == colnames(so))
+#so[["denoised_rna"]] = CreateAssayObject(data = denoised_rna)
+
+
+#PLOTS
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 30, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "IGT",
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+
+
+# FeaturePlots
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+#so = NormalizeData(so, assay = "protein_denoised", normalization.method = "CLR")
+#so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+g = "CD19"
+#sort(rownames(so))
+
+pdf(sprintf("%s_FeaturePlots.pdf", prefix), 20, 10, useDingbats = F)
+DefaultAssay(so) = "ADT"
+#denoised_protein = so@assays$protein_denoised$data
+#so[["protein_denoised"]] = NULL
+#so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein)
+p1 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s ADT", g))
+DefaultAssay(so) = "protein_denoised"
+p2 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s protein denoised", g))
+p1 | p2
+dev.off()
+
+gene_pair_list = list(
+    c("CD19", "THY1.2"),
+    c("ITAX.CD11C", "THY1.2" ),
+    c("TCRB", "TCRGD"),
+     c("CD4", "CD8A"),
+     c("CD62L","CD44"),
+     c("IL7RA.CD127","IL2RA.CD25") 
+)
+
+pdf(sprintf("%s_FeatureScatter.pdf", prefix), 20, 20, useDingbats = F)
+for(pair in gene_pair_list) {
+    print(pair)
+   DefaultAssay(so) = "ADT"
+    g1 = pair[1]
+    g2 = pair[2]
+    p3 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("ADT, %s x %s, IGT x spleen standard", g1, g2))  + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    DefaultAssay(so) = "protein_denoised"
+    p4 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("Protein Denoised, %s x %s, IGT x spleen standard", g1, g2)) + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    print(p3 | p4)
+}
+
+dev.off()
+
+```
+
+manual
+```{r}
+
+so = readRDS("immgent_20230705.Rds")
+prefix = "totalvi_igt1_48_20230706_allgenes"
+
+so$colnames = colnames(so)
+
+#Find Variable features
+#scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
+#Another important thing to keep in mind is highly-variable gene selection. While scVI and scANVI both accomodate for large gene sets in terms of runtime, we usually recommend filtering genes for best performance when the dataset has few number of cells. As a rule of thumb, performance starts to decrease when number of cells and number of genes are comparable. This point is emphasized in this comparative analysis of data integration algorithms for scRNA-seq data.
+DefaultAssay(so) = "RNA"
+so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so = NormalizeData(so)
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+plot1 = VariableFeaturePlot(so)
+plot2 = LabelPoints(plot = plot1, points = VariableFeatures(so), repel = TRUE)
+
+pdf(file = sprintf("%s_HVG.pdf", prefix), 20, 20, useDingbats = F)
+plot2
+dev.off()
+
+so = JoinLayers(so)
+
+#Convert Seurat V5 object to Anndata
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    message("same colnames between 2 assays")
+    print(all(colnames(so.v3[[assay1]]$counts) == colnames(so.v3[[assay2]]$counts)))
+    message("same colnames between S3 and S5")
+    print(all(colnames(so.v3) == colnames(so)))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+so.v3 = ConvertS5toS3(so) #so[VariableFeatures(so)]
+sce = Seurat::as.SingleCellExperiment(so.v3)
+
+#Convert to AnnData
+library(reticulate)
+library(sceasy)
+library(SingleCellExperiment)
+library(anndata)
+
+sc = import("scanpy", convert = FALSE)
+scvi = import("scvi", convert = FALSE)
+sys = import ("sys", convert = FALSE)
+np = import("numpy", convert=FALSE)
+
+#DefaultAssay(so2.v3) = "RNA"
+#sce = Seurat::as.SingleCellExperiment(so2.v3)
+
+#adata_protein = convertFormat(altExp(sce.pbmc), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+
+adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+adata$obsm[["protein"]] = adata_protein$to_df()
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+# run setup_anndata: https://docs.scvi-tools.org/en/stable/api/reference/scvi.model.SCVI.html#scvi.model.SCVI.setup_anndata
+
+scvi$model$TOTALVI$setup_anndata(adata, protein_expression_obsm_key="protein", categorical_covariate_keys = list("IGT"))
+## SAYS NO GPU EVEN IF THERE IS!!
+
+# create the model
+n_latent = as.integer(30)
+model = scvi$model$TOTALVI(adata, n_latent = n_latent, gene_likelihood = "nb")
+
+# train the model
+#max_epochs = min(round((20000 / as.numeric(as.character(adata$n_obs))) * 400), 400)
+model$train() #use_gpu = T
+# to specify the number of epochs when training:
+# model$train(max_epochs = as.integer(400))
+
+model$save(sprintf("%s/", prefix), save_anndata = T) 
+#model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
+
+# get the latent represenation
+latent = model$get_latent_representation()
+latent = as.matrix(latent)
+rownames(latent) = colnames(so)
+so[["totalvi"]] = CreateDimReducObject(embeddings = latent, key = "totalvi_", assay = DefaultAssay(so))
+
+#so = RunUMAP(so, dims = 1:10, reduction = "scvi", n.components = 2)
+so = RunUMAP(so, dims = 1:n_latent, reduction = "totalvi", n.components = 2, reduction.name = "umap_totalvi")
+
+so = FindNeighbors(so, dims = 1:n_latent, reduction = "totalvi")
+so = FindClusters(so, resolution = 0.25, cluster.name = "ClusterTOTALVI_Res0.25")
+so = FindClusters(so, resolution = 0.5, cluster.name = "ClusterTOTALVI_Res0.5")
+so = FindClusters(so, resolution = 1, cluster.name = "ClusterTOTALVI_Res1")
+so = FindClusters(so, resolution = 2, cluster.name = "ClusterTOTALVI_Res2")
+so = FindClusters(so, resolution = 3, cluster.name = "ClusterTOTALVI_Res3")
+so = FindClusters(so, resolution = 4, cluster.name = "ClusterTOTALVI_Res4")
+#colnames(so@meta.data) = gsub(x = colnames(so@meta.data), pattern = "scvi_res", replacement = "ClusterSCVI_Res")
+
+#so = JoinLayers(so)
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+# get denoised protein expression
+
+denoised = model$get_normalized_expression() #protein_list = rownames(so[["ADT"]]), transform_batch = as.character(unique(so$IGT))
+denoised_protein = py_to_r(denoised[[1]]) %>% t()
+all(colnames(denoised_protein) == colnames(so))
+so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein) #samples@assays$ADT$counts denoised_protein
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+
+saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+
+#Denoised RNA on all genes and all cells is too much, skip
+#denoised_rna = py_to_r(denoised[[0]]) %>% t()
+#all(colnames(denoised_rna) == colnames(so))
+#so[["denoised_rna"]] = CreateAssayObject(data = denoised_rna)
+
+
+#PLOTS
+pdf(sprintf("%s_Plots.pdf", prefix), 20, 30, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "IGT",
+        split_by2 =  "is_spleen_standard", 
+        genes = c("Ms4a1", "Cd3e", "Cd4", "Cd8a", "Foxp3", "Trgc1", "Itgax", "Itgam"), 
+        cluster_key = NULL, mypal = glasbey())
+dev.off()
+
+
+# FeaturePlots
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize", scale.factor = 10000)
+so = NormalizeData(so, assay = "protein_denoised", normalization.method = "LogNormalize", scale.factor = 10000)
+#so = NormalizeData(so, assay = "protein_denoised", normalization.method = "CLR")
+#so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+g = "CD19"
+#sort(rownames(so))
+
+pdf(sprintf("%s_FeaturePlots.pdf", prefix), 20, 10, useDingbats = F)
+DefaultAssay(so) = "ADT"
+#denoised_protein = so@assays$protein_denoised$data
+#so[["protein_denoised"]] = NULL
+#so[["protein_denoised"]] = CreateAssayObject(counts = denoised_protein)
+p1 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s ADT", g))
+DefaultAssay(so) = "protein_denoised"
+p2 = FeaturePlot(so, g, cols = c("lightgrey", "darkgreen"), slot = "counts") + ggtitle(sprintf("%s protein denoised", g))
+p1 | p2
+dev.off()
+
+gene_pair_list = list(
+    c("CD19", "THY1.2"),
+    c("ITAX.CD11C", "THY1.2" ),
+    c("TCRB", "TCRGD"),
+     c("CD4", "CD8A"),
+     c("CD62L","CD44"),
+     c("IL7RA.CD127","IL2RA.CD25") 
+)
+
+pdf(sprintf("%s_FeatureScatter.pdf", prefix), 20, 20, useDingbats = F)
+for(pair in gene_pair_list) {
+    print(pair)
+   DefaultAssay(so) = "ADT"
+    g1 = pair[1]
+    g2 = pair[2]
+    p3 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("ADT, %s x %s, IGT x spleen standard", g1, g2))  + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    DefaultAssay(so) = "protein_denoised"
+    p4 = FeatureScatter(so, feature1 = g1, feature2 = g2, slot = "data", group.by = "IGT", raster = T) + ggtitle(sprintf("Protein Denoised, %s x %s, IGT x spleen standard", g1, g2)) + facet_grid(rows = vars(so$IGT), cols = vars(so$is_spleen_standard))
+    print(p3 | p4)
+}
+
+dev.off()
+
+```
+
+
+**TOTAL-VI INTEGRATION IGT 1-56 all cells, all genes**
+
+*Merge all samples in one seurat object*
+IGT1: FALSE is then expected (can't rerun the pipeline)
+IGT3: spleen names lack IGT3. FALSE is then expected (can't rerun the pipeline)
+IGT19: remove spleen_standard.Rds (contains all samples by mistake). Done
+IGT23: remove spleen_standard.Rds (contains 1 cell). Done
+IGT38: no QC, no dataset_clean.Rds. Mistake before, colnames say IGT39.
+IGT47: no dataset_clean.Rds. took the old one for now. Check with Dania.
+
+```{r}
+
+ImportIGTData = function(dir, IGT) {
+    
+    spleen_test = file.exists(sprintf("%s/spleen.Rds", dir))
+    sample_test = file.exists(sprintf("%s/dataset_clean.Rds", dir))
+    
+    if (!sample_test) {
+        stop("no data")
+    }
+    
+    if (spleen_test) {
+        message("Loading spleen standard")
+        tmp = readRDS(sprintf("%s/spleen.Rds", dir))
+        tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+        tmp2[["ADT"]] = CreateAssayObject(counts = tmp@assays$ADT$counts)
+        print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+        tmp2$IGT = IGT
+        tmp2$is_spleen_standard = T
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(tmp2), split = "\\."))[,1])
+        message("IGT in spleen standard match IGT")
+        print(all(igt_incolnames %in% IGT))
+    }    
+    
+    if (sample_test) {
+        message("Loading samples")
+        samples = readRDS(sprintf("%s/dataset_clean.Rds", dir))
+        DefaultAssay(samples) = "RNA"
+        samples2 = CreateSeuratObject(counts = samples@assays$RNA$counts, meta.data = samples@meta.data, assay = "RNA")
+        samples2[["ADT"]] = CreateAssayObject(counts = samples@assays$ADT$counts) #samples@assays$ADT$counts
+        print(all(colnames(samples2@assays$RNA$counts) == colnames(samples2@assays$ADT$counts)))
+        samples2$IGT = IGT
+        samples2$is_spleen_standard = F
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(samples2), split = "\\."))[,1])
+        message("IGT in sample match IGT")
+        print(all(igt_incolnames %in% IGT))
+        all(samples2$IGT %in% IGT)
+    }
+    
+    if (spleen_test) {
+        message("Spleen standard present to merge")
+        int = intersect(colnames(samples2), colnames(tmp2))
+        #print(length(int))
+        if (length(int) != 0) {
+            message(sprintf("removing %s spleen standard cells from the samples", length(int)))
+            samples2 = samples2[,!colnames(samples2) %in% int]
+        }
+    
+        #table(samples2[,int]@meta.data$HTO_classification.simplified)
+        #table(tmp2[,int]@meta.data$HTO_classification.simplified)
+    
+        m = merge(tmp2, samples2)
+        m = JoinLayers(m)
+    } else {
+        message("No spleen standard to merge")
+        m = samples2
+    }
+    
+    meta = m@meta.data
+    meta$hashtag_number = meta$HTO_classification.simplified
+    meta = meta[,!grepl("HTO|hash.ID|outliers|singler|lowCountADT|orig.ident", colnames(meta))]
+    
+    metadata_sample = read.table(file = sprintf("%s/%s_specific_Sample_metadata.tsv", dir, IGT), sep = "\t", header = T, as.is = T)
+    #metadata_sample = read.table(file = sprintf("%s/%s_sample_specific_metadata.csv", dir, IGT), sep = ",", header = T, as.is = T)
+    metadata_sample = metadata_sample[,!colnames(metadata_sample) %in% "X"]
+    metadata_sample$hashtag_number = paste("HT", metadata_sample$hashtag_number, sep = "")
+    
+    message("IGT in seurat object match IGT in specific_Sample_metadata.csv")
+    print(unique(metadata_sample[,grepl("IGT_10xlane_id", colnames(metadata_sample))]) %in% unique(gsub("IGT", "", meta$IGT)))
+    
+    message("metadata_sample$hashtag_number match specific_Sample_metadata.csv hashtag_number")
+    print(all(metadata_sample$hashtag_number[match(meta$hashtag_number, metadata_sample$hashtag_number)] == meta$hashtag_number))
+
+    meta = data.frame(meta, metadata_sample[match(meta$hashtag_number, metadata_sample$hashtag_number),])
+    meta$sample_name = NULL
+    meta$hashtag_number.1 = NULL
+    meta[,grepl("IGT_10xlane_id", colnames(meta))] = NULL
+    colnames(meta)[colnames(meta) == "RNA_clusters"] = "Rosetta_RNA_clusters"
+    colnames(meta)[colnames(meta) == "Protein_clusters"] = "Rosetta_Protein_clusters"
+    colnames(meta) = gsub("First.Of.|Avg.Of.","", colnames(meta))
+    
+    m@meta.data = meta
+    
+    return(m)
+}
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+#files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+#dirs = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(1:48))
+#dirs = sprintf("/scratch/midway3/zemmour/exp_id/*/IGT%s", c(1:56))
+
+paths = list.files(path = "/scratch/midway3/zemmour/exp_id/", pattern = "dataset_clean.Rds", recursive = T, include.dirs=T)
+paths = do.call(rbind, strsplit(paths, split = "\\/"))[,c(1,2)] %>% as.data.frame() %>% distinct()
+colnames(paths) = c("exp_id", "IGT")
+paths = paths[!paths$IGT %in% "Old",] %>% as.data.frame()
+rownames(paths) = NULL
+paths %>% write.table(file = "igt_exp.txt", row.names = F, quote = F, sep = ",")
+
+so_list = list()
+for (s in 1:nrow(paths)) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    #print(IGT)
+    IGT = paths$IGT[s]
+    print(IGT)
+    dir = sprintf("/scratch/midway3/zemmour/exp_id/%s/%s", paths$exp_id[s], paths$IGT[s])
+    so_list[[IGT]]  = tryCatch(ImportIGTData(dir, IGT), error = function(e) {message("no data")})
+}
+
+for (i in 1:length(so_list)) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    print(names(so_list)[i])
+    print(range(so_list[[i]][["ADT"]]$counts))
+    if (max(so_list[[i]][["ADT"]]$counts) < 100 | is.na(max(so_list[[i]][["ADT"]]$counts) )) {
+        print("changing ADT data to 0, check:")
+        m = Matrix(data = 0, nrow=nrow(so_list[[i]][["ADT"]]$counts), ncol=ncol(so_list[[i]][["ADT"]]$counts), sparse = TRUE)
+        rownames(m) = rownames(so_list[[i]][["ADT"]]$counts)
+        colnames(m) = colnames(so_list[[i]][["ADT"]]$counts)
+        so_list[[i]][["ADT"]]$counts = m
+        print(range(so_list[[i]][["ADT"]]$counts))
+    }
+}
+
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), project = "immgent_20231030")
+so = JoinLayers(so)
+saveRDS(so, file = "immgent_20231030.Rds")
+
+```
+
+INTEGRATION AND PLOTS
+see github immgent_integration_git for latest code
+```{bash}
+sbatch run_totalvi_plot_wrapper_20231030.sh #Rscript run_totalvi.R /scratch/midway3/zemmour/integration immgent_20231030.Rds 
+sbatch run_totalvi_plot_wrapper.sh #Rscript run_totalvi_plot.R /scratch/midway3/zemmour/integration totalvi_igt1_56_20231030_allgenes
+```
+
+
+**TOTAL-VI INTEGRATION for shanelle IGT 22 and 56, all genes**
+
+*Isolate IGHT22 and 56*
+
+```{r}
+prefix = "totalvi_igt1_56_20231030_allgenes"
+so_orig = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+so = so_orig[,so_orig$IGT %in% c("IGT22", "IGT56")]
+so[["RNA"]]$counts = as(so[["RNA"]]$counts, Class = "dgCMatrix")
+so[["ADT"]]$counts
+so[["umap_totalvi_20231030"]] = so[["umap_totalvi"]]
+so[["totalvi_20231030"]] = so[["totalvi"]]
+
+dir.create("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle")
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle/immgent_IGT22_56_shanelle.Rds")
+
+```
+
+INTEGRATION AND PLOTS
+see github immgent_integration_git for latest code
+```{bash}
+prefix = "totalvi_igt22_56_shanelle_20231119"
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts: 
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle immgent_IGT22_56_shanelle.Rds totalvi_igt22_56_shanelle_20231119
+#Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle totalvi_igt22_56_shanelle_20231119
+
+
+```
+
+
+**TOTAL-VI INTEGRATION IGT 1-56, all genes, resting CD4, activated CD4, rCD8, aCD8, unconventional, bottom right**
+
+Create new seurat object with each subset
+
+```{r}
+prefix = "totalvi_igt1_56_20231030_allgenes"
+so_orig = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+
+annot = read.table("ClusterTOTALVI_Res1_quickannotation.csv", header = T, sep = ",")
+annot
+
+#Remove thymus and non T cells
+so = so_orig[,!(so_orig$organ %in% c("thymus") | so_orig$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "non_T"]))]
+
+#Resting CD4
+rcd4 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD4"])]
+rcd4[["RNA"]]$counts = as(rcd4[["RNA"]]$counts, Class = "dgCMatrix")
+rcd4[["ADT"]]$counts = as(rcd4[["ADT"]]$counts, Class = "dgCMatrix")
+rcd4[["umap_totalvi_20231030"]] = rcd4[["umap_totalvi"]]
+rcd4[["totalvi_20231030"]] = rcd4[["totalvi"]]
+
+dir.create("resting_cd4")
+saveRDS(so, file = "resting_cd4/immgent_IGT1_56_resting_cd4.Rds")
+
+#Resting CD8
+rcd8 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD8"])]
+rcd8[["RNA"]]$counts = as(rcd8[["RNA"]]$counts, Class = "dgCMatrix")
+rcd8[["ADT"]]$counts = as(rcd8[["ADT"]]$counts, Class = "dgCMatrix")
+rcd8[["umap_totalvi_20231030"]] = rcd8[["umap_totalvi"]]
+rcd8[["totalvi_20231030"]] = rcd8[["totalvi"]]
+
+dir.create("resting_cd8")
+saveRDS(so, file = "resting_cd8/immgent_IGT1_56_resting_cd8.Rds")
+
+```
+
+INTEGRATION AND PLOTS
+see github immgent_integration_git for latest code
+```{bash}
+prefix = "totalvi_igt1_56_allgenes_resting_cd4_20240306"
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_resting_cd4.sh #run the 2 following scripts: 
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle immgent_IGT22_56_shanelle.Rds totalvi_igt22_56_shanelle_20231119
+#Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT22_56_shanelle totalvi_igt22_56_shanelle_20231119
+
+
+```
+
+
+**Integration evaluation: conservation of HVG**
+Calculate mean intracluster distances in one batch before and after integration
+```{r}
+prefix = "totalvi_20230509_allgenes"
+
+so = readRDS(file = sprintf("%s_so.Rds", prefix))
+
+library(cluster)
+
+igt = "IGT2"
+so_sub = so[,so$IGT == igt & so$is_spleen_standard == F]
+
+so_sub = so_sub %>% SCTransform(vst.flavor = "v2", verbose = T) %>% RunPCA(npcs = 30, ndims.print = 1:5, nfeatures.print = 5, reduction.name = "pca_batch", verbose = T)
+
+so_sub_d = dist(so_sub[["pca_batch"]]@cell.embeddings, diag = FALSE, upper = FALSE)
+so_sub_d_int = dist(so_sub[["totalvi"]]@cell.embeddings, diag = FALSE, upper = FALSE)
+
+s = silhouette(so_sub$Rosetta_RNA_clusters, so_sub_d)
+
+```
+
+
+**Integration evaluation: intra-batch clustering preservation**
+Calculate mean intracluster distances in one batch before and after integration
+```{r}
+prefix = "totalvi_20230509_allgenes"
+
+scib = import("scib", convert = FALSE)
+model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
+
+adata = model$adata
+
+adata_int = adata
+adata_int$obsm$X_emb = model$get_latent_representation()
+
+adata$obs$batch = adata$obs$IGT
+adata_int$obs$batch = adata_int$obs$IGT
+
+scib$metrics$hvg_overlap(adata, adata_int, batch_key = "IGT", n_hvg = 500)
+
+metrics = scib$metrics$metrics(adata, adata_int, batch_key = "IGT", embed='X_emb')
+
+
+
+```
+
+**Integration evaluation: scib (not working)**
+
+```{r}
+prefix = "totalvi_20230509_allgenes"
+
+scib = import("scib", convert = FALSE)
+model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
+
+adata = model$adata
+
+adata_int = adata
+adata_int$obsm$X_emb = model$get_latent_representation()
+
+adata$obs$batch = adata$obs$IGT
+adata_int$obs$batch = adata_int$obs$IGT
+
+scib$metrics$hvg_overlap(adata, adata_int, batch_key = "IGT", n_hvg = 500)
+
+metrics = scib$metrics$metrics(adata, adata_int, batch_key = "IGT", embed='X_emb')
+
+
+
+```
+
+
+**Contribution of protein or RNA in structure**
+
+Compare sum of log2FC between RNA and protein to see how much RNA signal and protein signal can distinguish  clusters (done in totalVI paper) 
+- do sum of log2FC RNA
+- do sum of log2FC protein
+- are some clusters better identified by RNA or bny protein?
+
+
+**Install scvi and seurat v5 and scib**
+```{bash}
+
+module load python/anaconda-2022.05
+#conda env list
+
+mamba create -p /project/jfkfloor2/zemmourlab/david/envs/scvi python=3.9
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install jax jaxlib -c conda-forge
+
+#check installation and GPU works:
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 —-mem=8GB
+module load python/anaconda-2022.05
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+#on midway3-0283 GPU
+#import torch
+#torch.cuda.is_available()
+#True
+#torch.cuda.device_count()
+#1
+#torch.cuda.current_device()
+#0
+#torch.cuda.device(0)
+#<torch.cuda.device object at 0x7f4d19f42af0>
+#torch.cuda.get_device_name(0)
+#'Quadro RTX 6000'
+
+#install R in this environment
+mamba install -c conda-forge r-base=4.2 r-essentials r-reticulate
+#then install seuratv5, BP cells, ggrastr 
+module load hdf5/1.12.0 #for BPCells but also others
+
+#install scib
+pip install scib
+```
+
+
+
+
+

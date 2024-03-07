@@ -1,0 +1,1084 @@
+---
+title: "laptop_bpcells_analysis"
+output: html_document
+date: "2023-07-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+
+R
+options(max.print=1000)
+options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+setwd("~/google_drive/ImmgenT/jamboree2/")
+setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+
+libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+options(Seurat.object.assay.version = 'v5')
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
+  newpal = c()
+  for (c in 1:length(splitvector)){
+    #print(c)
+    n = splitvector[c]
+    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
+    newcol[4,] = seq(50, 255, length.out = n)
+    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+  }
+  return(newpal)
+}
+sp = SplitColors
+#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
+
+library(org.Hs.eg.db)
+hs = org.Hs.eg.db
+go2eg = as.list(org.Hs.egGO2ALLEGS)
+symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+```
+
+**Open file on Desktop and make BPCells object in Seurat V5**
+
+```{r}
+so = readRDS(file = "totalvi_igt1_48_20230706_allgenes_so.Rds")
+write_matrix_dir(mat = so[["RNA"]]$counts, dir = "bpcells/totalvi_igt1_48_20230706_allgenes_counts")
+counts.mat = open_matrix_dir(dir = "bpcells/totalvi_igt1_48_20230706_allgenes_counts")
+
+so[["RNA"]]$counts = counts.mat
+
+#saveRDS(
+#  object = so,
+#  file = "totalvi_igt1_48_20230706_allgenes_BPCells_so.Rds",
+#  destdir = "bpcells/totalvi_igt1_48_20230706_allgenes_counts"
+#)
+
+```
+
+**Most up-to-date data**
+
+```{r}
+#setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+prefix = "totalvi_igt1_56_20231030_allgenes"
+#so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
+
+#IGT1-48
+#setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_48")
+so = readRDS(file = "bpcells/totalvi_igt1_48_20230706_allgenes_counts/totalvi_igt1_48_20230706_allgenes_BPCells_so_sketched.Rds")
+prefix = "totalvi_igt1_48_20230706_allgenes"
+```
+
+Update Metadata: saved in totalvi_igt1_56_20231030_allgenes_BPCells_so_sketched.Rds
+```{r}
+#Adjust colnames(so) that was modified when merged
+so$colnames = colnames(so)
+pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
+#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
+so$colnames = gsub(pattern, "\\1", so$colnames)
+any(duplicated(so$colnames))
+colnames(so) = so$colnames
+
+#order IGT
+unique(so$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
+so$IGT = factor(so$IGT, levels = ordered_vector)
+
+#add iNKT and MAIT cell annotation
+iNKT = read.table(file = "../iNKT148.csv", header = T, sep = ",")
+MAIT = read.table(file = "../MAIT148.csv", header = T, sep = ",")
+
+table(so$colnames %in% iNKT$IGT.cellID)
+so$iNKT = so$colnames %in% iNKT$IGT.cellID
+table(so$colnames %in% MAIT$IGT.cellID)
+so$MAIT = so$colnames %in% MAIT$IGT.cellID
+
+saveRDS(
+  object = so,
+  file = sprintf("%s_BPCells_so.Rds", prefix) ,
+  destdir = sprintf("bpcells/%s_counts", prefix)
+)
+
+```
+
+**Plot UMAPs and expression**
+```{r}
+#so = readRDS(file = "bpcells/totalvi_igt1_48_20230706_allgenes_counts/totalvi_igt1_48_20230706_allgenes_BPCells_so.Rds")
+#prefix = "totalvi_igt1_48_20230706_allgenes"
+prefix = "totalvi_igt1_56_20231030_allgenes"
+so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+
+DimPlot(so, reduction = "umap_totalvi", group.by = "IGT", raster = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", group.by = "organ", raster = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", split.by = "organ", group.by = "IGT", ncol = 6, raster = F) 
+
+DimPlot(so, reduction = "umap_totalvi", group.by = "iNKT", raster = T) + scale_color_manual(values = c("grey", "red"))
+DimPlot(so, reduction = "umap_totalvi", group.by = "MAIT", raster = T) + scale_color_manual(values = c("grey", "red"))
+bkgrd = ggplot(data = as.data.frame(so[["umap_totalvi"]]@cell.embeddings)) + geom_point_rast(aes(umaptotalvi_1, umaptotalvi_2), color = "grey", raster.dpi = 50)
+bkgrd + p
+p = DimPlot(so, reduction = "umap_totalvi", split.by = "organ", group.by = "IGT", ncol = 6, raster = F) + scale_color_manual(values = mypal)
+pdf(sprintf("%s_IGT_tissue.pdf", prefix), 40,40, useDingbats = F)
+print(p)
+DimPlot(so, reduction = "umap_totalvi", group.by = "Distribution", raster = T) + scale_color_manual(values = mypal)
+dev.off()
+
+pdf(sprintf("%s_BroadCellAnnotation.pdf", prefix), 10,10, useDingbats = F)
+DimPlot(so, reduction = "umap_totalvi", group.by = "Distribution", raster = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", group.by = "iNKT", raster = T) + scale_color_manual(values = c("grey", "red"))
+DimPlot(so, reduction = "umap_totalvi", group.by = "MAIT", raster = T) + scale_color_manual(values = c("grey", "red"))
+dev.off()
+
+DefaultAssay(so) = "RNA"
+pdf(sprintf("%s_genes2.pdf", prefix), 10,10, useDingbats = F)
+#FeaturePlot(so, slot = "data", features = "Foxp3", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Foxp3", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Cd4", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Mki67", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Cd8a", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Cd8b1", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Sell", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Cd44", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Trgc1", raster = T, order = F)
+FeaturePlot(so, features = "TCRGD", raster = T)
+FeaturePlot(so, slot = "data", features = "CD62L", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "CD44", raster = T, order = F)
+dev.off()
+FeaturePlot(so, features = "Foxp3", raster = T, order = F)
+FeaturePlot(so, features = "Pdcd1", raster = T, order = F)
+FeaturePlot(so, features = "Icos", raster = T, order = F)
+FeaturePlot(so, features = "Bcl6", raster = F, order = T)
+FeaturePlot(so, features = "Rorc", raster = T)
+FeaturePlot(so, features = "Tbx21", raster = T)
+FeaturePlot(so, features = "Gata3", raster = T)
+FeaturePlot(so, features = "Il10", raster = T)
+FeaturePlot(so, features = "Tox", raster = T)
+FeaturePlot(so, features = "Ccr7", raster = T)
+FeaturePlot(so, features = "Btg1", raster = T)
+FeaturePlot(so, features = c("Btg1", "Btg2"), raster = T)
+FeaturePlot(so, features = c("Btg1", "Btg2"), raster = T)
+
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+#so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize", verbose = T)
+DefaultAssay(so) = "ADT"
+FeaturePlot(so, features = "CD62L", raster = T)
+FeaturePlot(so, features = "CD3", raster = T)
+FeaturePlot(so, features = "CD4", raster = T)
+FeaturePlot(so, features = "CD8A", raster = T)
+FeaturePlot(so, features = "CD3", raster = T)
+FeaturePlot(so, features = "Nr4a1", raster = T)
+FeaturePlot(so, features = "Sell", raster = T)
+FeaturePlot(so, features = "TCRGD", raster = T)
+FeaturePlot(so, features = "IL2RA.CD25", raster = T)
+FeaturePlot(so, features = "CD19", raster = T)
+FeaturePlot(so, features = "CD20", raster = T)
+FeaturePlot(so, features = "Pax5", raster = T)
+dev.off()
+
+DefaultAssay(so) = "RNA"
+#FeaturePlot(so, features = c("Zbtb46"), interactive = T, slot = "data", raster = T, blend = T)
+FeaturePlot(so, features = c("ITAX.CD11C", "ITAM.CD11B", "Zbtb46", "Lyz1"), raster = T)
+FeaturePlot(so, features = "ITAX.CD11C", raster = T)
+FeaturePlot(so, features = "Zbtb46", raster = T)
+
+FeaturePlot(so, features = c("CD19", "CD20", "Pax5"), raster = T)
+
+FeaturePlot(so, features = c("Nrg1"), raster = T)
+
+VlnPlot(so, features = c("Cd3e", "Foxp3", "Cd4"), ncol = 3, layer = "counts", alpha = 0.1)
+
+so2 = so[,so$IGT == "IGT20" & so$is_spleen_standard ==F]
+FeaturePlot(so2, features = "Foxp3", raster = F, pt.size = 1, order = T)
+FeaturePlot(so2, features = c("Notch1", "Notch2", "Notch4"), raster = F, pt.size = 1, order = T)
+FeaturePlot(so2, features = c("Dll1", "Dll4"), raster = F, pt.size = 1, order = T)
+FeaturePlot(so2, features = c("Jag1", "Jag2"), raster = F, pt.size = 1, order = T)
+DimPlot(so2, reduction = "umap_totalvi", group.by = "Distribution", raster = F, pt.size = 1, order = T) + scale_color_manual(values = mypal)
+DimPlot(so2, reduction = "umap_totalvi", group.by = "iNKT", raster = F, pt.size = 1, order = T) + scale_color_manual(values = mypal)
+DimPlot(so2, reduction = "umap_totalvi", group.by = "MAIT", raster = F, pt.size = 1, order = T) + scale_color_manual(values = mypal)
+DimPlot(so2, reduction = "umap_totalvi", split.by = "organ", group.by = "organ", raster = F, pt.size = 1, order = T) + scale_color_manual(values = mypal)
+FeaturePlot(so2, features = c("TCRGD"), raster = F, pt.size = 1, order = T)
+FeaturePlot(so2, features = c("CD8A"), raster = F, pt.size = 1, order = T)
+FeaturePlot(so2, features = c("CD8B"), raster = F, pt.size = 1, order = T)
+
+so$Tregs = so$ClusterTOTALVI_Res1 %in% c("10", "25", "29")
+so$organ2 = so$organ
+so$organ2[grepl("spleen|lymph", so$organ)] = "SLO"
+so$organ2[grepl("colon|duodenum|gut|ileum|jejunum|intestine|propria|SI", so$organ)] = "gut"
+so$organ2[grepl("skin", so$organ)] = "skin"
+so$organ2[grepl("submandibular", so$organ)] = "submandibular gland"
+DimPlot(so[,so$Tregs == T], reduction = "umap_totalvi", group.by = "organ2", raster = F, label = F) + scale_color_manual(values = mypal)
+FeaturePlot(so, features = "Foxp3", split.by = "Tregs", raster = F, pt.size = 1, order = T)
+DimPlot(so, reduction = "umap_totalvi", split.by = "Tregs", group.by = "ClusterTOTALVI_Res1", raster = F) + scale_color_manual(values = mypal)
+
+so$IGT43 = so$IGT %in% c("10", "25", "29")
+
+
+pdf(sprintf("%s_IGT_tissue.pdf", prefix), 40,40, useDingbats = F)
+print(p)
+DimPlot(so, reduction = "umap_totalvi", group.by = "Distribution", raster = T) + scale_color_manual(values = mypal)
+dev.off()
+
+```
+
+**Sketch analysis**
+https://satijalab.org/seurat/articles/seurat5_sketch_analysis
+sketch assay = 50000 cells in memory
+
+```{r}
+#‘Sketch’ a subset of cells
+DefaultAssay(so) = "RNA"
+#so$umap_totalvi_1 = so[["umap_totalvi"]]@cell.embeddings[,1]
+#so$umap_totalvi_2 = so[["umap_totalvi"]]@cell.embeddings[,2]
+#so[["RNA"]] = split(so[["RNA"]], f = so$IGT)
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize", verbose = T)
+so = FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
+so = SketchData( #make sure to run SketchData straight after FindVariableFeatures
+  object = so,
+  ncells = 20000, #per split, if done per split
+  method = "LeverageScore",
+  sketched.assay = "sketch"
+)
+#so[["sketch"]]$counts = as(so[["sketch"]]$counts, Class = "dgCMatrix") #if want to convert to in-memory
+
+DefaultAssay(so) = "sketch"
+so2 = subset(so, cells = colnames(so[["sketch"]]))
+so[["umap_totalvi_sketch"]] = so2[["umap_totalvi"]]
+#so = JoinLayers(so)
+
+#p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "organ", raster = T) + scale_color_manual(values = mypal)
+#p2 = DimPlot(so, reduction = "umap_totalvi_sketch", group.by = "organ", pt.size = 2, raster = T) + scale_color_manual(values = mypal)
+#p1 + NoLegend() | p2 + NoLegend()
+
+saveRDS(
+  object = so,
+  file = sprintf("%s_BPCells_so_sketched.Rds", prefix),
+  destdir = sprintf("bpcells/%s_counts/", prefix)
+)
+
+##Export the UMAP and clusters
+
+umap = so[["umap_totalvi"]]@cell.embeddings
+clusters_integrated = so$ClusterTOTALVI_Res1
+all(names(clusters_integrated) == rownames(so[["umap_totalvi"]]@cell.embeddings))
+df = data.frame(cells = colnames(so), umap_totalvi_1 = so[["umap_totalvi"]]@cell.embeddings[,1],umap_totalvi_2 = so[["umap_totalvi"]]@cell.embeddings[,2], clusters_integrated = so$ClusterTOTALVI_Res1)
+write.table(df, file = "integrated_umap_clusters.csv", quote = F, sep = ",", row.names = F, col.names = T)
+
+##Split for each IGT for jamboree
+
+#colnames(so[["sketch"]])
+#colnames(so[,so$IGT == "IGT1"])
+for (IGT in levels(so$IGT)) {
+    print(IGT)
+    sub = so$colnames[so$IGT == IGT & !(so$colnames %in% colnames(so[["sketch"]]))]
+    sub = c(sub, colnames(so[["sketch"]])) 
+    sub = subset(so, cells = sub)
+    saveRDS(sub, file = sprintf("jamboree2/%s_withsketch.Rds", IGT)) #saves in memory by default
+    rm(sub)
+}
+
+##Convert V5 to V3
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = as(so[[assay1]]$counts, Class = "dgCMatrix"))
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    message("same colnames between 2 assays")
+    print(all(colnames(so.v3[[assay1]]$counts) == colnames(so.v3[[assay2]]$counts)))
+    message("same colnames between S3 and S5")
+    print(all(colnames(so.v3) == colnames(so)))
+    so.v3@meta.data = so@meta.data
+    so.v3[["umap_totalvi"]] = so[["umap_totalvi"]]
+	return(so.v3)
+}
+
+priority = c("IGT22", "IGT56", "IGT37", "IGT39", "IGT28", "IGT26", "IGT45", "IGT44", "IGT33", "IGT16")
+IGTS = c(priority, levels(so$IGT)[!levels(so$IGT) %in% priority])
+for (IGT in IGTS[40:51]) {
+    print(IGT)
+    so = readRDS(file = sprintf("~/google_drive/ImmgenT/jamboree2/%s_withsketch.Rds", IGT))
+    so.v3 = ConvertS5toS3(so, assay1 = "RNA", assay2 = "ADT")
+    saveRDS(so.v3, file = sprintf("~/google_drive/ImmgenT/jamboree2/%s_withsketch_SeuratV4.Rds", IGT)) #saves in memory by default
+    rm(so)
+    rm(so.v3)
+}
+
+so = readRDS(file = sprintf("~/google_drive/ImmgenT/jamboree2/%s_withsketch_SeuratV4.Rds", IGT))
+DimPlot(so, reduction = "umap_totalvi", group.by = "IGT")
+FeaturePlot(so, reduction = "umap_totalvi", feature = "Foxp3")
+
+#Export for Shanelle and Sam
+sub = so$colnames[so$IGT %in% c("IGT15", "IGT16", "IGT22", "IGT56") & !(so$colnames %in% colnames(so[["sketch"]]))]
+sub = c(sub, colnames(so[["sketch"]])) 
+sub = subset(so, cells = sub)
+so.v3 = ConvertS5toS3(sub, assay1 = "RNA", assay2 = "ADT")
+table(so.v3$IGT)
+saveRDS(so.v3, file = "~/google_drive/ImmgenT/jamboree2/IGT15-16-22-56_withsketch_SeuratV4.Rds") 
+
+
+```
+
+Compare random to LeverageScore method
+```{r}
+#
+so3 =  subset(so, cells = sample(x = colnames(so), size = 10000, replace = F))
+
+p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "organ", raster = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = "umap_totalvi_sketch", group.by = "organ", pt.size = 2, raster = F) + scale_color_manual(values = mypal)
+p3 = DimPlot(so3, reduction = "umap_totalvi", group.by = "organ", pt.size = 2, raster = F) + scale_color_manual(values = mypal) 
+
+p1 + NoLegend() | p2 + NoLegend() | p3 
+
+pdf(file = sprintf("%s_umap_sketch.pdf", prefix), 40, 10, useDingbats = F)
+p1 + NoLegend() | p2 + NoLegend() | p3 
+dev.off()
+
+###
+all(colnames(so[["sketch"]]) == rownames(so[["umap_totalvi"]]@cell.embeddings[match(colnames(so[["sketch"]]), rownames(so[["umap_totalvi"]]@cell.embeddings)),]))
+so[["umap_totalvi_subset"]]@cell.embeddings[,1] = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so[["sketch"]]), rownames(so[["umap_totalvi"]]@cell.embeddings)),1]
+
+```
+
+**Clusters**
+
+```{r}
+
+
+pdf(file = sprintf("%s_umap_ClusterTOTALVI.pdf", prefix), 10, 10, useDingbats = F)
+p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.25", raster = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.5", raster = T) + scale_color_manual(values = mypal)
+p3 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res1", raster = T) + scale_color_manual(values = mypal)
+p4 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res2", raster = T) + scale_color_manual(values = mypal)
+p5 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res3", raster = T) + scale_color_manual(values = mypal)
+p6 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res4", raster = T, label = T) + scale_color_manual(values = mypal)
+p1
+p2
+p3
+p4
+p5
+p6
+
+p1 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.25", raster = T, label = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res0.5", raster = T, label = T) + scale_color_manual(values = mypal)
+p3 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res1", raster = T, label = T) + scale_color_manual(values = mypal)
+p4 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res2", raster = T, label = T) + scale_color_manual(values = mypal)
+p5 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res3", raster = T, label = T) + scale_color_manual(values = mypal)
+p6 = DimPlot(so, reduction = "umap_totalvi", group.by = "ClusterTOTALVI_Res4", raster = T, label = T) + scale_color_manual(values = mypal)
+p1 + NoLegend()
+p2 + NoLegend()
+p3 + NoLegend()
+p4 + NoLegend()
+p5 + NoLegend()
+p6 + NoLegend()
+
+dev.off()
+
+```
+
+**TOTALVI on subpopulations**
+
+```{r}
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+
+DefaultAssay(so) = "ADT"
+pdf(sprintf("%s_CD4CD8CD62LCD44_percluster.pdf", prefix), 10,10, useDingbats = F)
+for (cl in 0:54) {
+    print(cl)
+    p = FeaturePlot(so[,so$ClusterTOTALVI_Res1 == cl], slot = "data", features = c("CD4", "CD8A", "CD62L", "CD44"), raster = T)
+    print(p)
+}
+dev.off()
+
+
+#################
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+p1 = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.05, raster.dpi = 50)
+Idents(so) = NULL
+DimPlot(so, reduction = "umap_totalvi", pt.size = 0.05, group.by = NULL,raster = T) 
+p1+p2$patches$plots[[1]]
+p2$patches$plots[[1]]
+
+dim1 = so@reductions$umap_totalvi@cell.embeddings[,1]
+dim2 = so@reductions$umap_totalvi@cell.embeddings[,2]
+alpha = 0.5
+#patient_colors = mypal[1:length(levels(so$patient))]
+#names(patient_colors) = levels(so$patient)
+#patient_colors2 = patient_colors
+#patient_colors2[grepl("HD", names(patient_colors))] = "grey"
+
+
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+p1 = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.05, raster.dpi = 50)
+
+g = "Cd4"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$data[g,])
+p2 = geom_point(data = tmp[tmp$size >0,], aes(dim1, dim2), color = "red", size = 0.05, alpha = 0.5) 
+
+pdf(sprintf("%s_genes3.pdf", prefix), 10,10, useDingbats = F)
+q = p1 + p2 + theme_bw() + facet_grid(~ClusterTOTALVI_Res1, cols = 7)
+print(q)
+dev.off()
+
+FeaturePlot(so[,so$ClusterTOTALVI_Res1 == 0], slot = "data", features = c( "THY1.2", "CD4", "CD8A", "CD62L", "CD44"), raster = T)
+FeaturePlot(so, slot = "data", features = c( "THY1.2", "CD4", "CD8A", "CD62L", "CD44"), raster = T)
+
+
+DefaultAssay(so) = "RNA"
+pdf(sprintf("%s_genes2.pdf", prefix), 10,10, useDingbats = F)
+#FeaturePlot(so, slot = "data", features = "Foxp3", raster = T, order = F)
+DefaultAssay(so) = "ADT"
+FeaturePlot(so, slot = "data", features = c( "THY1.2", "CD4", "CD8A", "CD62L", "CD44"), raster = T, order = F)
+DefaultAssay(so) = "RNA"
+pdf(sprintf("%s_genes3.pdf", prefix), 50,50, useDingbats = F)
+FeaturePlot(so, slot = "data", features = c("Cd4"), raster = T, order = F, split.by = "ClusterTOTALVI_Res1", ncol = 7) 
+dev.off()
+
+
+
+
+
+
+
+
+```
+
+Create separate objects to run TOTALVI
+
+(UMAP plots clusters) copied from other code
+```{r}
+dim1 = so@reductions$umap_integrated@cell.embeddings[,1]
+dim2 = so@reductions$umap_integrated@cell.embeddings[,2]
+alpha = 0.5
+patient_colors = mypal[1:length(levels(so$patient))]
+names(patient_colors) = levels(so$patient)
+patient_colors2 = patient_colors
+patient_colors2[grepl("HD", names(patient_colors))] = "grey"
+
+all(rownames(so@reductions$umap_integrated@cell.embeddings) == rownames(so@meta.data))
+
+
+pdf("PAPER_UMAP_1.pdf", 20, 20)
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = sample_type), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal[c(1,3)])
+p
+  
+dev.off()
+
+pdf("PAPER_UMAP_2.pdf", 20, 20)
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = patient), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = patient_colors)
+p
+  
+dev.off()
+
+pdf("PAPER_UMAP_2_split.pdf", 20, 10)
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = patient), size = 1,  alpha = alpha) 
+
+q = p + p2 + scale_color_manual(values = patient_colors)  + theme_bw() + facet_wrap(~sample_type)
+q
+
+dev.off()
+
+pdf("PAPER_UMAP_2_split_withlabels.pdf", 20, 10)
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = patient), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = patient_colors)
+
+print(LabelClusters(p + facet_wrap(~sample_type), id = "patient", split.by = "sample_type" ))
+  
+dev.off()
+
+pdf("PAPER_UMAP_3.pdf", 20, 20)
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = c("blue", "darkgreen", "red"))
+p
+  
+dev.off()
+
+pdf("PAPER_UMAP_3_split.pdf", 30, 10, useDingbats=FALSE)
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 3, alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+print(p + facet_wrap(~sample_type) )
+  
+dev.off()
+
+pdf("PAPER_UMAP_4.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp$ClusterRPCA_Revised_Annotation_General = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General = factor(tmp$ClusterRPCA_Revised_Annotation_General, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+#p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+
+p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_grid(sample_type~ClusterRPCA_Revised_Annotation_General)
+
+dev.off()
+
+library(RColorBrewer)
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal = mypal[-4]
+
+dim1 = so@reductions$umap_integrated@cell.embeddings[,1]
+dim2 = so@reductions$umap_integrated@cell.embeddings[,2]
+alpha = 0.5
+patient_colors = mypal[1:length(levels(so$patient))]
+
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp[tmp$size >0,], aes(dim1, dim2), color = "red", size = 1, alpha = 0.5) 
+
+p + p2 + theme_bw() + facet_grid(sample_type~ClusterRPCA_Revised_Annotation_General)
+
+
+
+pdf("PAPER_UMAP_4_2.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp$ClusterRPCA_Revised_Annotation_General2 = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General2[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General2)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General2 = factor(tmp$ClusterRPCA_Revised_Annotation_General2, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+#p = ggplot(bkgrd) + geom_point(aes(dim1, dim2), color = "grey", size = 0.1)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 1, alpha = alpha ) 
+p3 = geom_point(data = tmp[tmp$size >0, ], aes(dim1, dim2), size = 6, fill = "yellow", alpha = 1, shape = 21) #size = size*2
+#p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+
+p + p2 + p3 + scale_color_manual(values = c("blue", "darkgreen", "red"))  + theme_bw() + facet_grid(sample_type~ClusterRPCA_Revised_Annotation_General2)
+
+dev.off()
+
+pdf("PAPER_UMAP_5_2.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp$ClusterRPCA_Revised_Annotation_General2 = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General2[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General2)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General2 = factor(tmp$ClusterRPCA_Revised_Annotation_General2, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+#p = ggplot(bkgrd) + geom_point(aes(dim1, dim2), color = "grey", size = 0.1)
+p2 = geom_point(data = tmp2, aes(dim1, dim2), color = "red", size = 1, alpha = alpha ) 
+p3 = geom_point(data = tmp2[tmp2$size >0, ], aes(dim1, dim2), fill = "yellow", size = 6, alpha = 1, shape = 21) 
+
+p + p2 + p3 + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme_bw() + facet_wrap(~patient)
+dev.off()
+
+pdf("PAPER_UMAP_5_3.pdf", 20, 9)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp = tmp[tmp$patient %in% c("B4.309", "P4.sp7", "B6.384", "P1.0", "HD01", "HD02", "HD03", "HD12" ),]
+tmp$ClusterRPCA_Revised_Annotation_General2 = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General2[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General2)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General2 = factor(tmp$ClusterRPCA_Revised_Annotation_General2, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 0.5, alpha = 0.5,  raster.dpi = 50)
+p3 = geom_point(data = tmp2, aes(dim1, dim2), color = "red", size = 1, alpha = alpha ) 
+p4 = geom_point(data = tmp2[tmp2$size >0, ], aes(dim1, dim2), fill = "yellow",size = 4, alpha = 1, shape = 21) # size = 6
+
+p + p2 + p3 + p4 + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme_bw() + facet_wrap(~patient, nrow = 2)
+dev.off()
+
+pdf("PAPER_UMAP_5_3_v2.pdf", 20, 9)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp = tmp[tmp$patient %in% c("B4.309", "P4.sp7", "B6.384", "P1.0", "HD01", "HD02", "HD03", "HD12" ),]
+tmp$ClusterRPCA_Revised_Annotation_General2 = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General2[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General2)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General2 = factor(tmp$ClusterRPCA_Revised_Annotation_General2, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.1, raster.dpi = 50)
+p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 3, alpha = 0.5,  raster.dpi = 100)
+p3 = geom_point(data = tmp2, aes(dim1, dim2), color = "red", size = 1, alpha = alpha ) 
+p4 = geom_point(data = tmp2[tmp2$size >0, ], aes(dim1, dim2), color = "yellow", shape = 21, size = 4, alpha = 1) # size = 6
+
+p + p2 + p3 + p4 + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme_bw() + facet_wrap(~patient, nrow = 2) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+dev.off()
+
+pdf("PAPER_UMAP_5_3_allsamples.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp$ClusterRPCA_Revised_Annotation_General2 = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General2[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General2)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General2 = factor(tmp$ClusterRPCA_Revised_Annotation_General2, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 0.5, alpha = 0.5,  raster.dpi = 50)
+p3 = geom_point(data = tmp2, aes(dim1, dim2), color = "red", size = 1, alpha = alpha ) 
+p4 = geom_point(data = tmp2[tmp2$size >0, ], aes(dim1, dim2), fill = "yellow",size = 4, alpha = 1, shape = 21) # size = 6
+
+p + p2 + p3 + p4 + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme_bw() + facet_wrap(~patient)
+dev.off()
+
+pdf("PAPER_UMAP_5.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+tmp$ClusterRPCA_Revised_Annotation_General = as.character(tmp$ClusterRPCA_Revised_Annotation_General)
+tmp$ClusterRPCA_Revised_Annotation_General[grepl("Tconv", tmp$ClusterRPCA_Revised_Annotation_General)] = "Tconv"
+tmp$ClusterRPCA_Revised_Annotation_General = factor(tmp$ClusterRPCA_Revised_Annotation_General, levels = c("Tconv", "Treg"))
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+tmp2 = tmp[tmp$ClusterRPCA_Revised_Annotation_General == "Treg",]
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+#p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+
+p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_wrap(~patient)
+
+dev.off()
+
+pdf("PAPER_UMAP_6.pdf", 20, 20)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_General), size = 1, alpha = alpha) 
+#p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+
+p + p2  + scale_color_manual(values = c("blue", "darkgreen", "red")) + theme_bw()  + facet_wrap(~patient)
+
+dev.off()
+
+pdf("PAPER_UMAP_7.pdf", 20, 15)
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp, aes(dim1, dim2, color = patient), size = 1, alpha = alpha) 
+p + p2  + scale_color_manual(values = patient_colors) + theme_bw()  + facet_wrap(~experiment_date)
+  
+dev.off()
+
+
+pdf("PAPER_UMAP_8_replicatesP7B4B5.pdf", 20, 10)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+pts = c("P7.408", "B4.309", "B5.384")
+
+for (pt in pts) {
+  print(pt)
+  p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+  p2 = geom_point(data = tmp[tmp$patient == pt,], aes(dim1, dim2, color = patient), size = 1, alpha = alpha) 
+
+  q = p + p2  + scale_color_manual(values = patient_colors[pt]) + theme_bw()  + facet_wrap(~sample_name)
+  print(q)
+
+}
+
+dev.off()
+
+
+pdf("PAPER_UMAP_8_replicatesP4.pdf", 30, 10)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+
+pt = "P4.sp7"
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp[tmp$patient == pt,], aes(dim1, dim2, color = patient), size = 1, alpha = alpha) #
+
+q = p + p2  + scale_color_manual(values = patient_colors[pt]) + theme_bw()  + facet_wrap(~sample_name)
+print(q)
+  
+dev.off()
+
+pdf("PAPER_UMAP_9_B6_B5_samemut384.pdf", 20, 10)
+g = "FOXP3"
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size =so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,])
+bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+
+p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+p2 = geom_point(data = tmp[tmp$patient %in% c("B5.384", "B6.384"),], aes(dim1, dim2, color = patient), size = 1, alpha = alpha) #ClusterRPCA_Revised_Annotation_General
+
+q = p + p2  + scale_color_manual(values = patient_colors[c("B5.384", "B6.384")]) + theme_bw()  + facet_wrap(~patient)
+print(q) # c("blue", "darkgreen", "red")
+
+dev.off()
+
+pdf("PAPER_UMAP_RPCA_1.pdf", 20, 20)
+dim1 = so@reductions$umap_integrated_rpca@cell.embeddings[,1]
+dim2 = so@reductions$umap_integrated_rpca@cell.embeddings[,2]
+alpha = 0.5
+tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+
+p = ggplot(tmp) + geom_point_rast(aes(dim1, dim2, color = ClusterRPCA_Revised_Annotation_Detailed), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal)
+p
+
+dev.off()
+
+pdf("PAPER_UMAP_RPCA_HEATMAP.pdf", 30, 30)
+DimHeatmap(so, reduction = "pca_integrated_rpca", dims = 1:30, cells = 500, balanced = TRUE, nfeatures = 20)
+dev.off()
+
+load("signaturelisthuman20200203.Rda")
+signaturelist[["treg_up"]]
+pdf("PAPER_UMAP_RPCA_HEATMAP.pdf", 10, 10)
+DimHeatmap(so, reduction = "pca_integrated_rpca", dims = c(1,6,8,9), cells = 100, balanced = T, nfeatures = 30)
+dev.off()
+
+pdf("PAPER_UMAP_RPCA_Tregs.pdf", 10, 10)
+x = so@reductions$pca_integrated_rpca@feature.loadings
+x = x[rownames(x) %in% signaturelist[["treg_up"]],]
+barplot(abs(colSums(x)), axis.lty = 1)
+
+plot(cumsum((so@reductions$pca_integrated_rpca@stdev**2 / sum(so@reductions$pca_integrated_rpca@stdev**2))))
+
+dev.off()
+
+k = so@reductions$pca_integrated_rpca@feature.loadings["TNFRSF4",]
+sort(k)
+
+
+
+
+
+#######
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_name), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+print(LabelClusters(p, id = "sample_name"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = experiment_date), alpha = I(alpha)) + theme_bw()  + scale_color_manual(values = mypal)
+  print(LabelClusters(p, id = "sample_name"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_name), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p + facet_wrap(~experiment_date), id = "sample_type", split.by = "experiment_date"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_type), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p + facet_wrap(~experiment_date), id = "sample_type", split.by = "experiment_date"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = sample_name), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+  print(p)
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = sample_type), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+  print(LabelClusters(p + facet_wrap(~sample_type), id = "sample_type", split.by = "sample_type"))
+  
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = clustersCCA7Renamed), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+  print(LabelClusters(p + facet_wrap(~sample_type), id = "clustersCCA7Renamed", split.by = "sample_type")) 
+  
+  
+  tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+for( i in grep("ClusterRPCA_Res", colnames(so@meta.data))) {
+      p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = tmp[,i]), size = I(1), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, %s", colnames(so@meta.data)[i]))
+      print(LabelClusters(p, id =  colnames(so@meta.data)[i], size = 5))
+}
+  
+  
+p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = ClusterRPCA_Res0.5), size = I(0.25), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, %s", colnames(so@meta.data)[i]))
+print(LabelClusters(p + facet_wrap(~ClusterRPCA_Res0.5), id = "ClusterRPCA_Res0.5", split.by = "ClusterRPCA_Res0.5"))
+      
+        
+p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = ClusterRPCA_Revised), size = I(0.25), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, ClusterRPCA_Revised", colnames(so@meta.data)[i]))
+print(LabelClusters(p, id = "ClusterRPCA_Revised"))
+print(LabelClusters(p + facet_wrap(~ClusterRPCA_Revised), id = "ClusterRPCA_Revised", split.by = "ClusterRPCA_Revised"))
+
+#2
+tmp = data.frame(so@meta.data, dim1 = so@reductions$umap_integrated@cell.embeddings[colnames(so),1], dim2 = so@reductions$umap_integrated@cell.embeddings[colnames(so),2])
+p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = ClusterRPCA_Revised), size = I(0.25), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, ClusterRPCA_Res0.5", colnames(so@meta.data)[i]))
+print(LabelClusters(p, id = "ClusterRPCA_Res0.5"))
+print(LabelClusters(p + facet_wrap(~sample_type), id = "ClusterRPCA_Res0.5", split.by = "sample_type"))
+
+p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = ClusterRPCA_Revised), size = I(0.25), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, ClusterRPCA_Revised", colnames(so@meta.data)[i]))
+print(LabelClusters(p, id = "ClusterRPCA_Revised"))
+print(LabelClusters(p + facet_wrap(~sample_type), id = "ClusterRPCA_Revised", split.by = "sample_type"))
+
+#3. Color = sample_type
+p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = sample_type), size = I(0.25), alpha = alpha) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(sprintf("UMAP, ClusterRPCA_Revised", colnames(so@meta.data)[i]))
+print(p + facet_wrap(~ClusterRPCA_Revised))
+
+dev.off()
+
+##PLOTS
+
+MyPlots = function(so = so, dim1 = so@reductions$tsne_integrated[,1], dim2 = so@reductions$tsne_integrated[,2], genes = genes, alpha = 0.5) {
+    p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_type), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p, id = "sample_type"))
+  print(p + facet_wrap(~sample_type))
+  print(p + facet_wrap(~sample_name))
+  
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_name), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p, id = "sample_name"))
+  
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = experiment_date), alpha = I(alpha)) + theme_bw()  + scale_color_manual(values = mypal)
+  print(LabelClusters(p, id = "sample_name"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_name), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p + facet_wrap(~experiment_date), id = "sample_type", split.by = "experiment_date"))
+
+  p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point(aes(dim1, dim2, color = sample_type), alpha = I(alpha)) + theme_bw() + scale_color_manual(values = mypal)
+  print(LabelClusters(p + facet_wrap(~experiment_date), id = "sample_type", split.by = "experiment_date"))
+  
+  p2 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = sample_name), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+  print(p2)
+
+  for (g  in genes) {
+    print(g)
+    if (g %in% c("Cre", "IresGfp")) { 
+    size = so@meta.data[,g]+1 
+  } else if (length(g)>1) {
+      size = Matrix::colSums(so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g,]+1) 
+  } else {
+      size = so@assays$SCT@counts[rownames(so@assays$SCT@counts) %in% g, ]+1 }
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = size) 
+  
+#    p2 = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size > 1,  size = size), alpha = I(alpha)) + scale_color_manual(values = c("grey", "red")) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=5), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(label = paste(g, collapse = ","))
+#    print(p2)#+ xlim(c(-15,50)) + ylim(c(-20,18)) + ggtitle(label = paste(g, collapse = ",")) #+ facet_wrap(~cell_type) 
+#print(LabelClusters(p2 +facet_wrap(~Condition) , id = "Cluster_merged", size = 5, split.by = "Condition") )
+#    print(LabelClusters(p2 +facet_wrap(~genotype) , id = "sample_name", size = 5, split.by = "genotype") )
+#    print(p2+facet_wrap(~sample_name))
+#    print(LabelClusters(p2 +facet_wrap(~genotype) , id = "sample_name", size = 5, split.by = "sample_name") )
+
+    p2 = ggplot(tmp) + geom_point(aes(dim1, dim2, color = log10(size),  size = size), alpha = I(alpha)) + theme_bw() +scale_color_gradientn(colours = rev(rainbow(10, end = 4/6)))+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=5), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(label = paste(g, collapse = ",")) #+ xlim(c(-15,50)) + ylim(c(-20,18)) + ggtitle(label = paste(g, collapse = ",")) #+ facet_wrap(~cell_type) 
+    print(p2)
+    print(LabelClusters(p2 +facet_wrap(~sample_type) , id = "sample_name", size = 5, split.by = "sample_type") )
+    print(p2 +facet_wrap(~ClusterRPCA_Revised))
+    #print(p2+facet_wrap(~sample_name))
+    #print(LabelClusters(p2 +facet_wrap(~sample_type) , id = "sample_name", size = 5, split.by = "sample_type") )
+
+#th = 2
+#tmp$density = rep("grey", nrow(tmp))
+#tmp$density[size>th ] = densCols(tmp$dim1[tmp$size>th],tmp$dim2[size>th], colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+#p2 = ggplot(tmp) + geom_point(aes(dim1, dim2, color = density), size = I(2),  alpha = I(0.5)) + theme_bw() + scale_colour_identity() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20)) + geom_point(data = tmp[tmp$size > th,],aes(dim1, dim2, color = density), size = I(2),  alpha = I(0.5)) #+ facet_grid(.~color)#+  ylim(c(-50,50)) + ggtitle(label = paste(g, collapse = ",")) + facet_wrap(~color) #c("red", "darkgreen", "blue", "orange")
+#print(LabelClusters(p2 +facet_wrap(~Condition) , id = "Cluster_merged", size = 5, split.by = "Condition") )
+
+##Plot Violin plot
+#p2 = ggplot(tmp) + geom_point(aes(Cluster_Res4, log10(size), color = Cluster_Res4), position = position_jitter(width = 0.2), size = I(2),  alpha = I(0.7)) + geom_violin(aes(Cluster_Res4, log10(size+1), color = Cluster_Res4)) + theme_bw() + scale_color_manual(values = mypal) + guides(color = F) + theme(axis.text.x  = element_text(size=15, angle = 70, vjust = 1, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20)) + ggtitle(label = paste(g, collapse = ","))
+#print(p2)
+
+  }
+
+}
+
+genes = c('CTNNB1', 'GTF2H4', 'TOX2', 'TCF4', 'BCL11A', 'SOX4', 'DACH1', 'BACH2', 'SOX12', 'LEF1', 'SATB1', 'JUN', 'STAT4', 'FOS', 'FOSL2', 'RUNX3', 'BHLHE40', 'MYBL1', 'NR4A2', 'TBX21', 'EOMES', 'ASCL2', 'CEBPD', 'ZBTB16', 'RORC', 'NR1D1', 'HLF', 'BCL6', 'PRDM1', 'SMAD7', 'GATA3', 'MAF', 'FOXD2', 'FOXM1', 'UHRF1', 'FOXP3', 'PTTG1', 'AIRE', 'CEBPA', 'BATF', 'HMGB2', 'IKZF2', 'IL15', 'S100A9', 'IGFBP3', 'CTSW', 'IFNL1', 'S100A13', 'FGFBP2', 'MSMP', 'CCL4', 'XCL1', 'XCL2', 'GNLY', 'CCL5', 'LGALS3', 'ANXA2', 'IL32', 'CSF1', 'CCL20', 'CFH', 'PTGDS', 'OSM', 'EPDR1', 'CST3', 'FLT1', 'HSPG2', 'CA6', 'CD9', 'GPC3', 'DDR1', 'KRT2', 'CHI3L2', 'LRRN3', 'CLEC11A', 'SERPINE2', 'APOA1', 'IFNG', 'TGFB3', 'CPM', 'CPA5', 'CD70', 'LRFN4', 'IL7', 'LMCD1', 'UTS2', 'CHEK1', 'SELL', 'CCR7', 'CCR10', 'HLA−DQB1', 'HLA−DRB1', 'HLA−DRB5', 'HLA−DQA2', 'HLA−DQA1', 'HLA−DRA', 'LDLR', 'CCR4', 'CTLA4', 'TNFRSF4', 'CTSA', 'CCR6', 'NT5E', 'IL7R', 'IL17RB', 'TLR2', 'CR1', 'LAG3', 'CXCR6', 'IL12RB2', 'MS4A1', 'CCR5', 'CXCR3', 'F2R', 'TYROBP', 'CXCR4', 'IL2RB', 'SDC4', 'PDCD1', 'FAS', 'HLA−DPB1', 'HLA−DPA1', 'TIGIT', 'ANXA1', 'ANXA5', 'TGFB1', 'S100A6', 'LGALS1', 'IL2RA', 'CXCR5', "CD69", "CD161", "CCR4", "TBX21") 
+
+genes = list("FOXP3", "CD4", "IKZF2", "IL7R", "IL2RA", "CTLA4", "S100A4", "SATB1", "BACH2", "CD69", "NR4A2", "LAG3", "CCR7", "SELL", "GZMK", "GZMA", "CCR2", "GNLY", "CCL5", "RORC", "TBX21", "IRF4", "MAF", "MKI67", "NKG7", "KLRB1", "CTNNB1", "SOX4") #fData(cdsn)$SYMBOL[grep(x = fData(cdsn)$SYMBOL, pattern = "^MT-")]
+
+genes = list("FOXP3")
+
+dim1 = so@reductions$umap_integrated@cell.embeddings[,1]
+dim2 = so@reductions$umap_integrated@cell.embeddings[,2]
+alpha = 0.5
+
+pdf("IPEX_10x_batch2to7_RPCAAnalysis_UMAPbatchcor_GeneExpression_SCT.pdf", 20,20) #RNA, SCT
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = clustersCCA7Renamed), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+print(LabelClusters(p, id = "clustersCCA7Renamed")) 
+print(LabelClusters(p + facet_wrap(~sample_type), id = "clustersCCA7Renamed", split.by = "sample_type")) 
+
+p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2 )) + geom_point(aes(dim1, dim2, color = ClusterRPCA_Revised), size = I(1), alpha = I(alpha)) + scale_color_manual(values = mypal) + theme_bw() + theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank())
+print(LabelClusters(p, id = "ClusterRPCA_Revised")) 
+print(LabelClusters(p + facet_wrap(~sample_type), id = "ClusterRPCA_Revised", split.by = "sample_type")) 
+print(LabelClusters(p + facet_wrap(~sample_name), id = "ClusterRPCA_Revised", split.by = "sample_name")) 
+
+
+MyPlots(so = so, dim1 = so@reductions$umap_integrated@cell.embeddings[,1], dim2 = so@reductions$umap_integrated@cell.embeddings[,2], genes = genes, alpha = 0.5)
+
+
+
+dev.off()
+
+```
+

@@ -1,0 +1,162 @@
+---
+title: "transfer_metadata"
+output: html_document
+date: "2023-06-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+1. Get data from Access ImmGen T database
+
+2. Convert xlsx to csv
+```{r}
+library("xlsx")
+library("dplyr")
+
+#for individual files: IGTXX_
+#setwd("~/google_drive/ImmgenT/analysis/samplemetadata1-31/")
+#setwd("~/google_drive/ImmgenT/exp_id/IGT_metadata/")
+setwd("~/google_drive/ImmgenT/exp_id/Sample Metadata/")
+f = list.files(pattern = "*xlsx",recursive = T)
+#i = f
+for (i in f) {
+    print(i)
+    read.xlsx2(file = i, sheetIndex = 1, as.data.frame = T, header = T) %>% write.table(file = gsub(x = i, pattern = "xlsx", replacement = "csv"), quote = F, sep = ",", row.names = F)
+}
+
+#If combined file
+setwd("~/google_drive/ImmgenT/exp_id/Sample Metadata/")
+f = list.files(pattern = "*xlsx",recursive = T)[2]
+ 
+cols = colnames(read.xlsx2(file = f, sheetIndex = 1, as.data.frame = T, header = T))
+colclasses = rep("character", length(cols))
+colclasses[grepl("date", cols)] = "Date"
+m = read.xlsx2(file = f, sheetIndex = 1, as.data.frame = T, header = T, colClasses=colclasses) 
+
+#library("tidyverse")
+m2 = m %>% group_by(immgent_IGT_10xlane_id) %>% group_split()
+for (i in 1:length(m2)) { #length(m2)
+    write.table(m2[[i]], file = sprintf("IGT%s_specific_Sample_metadata.tsv", unique(m2[[i]]$immgent_IGT_10xlane_id)), quote = F, sep = "\t", row.names = F)
+}
+    
+```
+
+
+**3. transfer metadata to each IGT folder on GDrive and Midway3**
+
+In terminal
+```{bash}
+
+cd /Users/david/google_drive/ImmgenT/exp_id
+
+for i in {1..48}; do \
+echo IGT$i ; \
+#echo IGT_metadata/IGT${i}_specific_Sample_metadata.csv;
+#ll */IGT${i}/;
+cp IGT_metadata/IGT${i}_specific_Sample_metadata.csv */IGT${i}/
+done 
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#echo sample_metadata/IGT${i}_specific_Sample_metadata.csv;
+#ll */IGT${i}/;
+cp sample_metadata/IGT${i}_specific_Sample_metadata.tsv */IGT${i}/
+done 
+
+
+
+```
+on midway
+```{bash}
+#cd /project/jfkfloor2/zemmourlab/david/immgent/data
+cd /scratch/midway3/zemmour/exp_id
+
+for i in {1..48}; do \
+echo IGT$i ; \
+#echo IGT_metadata/IGT${i}_specific_Sample_metadata.csv;
+#ll */IGT${i}/;
+cp IGT_metadata/IGT${i}_sample_specific_metadata.csv IGT${i}/
+done 
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#echo sample_metadata/IGT${i}_specific_Sample_metadata.csv;
+#ll */IGT${i}/;
+cp sample_metadata/IGT${i}_specific_Sample_metadata.tsv */IGT${i}/
+done 
+
+```
+
+**4. transfer spleen.Rds to each IGT folder on GDrive and Midway3**
+
+In terminal (GDrive)
+```{bash}
+cd /Users/david/google_drive/ImmgenT/exp_id
+
+for i in {1..56}; do \
+echo IGT$i ; \
+ls spleen_data/IGT${i}/spleen.Rds;
+ls *exp_id*/IGT${i}/spleen.Rds;
+cp spleen_data/IGT${i}/spleen.Rds *exp_id*/IGT${i}/
+done 
+
+```
+
+on midway
+```{bash}
+#cd /project/jfkfloor2/zemmourlab/david/immgent/data
+cd /scratch/midway3/zemmour/exp_id
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#ls spleen_data/IGT${i}/spleen.Rds;
+#ls *exp_id*/IGT${i}/spleen.Rds;
+cp spleen_data/IGT${i}/spleen.Rds *exp_id*/IGT${i}/
+done 
+
+```
+
+**5. transfer TCR data 3 on GDrive**
+
+In terminal (GDrive)
+```{bash}
+
+cd /Users/david/google_drive/ImmgenT/exp_id
+
+for i in {1..56}; do \
+echo IGT$i ; \
+ls TCR_IGT_summary_tables/IGT${i}_summary_table.csv;
+mv TCR_IGT_summary_tables/IGT${i}_summary_table.csv TCR_IGT_summary_tables/IGT${i}_tcr_table.csv;
+#ls *exp_id*/IGT${i}/IGT${i}_tcr_table.csv;
+cp TCR_IGT_summary_tables/IGT${i}_tcr_table.csv *exp_id*/IGT${i}/
+done 
+
+
+
+```
+
+
+**6. transfer sketched data on GDrive**
+
+In terminal (GDrive)
+```{bash}
+
+cd /Users/david/google_drive/ImmgenT/exp_id
+
+cd /Users/david/google_drive/ImmgenT/jamboree2
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#ls IGT${i}_withsketch_SeuratV4.Rds;
+#ls ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/;
+cp IGT${i}_withsketch_SeuratV4.Rds ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/;
+done 
+
+
+
+```
+
+
+
