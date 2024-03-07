@@ -2158,7 +2158,21 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 Create new seurat object with each subset
 
 ```{r}
+SubsetData = function(so = so, to_subset = "resting_CD4") {
+    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
+    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
+    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
+    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
+    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
+    message("Dimensions of subset")
+    dim(tmp)
+    dir.create(to_subset)
+    message("Saving Rds")
+    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
+}
+
 prefix = "totalvi_igt1_56_20231030_allgenes"
+
 so_orig = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
 
 annot = read.table("ClusterTOTALVI_Res1_quickannotation.csv", header = T, sep = ",")
@@ -2169,27 +2183,29 @@ so = so_orig[,!(so_orig$organ %in% c("thymus") | so_orig$ClusterTOTALVI_Res1 %in
 
 #Resting CD4
 to_subset = "resting_CD4"
-SubsetData = function(so = so, to_subset = "resting_CD4") {
-    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
-    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
-    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
-    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
-    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
-    dir.create(to_subset)
-    message("Saving Rds")
-    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
-}
-
-to_subset = "resting_CD4"
 SubsetData(so, to_subset)
 
-#rcd4 = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == "resting_CD4"])]
-#rcd4[["RNA"]]$counts = as(rcd4[["RNA"]]$counts, Class = "dgCMatrix")
-#rcd4[["ADT"]]$counts = as(rcd4[["ADT"]]$counts, Class = "dgCMatrix")
-#rcd4[["umap_totalvi_20231030"]] = rcd4[["umap_totalvi"]]
-#rcd4[["totalvi_20231030"]] = rcd4[["totalvi"]]
-#dir.create("resting_cd4")
-#saveRDS(rcd4, file = "resting_cd4/immgent_IGT1_56_resting_cd4.Rds")
+#create the wrapper and modify the lines as follows:
+prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+
+sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
+sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
+sprintf("Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
+
+#Resting CD8
+to_subset = "resting_CD8"
+SubsetData(so, to_subset)
+
+#create the wrapper and modify the lines as follows:
+prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+
+sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
+sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
+sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
+
+
 
 ```
 
