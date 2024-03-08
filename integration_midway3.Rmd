@@ -2155,7 +2155,8 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, resting CD4, activated CD4, rCD8, aCD8, unconventional, bottom right**
 
-Create new seurat object with each subset
+Create new seurat object with each subset and run totalvi
+see github immgent_integration_git for latest code
 ```{r}
 SubsetData = function(so = so, to_subset = "resting_CD4") {
     tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
@@ -2250,8 +2251,14 @@ SubsetData2 = function(so = so, to_subset = "resting_CD4") {
     message("Saving Rds")
     saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
 }
-
-
+to_subset = "Treg"
+SubsetData2(so, to_subset)
+#Run scripts: create the wrapper and modify the lines as follows:
+prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
+sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
+sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
 
 
 ```

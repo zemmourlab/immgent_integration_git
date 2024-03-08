@@ -48,6 +48,10 @@ so$colnames = colnames(so)
 message("Check that ADT counts are numerical. 0 is cells when no ADT data, no NA. Range:")
 print(range(so[["ADT"]]$counts))
 
+message("Remove IGT with only 1 cells")
+rm_igt = so@meta.data %>% group_by(IGT) %>% summarize(counts = n()) %>% filter(counts == 1) %>% pull(IGT)
+so = so[,!so$IGT %in% rm_igt]
+
 message("Finding variable features across datasets (not necessary when integrating with all genes)")
 #Find Variable features: not useful if running totalvi on all genes
 #scvi-tools models require the raw counts; normalization just here becayse often used for other purposes
