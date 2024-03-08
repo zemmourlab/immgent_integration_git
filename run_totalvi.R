@@ -50,6 +50,7 @@ print(range(so[["ADT"]]$counts))
 
 message("Remove IGT with only 1 cells")
 rm_igt = so@meta.data %>% group_by(IGT) %>% summarize(counts = n()) %>% filter(counts == 1) %>% pull(IGT)
+print(rm_igt)
 so = so[,!so$IGT %in% rm_igt]
 
 message("Finding variable features across datasets (not necessary when integrating with all genes)")
