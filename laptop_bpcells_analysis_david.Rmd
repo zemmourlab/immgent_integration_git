@@ -237,10 +237,15 @@ prefix = "totalvi_igt1_56_20231030_allgenes"
 #so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
 so = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
 
+#IGT1-56 subsets: resting_CD4, activated_CD4, rCD8, aCD8, unconventional, bottom right, Treg
+prefix = "totalvi_igt1_56_20240306_allgenes"
+to_subset = "Treg"
+so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset, to_subset))
+
 #IGT1-48
 #setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_48")
-so = readRDS(file = "bpcells/totalvi_igt1_48_20230706_allgenes_counts/totalvi_igt1_48_20230706_allgenes_BPCells_so_sketched.Rds")
-prefix = "totalvi_igt1_48_20230706_allgenes"
+#so = readRDS(file = "bpcells/totalvi_igt1_48_20230706_allgenes_counts/totalvi_igt1_48_20230706_allgenes_BPCells_so_sketched.Rds")
+#prefix = "totalvi_igt1_48_20230706_allgenes"
 ```
 
 Update Metadata: saved in totalvi_igt1_56_20231030_allgenes_BPCells_so_sketched.Rds
@@ -311,6 +316,7 @@ DefaultAssay(so) = "RNA"
 pdf(sprintf("%s_genes2.pdf", prefix), 10,10, useDingbats = F)
 #FeaturePlot(so, slot = "data", features = "Foxp3", raster = T, order = F)
 FeaturePlot(so, slot = "data", features = "Foxp3", raster = T, order = F)
+FeaturePlot(so, slot = "data", features = "Nr4a1", raster = T, order = F)
 FeaturePlot(so, slot = "data", features = "Cd4", raster = T, order = F)
 FeaturePlot(so, slot = "data", features = "Mki67", raster = T, order = F)
 FeaturePlot(so, slot = "data", features = "Cd8a", raster = T, order = F)
@@ -330,15 +336,33 @@ FeaturePlot(so, features = "Rorc", raster = T)
 FeaturePlot(so, features = "Tbx21", raster = T)
 FeaturePlot(so, features = "Gata3", raster = T)
 FeaturePlot(so, features = "Il10", raster = T)
+FeaturePlot(so, features = "Pparg", raster = T)
 FeaturePlot(so, features = "Tox", raster = T)
 FeaturePlot(so, features = "Ccr7", raster = T)
 FeaturePlot(so, features = "Btg1", raster = T)
 FeaturePlot(so, features = c("Btg1", "Btg2"), raster = T)
 FeaturePlot(so, features = c("Btg1", "Btg2"), raster = T)
 
+
+
 so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
 #so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize", verbose = T)
 DefaultAssay(so) = "ADT"
+FeaturePlot(so, features = "KLRBC-NK1.1", raster = F)
+FeaturePlot(so, features = "NEUROPILIN1.CD304", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Nr4a1", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Cxcr3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Tbx21", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Gata3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Foxp3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Il2ra", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Ctla4", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Izumo1r", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "FR4", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
+
+FeaturePlot(so, features = "CD62L", raster = T)
 FeaturePlot(so, features = "CD62L", raster = T)
 FeaturePlot(so, features = "CD3", raster = T)
 FeaturePlot(so, features = "CD4", raster = T)

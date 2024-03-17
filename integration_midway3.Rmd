@@ -1685,7 +1685,7 @@ so[["RNA"]]$counts = counts.mat
 ```
 
 Get denoised protein
-GPU needed
+GPU needed?
 run on jfkfloor2 with lots of memory
 ```{r}
 message("loading R libraries and custom functions")
@@ -2263,19 +2263,6 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 
 ```
 
-INTEGRATION AND PLOTS
-see github immgent_integration_git for latest code
-```{bash}
-prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
-sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
-sprintf("Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
-#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_CD4/ immgent_IGT1_56_resting_CD4.Rds totalvi_igt1_56_allgenes_resting_CD4_20240306
-#Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/resting_cd4/ totalvi_igt1_56_allgenes_resting_cd4_20240306
-
-
-```
 
 
 **Integration evaluation: conservation of HVG**
@@ -2368,6 +2355,8 @@ source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
 
 mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 mamba install jax jaxlib -c conda-forge
+
+mamba install scvi-tools -c conda-forge
 
 #check installation and GPU works:
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 —-mem=8GB
