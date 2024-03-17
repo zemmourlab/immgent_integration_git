@@ -253,6 +253,30 @@ to_subset = "Treg"
 so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset, to_subset))
 ```
 
+Plots
+```{r}
+FeaturePlot(so, features = "NEUROPILIN1.CD304", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Areg", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Mki67", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Tbx21", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Nr4a1", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Egr3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Nr4a1", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Cxcr3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Tbx21", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Gata3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Foxp3", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Il2ra", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Ctla4", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Izumo1r", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "FR4", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
+FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
+```
+
+
 **Create a new environment in Midway3 for module analysis: /project/zemmour/david/envs/scvi_20240315**
 just in case it messes up my SCVI environment
 

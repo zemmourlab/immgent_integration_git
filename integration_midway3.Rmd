@@ -19,7 +19,7 @@ cd $LABHOME
 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
-
+module load openblas/0.3.13
 #sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
 
 source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
@@ -2158,8 +2158,9 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 Create new seurat object with each subset and run totalvi
 see github immgent_integration_git for latest code
 ```{r}
-SubsetData = function(so = so, to_subset = "resting_CD4") {
-    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$for_subset == to_subset])]
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56")
+SubsetData = function(so = so, to_subset = "resting_CD4", column = "for_subset") {
+    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot[,column] == to_subset])]
     tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
     tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
     tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
@@ -2181,7 +2182,7 @@ so = so_orig[,!(so_orig$organ %in% c("thymus") | so_orig$ClusterTOTALVI_Res1 %in
 
 #Resting CD4
 to_subset = "resting_CD4"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2191,7 +2192,7 @@ sprintf("Rscript run_totalvi_plots.R /project/jfkfloor2/zemmourlab/david/immgent
 
 #Resting CD8
 to_subset = "resting_CD8"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2201,7 +2202,7 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 
 #activated CD4
 to_subset = "activated_CD4"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2211,7 +2212,7 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 
 #activated CD8
 to_subset = "activated_CD8"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2221,7 +2222,7 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 
 #unconventional T
 to_subset = "unconventional"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2231,7 +2232,7 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 
 #bottom_right
 to_subset = "bottom_right"
-SubsetData(so, to_subset)
+SubsetData(so, to_subset, column = "for_subset")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2240,23 +2241,33 @@ sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analy
 sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
 
 #Tregs
-SubsetData2 = function(so = so, to_subset = "resting_CD4") {
-    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$annotation_broad == to_subset])]
-    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
-    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
-    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
-    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
-    message(sprintf("Dimensions of subset: %s cells", ncol(tmp)))
-    dir.create(to_subset)
-    message("Saving Rds")
-    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
-}
+#SubsetData2 = function(so = so, to_subset = "resting_CD4") {
+#    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$annotation_broad == to_subset])]
+#    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
+#    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
+#    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
+#    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
+#    message(sprintf("Dimensions of subset: %s cells", ncol(tmp)))
+#    dir.create(to_subset)
+#    message("Saving Rds")
+#    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
+#}
 to_subset = "Treg"
-SubsetData2(so, to_subset)
+SubsetData(so, to_subset, column = "annotation_broad")
 #Run scripts: create the wrapper and modify the lines as follows:
 prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
+sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
+sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
+
+#activated_CD4_noTreg
+to_subset = "activated_CD4_noTreg"
+SubsetData(so, to_subset, column = "annotation_broad")
+#Run scripts: create the wrapper and modify the lines as follows:
+prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #runs the 2 following scripts, modifies those lines : 
 sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
 sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
 
