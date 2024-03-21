@@ -27,6 +27,7 @@ source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
 
 #R
 #options(max.print=1000)
@@ -250,30 +251,79 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 #IGT1-56 subsets
 prefix = "totalvi_igt1_56_20240306_allgenes"
 to_subset = "Treg"
-so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset, to_subset))
+so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
 ```
 
 Plots
 ```{r}
-FeaturePlot(so, features = "NEUROPILIN1.CD304", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Areg", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Mki67", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Tbx21", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Nr4a1", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Egr3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Nr4a1", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Cxcr3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Tbx21", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Gata3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Foxp3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Il2ra", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Ctla4", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Izumo1r", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "FR4", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
+prefix = paste(prefix, to_subset, sep = "_")
+sample_qc = read.table("~/google_drive/ImmgenT/analysis/QC/Sample_metadata_withQC.csv", header = T, sep = ",")
+sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id
+sample_qc$sample_id = paste(sample_qc$immgent_IGT_10xlane_id, sample_qc$hashtag_number, sep = "_")
+
+so$sample_id = paste(so$IGT, so$hashtag_number, sep = "_")
+
+#sample_qc$organ[match(so$sample_id, sample_qc$sample_id)]
+so$organ_clean = sample_qc$organ[match(so$sample_id, sample_qc$sample_id)]
+so$organ_clean[is.na(so$organ_clean)] = so$organ[is.na(so$organ_clean)]
+#table(so$organ[which(is.na(so$organ_clean))])
+table(so$organ_clean, so$organ)
+so$organ_clean_simplified = so$organ_clean
+so$organ_clean_simplified[grepl(pattern = "lymph node", x = so$organ_clean)] = "lymph node"
+so$organ_clean_simplified[grepl(pattern = "duodenum|ileum|jejunum|Lamina|SI|small intestine", x = so$organ_clean)] = "small intestine"
+so$organ_clean_simplified[grepl(pattern = "gut", x = so$organ_clean)] = "colon"
+so$organ_clean_simplified[grepl(pattern = "salivary", x = so$organ_clean)] = "submandibular gland"
+so$organ_clean_simplified[grepl(pattern = "skin", x = so$organ_clean)] = "skin"
+table(so$organ_clean_simplified)
+
+so$condition = sample_qc$condition[match(so$sample_id, sample_qc$sample_id)]
+so$condition[is.na(so$condition) & grepl(pattern = "LCMV",x = so$sample_name.1)] = "virus"
+so$condition[is.na(so$condition)] = "healthy"
+table(so$condition)
+
+pdf(sprintf("%s_UMAP_organ_condition.pdf", prefix), 12,10, useDingbats = F)
+DimPlot(so, reduction = "umap_totalvi", group.by = "IGT", raster = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", group.by = "organ_clean_simplified", raster = F) + scale_color_manual(values = mypal) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", group.by = "condition", raster = F) + scale_color_manual(values = mypal) + scale_color_manual(values = mypal)
+
+DimPlot(so, reduction = "umap_totalvi", split.by = "organ_clean_simplified", group.by = "IGT", ncol = 5, raster = F)  + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", split.by = "organ_clean_simplified", group.by = "condition", ncol = 5, raster = F)  + scale_color_manual(values = mypal)
+
+DimPlot(so, reduction = "umap_totalvi", split.by = "condition", group.by = "IGT", ncol = 3, raster = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "umap_totalvi", split.by = "condition", group.by = "organ_clean_simplified", ncol = 3, raster = F) + scale_color_manual(values = mypal)
+dev.off()
+
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+
+pdf(sprintf("%s_UMAP_genes.pdf", prefix), 12,10, useDingbats = F)
+rstr = F
+FeaturePlot(so, slot = "data", features = "Foxp3", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Il2ra", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "IL2RA.CD25", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Ctla4", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Tnfrsf18", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "GITR.CD357", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "Izumo1r", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, slot = "data", features = "FR4", raster = rstr, pt.size = 2, order = T)
+
+FeaturePlot(so, features = "Ccr7", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Sell", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "CD62L", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "CD44", raster = rstr, pt.size = 2, order = T)
+
+FeaturePlot(so, features = "NEUROPILIN1.CD304", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Rorc", raster = rstr, pt.size = 2, order = T)
+
+FeaturePlot(so, features = "Areg", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Il1rl1", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Pparg", raster = rstr, pt.size = 2, order = T)
+
+FeaturePlot(so, features = "Mki67", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Tbx21", raster = rstr, pt.size = 2, order = T)
+FeaturePlot(so, features = "Nr4a1", raster = rstr, pt.size = 2, order = T)
+dev.off()
+
 ```
 
 
@@ -302,7 +352,6 @@ pip install hotspot
 
 ```
 
-
 **Method 1: Hotspot**
 based on latent space proximity
 caveat: each gene can be at most in one module, in contrasts to topic modeling
@@ -322,6 +371,8 @@ import matplotlib.pyplot as plt
 import pickle
 
 os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+
+n_var_genes = 2000
 
 #adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
 model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
@@ -357,7 +408,7 @@ hs.results.to_csv('autocorrelations.csv', sep=',', header=True, index=True)
 
 hs_genes = hs_results.loc[hs_results.FDR < 0.05].sort_values('Z', ascending=False).head(2000).index
 
-#Compute local autocorrelation in the TOTALVI latent space
+#Compute local correlation in the TOTALVI latent space
 lcz = hs.compute_local_correlations(hs_genes, jobs=16)
 lcz.to_csv('local_correlations_2000genes.csv', sep=',', header=True, index=True)
 
@@ -368,11 +419,11 @@ modules = hs.create_modules(
 
 plt.figure(figsize=(15,15 ))
 hs.plot_local_correlations(vmin=-12, vmax=12)
-plt.savefig("Treg_modules_heatmap_2000genes.pdf", format='pdf', bbox_inches='tight')
+plt.savefig("modules_2000genes_heatmap.pdf", format='pdf', bbox_inches='tight')
 plt.close() 
 
 results = hs.results.join(hs.modules) #merges both pd df
-results.to_csv('modules_extended_2000genes.csv', sep=',', header=True, index=True)
+results.to_csv('modules_2000genes_table.csv', sep=',', header=True, index=True)
 
 # Show the top genes for a module
 module = 1
@@ -382,7 +433,7 @@ results2.sort_values('Z', ascending=False).head(50)
 #Calculate module score for each single cell
 module_scores = hs.calculate_module_scores()
 module_scores.head()
-module_scores.to_csv('modules_singlecellscores_2000genes.csv', sep=',', header=True, index=True)
+module_scores.to_csv('modules_2000genes_singlecellscores.csv', sep=',', header=True, index=True)
 
 sc.pp.neighbors(adata, use_rep = "X_totalVI")
 sc.tl.umap(adata)
@@ -397,9 +448,6 @@ for c in module_scores.columns:
 with mplscience.style_context():
     sc.pl.umap(adata, color=module_cols, frameon=False, vmin=-1, vmax=1, save='UMAP_module_plot.pdf')
     
-with plt.rc_context({'savefig.dpi': 300}):
-    # You can adjust the figure size and other properties within the context manager
-    sc.pl.umap(adata, color=module_cols, frameon=False, vmin=-1, vmax=1, save='_UMAP_plot.pdf')
 
 
 #save object
@@ -414,9 +462,10 @@ with open('hs_object.pkl', 'rb') as file:
 
 Plot the modules in the UMAP
 ```{r}
-module_scores = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_singlecellscores_2000genes.csv", row.names = 1, header = T, sep = ",")
+setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg")
+module_scores = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_singlecellscores.csv", row.names = 1, header = T, sep = ",")
 
-module_genes = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_extended_2000genes.csv", header = T, sep = ",")
+module_genes = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_extended.csv", header = T, sep = ",")
 module_genes$Module = sprintf("Module_%s",module_genes$Module)
 
 colnames(module_scores) = gsub(pattern = "X", replacement = "Module_", colnames(module_scores))
@@ -448,29 +497,52 @@ for (module in colnames(module_scores) ) {
 }
 dev.off()
 
-so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
-so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+```
+Plot module in single cells
+```{r}
+setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg")
+
+module_scores = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_singlecellscores.csv", row.names = 1, header = T, sep = ",")
+colnames(module_scores) = gsub(pattern = "X", replacement = "Module_", colnames(module_scores))
+module_scores = module_scores[match(rownames(so@meta.data), rownames(module_scores)),]
+all(rownames(module_scores) == rownames(so@meta.data))
+so@meta.data = merge(so@meta.data, module_scores, by = "row.names", all.x = TRUE)
+rownames(so@meta.data) = so@meta.data[,"Row.names"]
+
+percentiles = function(vector = c(1) ) {return(ecdf(vector)(vector) * 100) }
+module_scores_percentile = apply(module_scores, 2, percentiles)
+rownames(module_scores_percentile) = rownames(module_scores)
+module_scores_percentile2 = module_scores_percentile / rowSums(module_scores_percentile) *100
 
 
-FeaturePlot(so, features = "NEUROPILIN1.CD304", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Areg", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Mki67", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Tbx21", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Nr4a1", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Egr3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Nr4a1", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Cxcr3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Tbx21", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Gata3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Foxp3", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Il2ra", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Ctla4", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "Izumo1r", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, slot = "data", features = "FR4", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Rorc", raster = F, pt.size = 2, order = T)
-FeaturePlot(so, features = "Ccr7", raster = F, pt.size = 2, order = T)
+so = RunUMAP(so, dims = 1:30, reduction = "totalvi", n.components = 1, reduction.name = "totalvi_1d")
+ord_cells = order(so[["totalvi_1d"]]@cell.embeddings[,1])
+
+hc = hclust(dist(t(module_scores_percentile2)))
+ord_modules = colnames(module_scores_percentile2)[hc$order]
+
+#pca = prcomp(module_scores_percentile2, scale. = TRUE)
+#pca_1 = pca$x[, 1]
+#ordered_df = as.data.frame(module_scores_percentile2[order(pca_1),])
+ordered_df = as.data.frame(module_scores_percentile2[ord_cells,ord_modules])
+ordered_df$cell_id = factor(rownames(ordered_df), ordered = T)
+melted_df = melt(ordered_df)
+melted_df$variable = factor(melted_df$variable, levels = ord_modules, ordered = T)
+melted_df = melted_df %>% arrange(cell_id)
+
+pdf("modules_singlecell_barplot.pdf", 20,10, useDingbats = F)
+p = ggplot(melted_df, aes(x = cell_id, y = value, fill = variable)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = mypal)+
+    labs(x = "Cells", y = "Score", fill = "Module") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank()
+    )
+print(p)
+dev.off()
 
 
 
