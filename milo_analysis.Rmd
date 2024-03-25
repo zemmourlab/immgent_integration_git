@@ -1,5 +1,5 @@
 ---
-title: "HotSpot_analysis"
+title: "Milo_analysis"
 output: html_document
 date: "2024-03-16"
 editor_options: 
@@ -37,9 +37,7 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 **Initialize in R: load libraries and custom functions**
 
 ```{r}
-setwd("~/google_drive/ImmgenT/jamboree2/")
-setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
-setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
 
 libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
@@ -224,25 +222,6 @@ Here for reference only:
 ```{r}
 #Tregs
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56")
-SubsetData2 = function(so = so, to_subset = "resting_CD4") {
-    tmp = so[,so$ClusterTOTALVI_Res1 %in% as.character(annot$ClusterTOTALVI_Res1[annot$annotation_broad == to_subset])]
-    tmp[["RNA"]]$counts = as(tmp[["RNA"]]$counts, Class = "dgCMatrix")
-    tmp[["ADT"]]$counts = as(tmp[["ADT"]]$counts, Class = "dgCMatrix")
-    tmp[["umap_totalvi_20231030"]] = tmp[["umap_totalvi"]]
-    tmp[["totalvi_20231030"]] = tmp[["totalvi"]]
-    message(sprintf("Dimensions of subset: %s cells", ncol(tmp)))
-    dir.create(to_subset)
-    message("Saving Rds")
-    saveRDS(tmp, file = sprintf("%s/immgent_IGT1_56_%s.Rds", to_subset, to_subset))
-}
-to_subset = "Treg"
-SubsetData2(so, to_subset)
-#Run scripts: create the wrapper and modify the lines as follows:
-prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
-#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #run the 2 following scripts: 
-sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
-sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
 
 ```
 
@@ -251,8 +230,80 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 #IGT1-56 subsets
 prefix = "totalvi_igt1_56_20240306_allgenes"
 to_subset = "Treg"
-so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+#so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
 ```
+
+**Load Metadata**
+```{r}
+m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.txt",header = T, sep = "\t")
+
+m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = "_")
+so$sample_id = paste(so$IGT, so$hashtag_number, sep = "_")
+
+someta = so@meta.data
+someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
+m2 = merge(someta, m, by  = "sample_id", all.x = T)
+m2$sample_id[which(is.na(m2$exp_number))]
+m2$is_spleen_standard[which(is.na(m2$exp_number))] #missing metadata about spleen standards!!
+m2$colnames[which(is.na(m2$exp_number))]
+
+all(m2$colnames %in% rownames(so@meta.data))
+rownames(m2) = m2$colnames
+m2 = m2[rownames(so@meta.data),]
+all(m2$colnames %in% rownames(so@meta.data))
+
+so@meta.data = m2
+
+#Adjust colnames(so) that was modified when merged
+#so$colnames = colnames(so)
+pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
+#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
+so$colnames = gsub(pattern, "\\1", so$colnames)
+any(duplicated(so$colnames))
+colnames(so) = so$colnames
+
+#order IGT
+unique(so$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
+so$IGT = factor(so$IGT, levels = ordered_vector)
+
+```
+
+**Milo differential abundance testing**
+
+Create Milo object
+```{r}
+library(Seurat)
+
+sce = as.SingleCellExperiment(so)
+mi = Milo(sce)
+
+#optimize k and prop
+pdf("milo_neighborhood_optimization.pdf", 10,10)
+k_s = seq(10, 50, by = 10)
+prop_s = seq(10, 50, by = 10)
+for (k in k_s) {
+    for (prop in prop_s) {
+        mi = buildGraph(mi, k = k, d = 30, reduced.dim = "TOTALVI") #d = 30 because 30 dims in TOTALVI
+        mi = makeNhoods(mi, reduced_dims = "TOTALVI", prop = prop, k = k, d = 30, refined = TRUE) #use same k and d as above
+        
+        print(plotNhoodSizeHist(mi, bins = 50) + ggtitle(sprintf("k=%s prop = %s", k, prop)) )
+    }
+}
+dev.off()
+
+mi = buildGraph(mi, k = 10, d = 30, reduced.dim = "TOTALVI") #d = 30 because 30 dims in TOTALVI
+mi = makeNhoods(mi, reduced_dims = "TOTALVI", prop = 0.5, k = 10, d = 30, refined = TRUE) #use same k and d as above
+
+plotNhoodSizeHist(mi) + ggtitle("test") #best to have a distribution peaking between 50 and 100. Otherwise you might consider rerunning makeNhoods increasing k and/or prop. here changed k from 10 to 25
+
+```
+
+
 
 Plots
 ```{r}
@@ -325,246 +376,4 @@ FeaturePlot(so, features = "Nr4a1", raster = rstr, pt.size = 2, order = T)
 dev.off()
 
 ```
-
-
-**Create a new environment in Midway3 for module analysis: /project/zemmour/david/envs/scvi_20240315**
-just in case it messes up my SCVI environment
-
-```{bash}
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
-
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-conda env export > scvi.yml
-#modifyyml to change the name to /project/zemmour/david/envs/scvi_20240315
-#exit and log in again
-source activate mamba-env  
-mamba env create -p /project/zemmour/david/envs/scvi_20240315 -f scvi.yml
-#if issues with "strict repo priority", delete the line in .condarc
-
-module load python/anaconda-2022.05
-source activate /project/zemmour/david/envs/scvi_20240315
-
-mamba update scvi-tools #to 1.1.2
-pip install hotspot
-
-
-```
-
-**Method 1: Hotspot**
-based on latent space proximity
-caveat: each gene can be at most in one module, in contrasts to topic modeling
-
-```{python}
-import warnings; warnings.simplefilter('ignore')
-
-import scvi
-import os
-import hotspot
-import scanpy as sc
-import muon as mu
-
-import numpy as np
-import mplscience
-import matplotlib.pyplot as plt
-import pickle
-
-os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
-
-n_var_genes = 2000
-
-#adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
-model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
-mdata = mu.MuData({"RNA": model.adata})
-protein_data = model.adata.obsm['protein']
-protein_adata = sc.AnnData(X=protein_data)
-mdata.mod['protein'] = protein_adata
-#del mdata["RNA"].obsm['protein']
-TOTALVI_LATENT_KEY = "X_totalVI"
-mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
-
-adata = mdata.mod["RNA"]
-#Remove genes with no counts
-gene_sums = np.sum(adata.X, axis=0)
-genes_non_zero = gene_sums > 0
-adata = adata[:, genes_non_zero]
-adata.layers["counts"] = adata.X.copy()
-adata.layers["counts_csc"] = adata.layers["counts"].tocsc()
-
-hs = hotspot.Hotspot(
-    adata,
-    layer_key="counts_csc",
-    model='danb',
-    latent_obsm_key="X_totalVI"
-)
-
-hs.create_knn_graph( weighted_graph=False, n_neighbors=30)
-
-#Find most variable genes by autocorrelation
-hs_results = hs.compute_autocorrelations(jobs=16)
-hs_results.head(15)
-hs.results.to_csv('autocorrelations.csv', sep=',', header=True, index=True)
-
-hs_genes = hs_results.loc[hs_results.FDR < 0.05].sort_values('Z', ascending=False).head(2000).index
-
-#Compute local correlation in the TOTALVI latent space
-lcz = hs.compute_local_correlations(hs_genes, jobs=16)
-lcz.to_csv('local_correlations_2000genes.csv', sep=',', header=True, index=True)
-
-#Find modules
-modules = hs.create_modules(
-    min_gene_threshold=15, core_only=True, fdr_threshold=0.05
-)
-
-plt.figure(figsize=(15,15 ))
-hs.plot_local_correlations(vmin=-12, vmax=12)
-plt.savefig("modules_2000genes_heatmap.pdf", format='pdf', bbox_inches='tight')
-plt.close() 
-
-results = hs.results.join(hs.modules) #merges both pd df
-results.to_csv('modules_2000genes_table.csv', sep=',', header=True, index=True)
-
-# Show the top genes for a module
-module = 1
-results2 = results.loc[results.Module == module]
-results2.sort_values('Z', ascending=False).head(50)
-
-#Calculate module score for each single cell
-module_scores = hs.calculate_module_scores()
-module_scores.head()
-module_scores.to_csv('modules_2000genes_singlecellscores.csv', sep=',', header=True, index=True)
-
-sc.pp.neighbors(adata, use_rep = "X_totalVI")
-sc.tl.umap(adata)
-#sc.pl.umap(adata, frameon=False)
-
-module_cols = []
-for c in module_scores.columns:
-    key = f"Module {c}"
-    adata.obs[key] = module_scores[c]
-    module_cols.append(key)
-    
-with mplscience.style_context():
-    sc.pl.umap(adata, color=module_cols, frameon=False, vmin=-1, vmax=1, save='UMAP_module_plot.pdf')
-    
-
-
-#save object
-# Serialize and save the `hs` object to disk
-with open('hs_object.pkl', 'wb') as file:
-    pickle.dump(hs, file)
-# Later, you can load the `hs` object back into memory
-with open('hs_object.pkl', 'rb') as file:
-    hs = pickle.load(file)
-
-```
-
-Plot the modules in the UMAP
-```{r}
-setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg")
-module_scores = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_singlecellscores.csv", row.names = 1, header = T, sep = ",")
-
-module_genes = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_extended.csv", header = T, sep = ",")
-module_genes$Module = sprintf("Module_%s",module_genes$Module)
-
-colnames(module_scores) = gsub(pattern = "X", replacement = "Module_", colnames(module_scores))
-module_scores = module_scores[match(rownames(so@meta.data), rownames(module_scores)),]
-all(rownames(module_scores) == rownames(so@meta.data))
-so@meta.data = merge(so@meta.data, module_scores, by = "row.names", all.x = TRUE)
-rownames(so@meta.data) = so@meta.data[,"Row.names"]
-
-
-#so[["m1"]]
-#tmp = CreateAssay5Object(data = Matrix::Matrix(t(module_scores), sparse = TRUE))
-#tmp@meta.data = so@meta.data
-#rownames(tmp@meta.data) = tmp@meta.data$Row.names
-#tmp[["umap_totalvi"]] = so[["umap_totalvi"]]
-all(rownames(so@meta.data) == rownames(so[["umap_totalvi"]]))
-all(rownames(so@meta.data) == colnames(so))
-
-#module = "Module_1"
-pdf("modules_UMAP.pdf", 9,8, useDingbats = F)
-for (module in colnames(module_scores) ) {
-    print(module)
-    genes = module_genes %>% filter(Module == module) %>% pull(Gene)
-    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),1], dim2 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),2], size = so@meta.data[,module]) 
-    tmp$size[tmp$size > 1] = 1
-    tmp$size[tmp$size < -1] = -1
-    
-    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2, alpha = I(alpha)) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
-    print(p)
-}
-dev.off()
-
-```
-Plot modules in single cells
-```{r}
-setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg")
-
-module_scores = read.csv("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg/modules_2000genes_singlecellscores.csv", row.names = 1, header = T, sep = ",")
-colnames(module_scores) = gsub(pattern = "X", replacement = "Module_", colnames(module_scores))
-module_scores = module_scores[match(rownames(so@meta.data), rownames(module_scores)),]
-all(rownames(module_scores) == rownames(so@meta.data))
-so@meta.data = merge(so@meta.data, module_scores, by = "row.names", all.x = TRUE)
-rownames(so@meta.data) = so@meta.data[,"Row.names"]
-
-percentiles = function(vector = c(1) ) {return(ecdf(vector)(vector) * 100) }
-module_scores_percentile = apply(module_scores, 2, percentiles)
-rownames(module_scores_percentile) = rownames(module_scores)
-module_scores_percentile2 = module_scores_percentile / rowSums(module_scores_percentile) *100
-
-
-so = RunUMAP(so, dims = 1:30, reduction = "totalvi", n.components = 1, reduction.name = "totalvi_1d")
-ord_cells = order(so[["totalvi_1d"]]@cell.embeddings[,1])
-
-hc = hclust(dist(t(module_scores_percentile2)))
-ord_modules = colnames(module_scores_percentile2)[hc$order]
-
-#pca = prcomp(module_scores_percentile2, scale. = TRUE)
-#pca_1 = pca$x[, 1]
-#ordered_df = as.data.frame(module_scores_percentile2[order(pca_1),])
-ordered_df = as.data.frame(module_scores_percentile2[ord_cells,ord_modules])
-ordered_df$cell_id = factor(rownames(ordered_df), ordered = T)
-melted_df = melt(ordered_df)
-melted_df$variable = factor(melted_df$variable, levels = ord_modules, ordered = T)
-melted_df = melted_df %>% arrange(cell_id)
-
-pdf("modules_singlecell_barplot.pdf", 20,10, useDingbats = F)
-p = ggplot(melted_df, aes(x = cell_id, y = value, fill = variable)) +
-    geom_bar(stat = "identity") +
-    scale_fill_manual(values = mypal)+
-    labs(x = "Cells", y = "Score", fill = "Module") +
-    theme_minimal() +
-    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          panel.background = element_blank()
-    )
-print(p)
-dev.off()
-
-
-
-
-
-```
-
-
-**Method 2: fastTopics**
-on count data
-in R
-- could do in each batch for example then goal would be to harmonize the topics?
-- topic on normalized data from SCVI
-
-IGT 24
-```{r}
-
-```
-
-
-**Method 3: SCVI Amortized LDA**
-but doesn't take into account the batch correction
-NMF and LDA are the 2 most popular calculation of topics. LDA requires count matrix.
-
 

@@ -190,7 +190,6 @@ chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"
 
 ```
 
-
 **Most up-to-date data**
 
 ```{r}
@@ -357,6 +356,11 @@ dev.off()
 
 
 ```
+
+
+**Milo**
+
+
 
 **Simplified dataset / Theory**
 
@@ -646,8 +650,6 @@ crossprod(y - mean(y), y - mean(y)) / (length(y)-1)
 
 
 ```
-
-
 
 **GLM for sex and organ-specific cluster enrichment**
 https://github.com/MarioniLab/milo_analysis_2020/blob/main/benchmark/benchmark_utils.R
