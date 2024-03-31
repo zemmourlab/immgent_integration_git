@@ -944,3 +944,45 @@ p1 | p2 | p3
 ```
 
 
+Matrix rank full rank
+```{r}
+#If 2 conditions only, no need for contrasts
+#da_results = testNhoods(mi, design = ~ organ_simplified, design.df = design, reduced.dim = "TOTALVI", norm.method="TMM")
+#da_results %>% arrange(- SpatialFDR) %>% head() 
+#mi = buildNhoodGraph(mi)
+#plotUMAP(mi) + plotNhoodGraphDA(mi, da_results, alpha=0.05) + plot_layout(guides="collect")
+
+mm1 = model.matrix(data = design, ~ 0 + organ_simplified)
+dim(mm1)
+r = qr(mm1)$rank
+r
+dim(mm1)[2]-r
+
+mm1 = model.matrix(data = design, ~ 0 + condition_broad + organ_simplified)
+dim(mm1)
+r = qr(mm1)$rank
+dim(mm1)[2]-r
+mm2 = make_full_rank(mm1,with.intercept = FALSE) 
+dim(mm2)
+r = qr(mm2)$rank
+dim(mm2)[2]-r
+colnames(mm1)[!colnames(mm1) %in% colnames(mm2)]
+sample_to_rm = design$sample_id[design$organ_simplified == "uterus"]
+design2 = design[!design$sample_id %in% sample_to_rm,]
+mm3 = model.matrix(data = design2, ~ 0 + condition_broad + organ_simplified)
+qr(mm3)$rank == dim(mm3)[2]
+
+
+colnames(mm1)[ncol(mm1)-r+1]  # find columns that create linearly dependent columns
+names(which(mm1[,ncol(mm1)-r+1] != 0)) %in%  design$sample_id[design$condition_broad == "autoimmune"]# two different ways to find samples that create linearly dependent columns
+design2 = design[!design$sample_id %in% names(which(mm1[,ncol(mm1)-r+1] != 0)),]
+mm2 = model.matrix(data = design2, ~ 0 + condition_broad + organ_simplified)
+qr(mm2)$rank == dim(mm2)[2]
+
+
+#mm2 = mm1[, qr(mm1)$pivot[seq_len(qr(mm1)$rank)]]
+mm2 = mm1[, 1:qr(mm1)$rank]
+qr(mm2)$rank
+```
+
+

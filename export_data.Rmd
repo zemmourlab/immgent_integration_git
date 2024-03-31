@@ -1,0 +1,241 @@
+---
+title: "export_data"
+output: html_document
+date: "2024-03-30"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+#source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+R
+options(max.print=1000)
+options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+
+libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+```
+
+Original seurat object to export
+```{r}
+prefix = "totalvi_igt1_56_20231030_allgenes"
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
+
+#write.table(so[["umap_totalvi"]]@cell.embeddings, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
+
+#m = so@meta.data[,c("Rosetta_RNA_clusters","Rosetta_Protein_clusters","iNKT","MAIT","ClusterTOTALVI_Res1")]
+#all(rownames(so@meta.data) == rownames(so[["umap_totalvi"]]@cell.embeddings))
+#m = data.frame(m, so[["umap_totalvi"]]@cell.embeddings)
+#m = data.frame(m, so[["totalvi"]]@cell.embeddings)
+
+#write.table(m, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi_andothermetadata.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
+
+
+```
+
+Update the metadata in seurat object
+```{r}
+
+#Adjust colnames(so) 
+pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames)
+any(duplicated(so$colnames))
+colnames(so) = so$colnames
+
+#Update cell names to be IGT.BARCODE
+colnames(so)[so$IGT == "IGT1"]
+nm = gsub( "(_\\d+)", "", colnames(so)[so$IGT == "IGT1"])
+nm = paste("IGT1", nm, sep = ".")
+colnames(so)[so$IGT == "IGT1"] = nm
+
+#add sample_id: IGT.HT
+so$sample_id = paste(so$IGT, so$hashtag_number, sep = ".")
+
+#order IGT
+unique(so$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
+so$IGT = factor(so$IGT, levels = ordered_vector)
+
+#Clean up metadata
+cat(colnames(so@meta.data), sep = '\",\"')
+#someta = so@meta.data
+so@meta.data = so@meta.data[,c("nCount_RNA","nFeature_RNA","nCount_ADT","nFeature_ADT","percent_mito","signature_1T.enriched","signature_1mnp.enriched","signature_1B.enriched","signature_1ILC.enriched","IGT","is_spleen_standard","Rosetta_RNA_clusters","Rosetta_Protein_clusters","hashtag_number","ClusterTOTALVI_Res1","iNKT","MAIT")]
+
+```
+
+Export seurat object as BPCells (on-disk instead of in-memory) object and with sketched assay
+```{r}
+library(BPCells)
+file_dir = "export_data/bpcells"
+
+DefaultAssay(so) = "RNA"
+so = JoinLayers(so)
+
+write_matrix_dir(mat = so[["RNA"]]$counts, dir = sprintf("%s/%s_counts", file_dir, prefix))
+counts.mat = open_matrix_dir(dir = sprintf("%s/%s_counts", file_dir, prefix))
+
+so_bp = so
+so_bp[["RNA"]]$counts = counts.mat
+
+#message("Saving Seurat BPCells object")
+saveRDS( object = so_bp,
+         file = sprintf("%s_BPCells_so.Rds", prefix),
+         destdir = file_dir
+)
+
+#so_bp = readRDS(sprintf("export_data/bpcells/%s_BPCells_so.Rds", prefix))
+
+```
+
+Export in-memory diet seurat object
+```{r}
+file_dir = "export_data"
+sod = so
+sod[["RNA"]]$counts = as(object = sod[["RNA"]]$counts, Class = "dgCMatrix")
+
+sod = DietSeurat(sod,
+  layers = c("counts"),
+  features = NULL,
+  assays = c("RNA", "ADT"),
+  dimreducs = c("totalvi", "umap_totalvi"),
+  graphs = NULL,
+  misc = TRUE
+)
+
+saveRDS(object = sod, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir, prefix))
+
+#sod = readRDS(sprintf("export_data/%s_inmemory_diet_seurat.Rds", prefix))
+```
+
+Export individual files (like for GEO)
+```{r}
+library(Matrix)
+file_dir = "export_data/individual_files"
+
+#message("Exporting data")
+message("Exporting matrix_rna.mtx...")
+writeMM(obj = sod[["RNA"]]$counts, file = sprintf("%s/matrix_rna.mtx", file_dir))
+
+message("Exporting matrix_protein.mtx...")
+writeMM(obj = sod[["ADT"]]$counts, file = sprintf("%s/matrix_protein.mtx", file_dir))
+
+message("Exporting genes.tsv and proteins.tsv...")
+write.table(rownames(sod[["RNA"]]), file = sprintf("%s/genes.tsv", file_dir), sep = "\t", quote = F, row.names = F, col.names = F)
+write.table(rownames(sod[["ADT"]]), file = sprintf("%s/proteins.tsv", file_dir), sep = "\t", quote = F, row.names = F, col.names = F)
+
+message("Exporting cells.tsv...")
+write.table(colnames(sod), file = sprintf("%s/cells.tsv", file_dir), sep = "\t", quote = F, row.names = F, col.names = F)
+
+message("Exporting cell_metadata.tsv")
+write.table(sod@meta.data, file = sprintf("%s/cell_metadata.tsv", file_dir), sep = "\t", quote = F, row.names = T, col.names = T)
+
+message("Exporting reductions.tsv")
+reductions = data.frame(sod[["totalvi"]]@cell.embeddings, sod[["umap_totalvi"]]@cell.embeddings)
+write.table(reductions, file = sprintf("%s/reductions.tsv", file_dir), sep = "\t", quote = F, row.names = T, col.names = T)
+
+
+```
+
+Export Anndata h5ad file
+Don't forget to activate the scvi python environment before laouching R
+```{r}
+file_dir = "export_data"
+library(SingleCellExperiment)
+library(sceasy)
+library(anndata)
+
+message("Loading python library")
+sc = tryCatch(import("scanpy", convert = FALSE), error = function(e) {message("scanpy error usually not a problem undefined symbol: cblas_cdotc_sub")})
+scvi = import("scvi", convert = FALSE)
+sys = import ("sys", convert = FALSE)
+np = import("numpy", convert=FALSE)
+
+sce = Seurat::as.SingleCellExperiment(sod)
+
+message("Converting to AnnData")
+adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
+adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer="counts", drop_single_values=FALSE)
+adata$obsm[["protein"]] = adata_protein$to_df()
+print(adata) # Note generally in Python, dataset conventions are obs x var
+
+write_h5ad(adata, filename = sprintf("%s/adata.h5ad", file_dir))
+          
+```
+
+EXTRA:
+Export sketched data only
+```{bash}
+file_dir = "export_data"
+DefaultAssay(so) = "sketch"
+length(colnames(so[["sketch"]]))
+
+so[["sketch"]]$counts = as(object = so[["sketch"]]$counts, Class = "dgCMatrix")
+so[["ADT"]] = so[["ADT"]][,colnames(so[["sketch"]])]
+
+so = DietSeurat(so,
+  layers = c("counts"),
+  features = NULL,
+  assays = c("sketch", "ADT"),
+  dimreducs = c("totalvi", "umap_totalvi"),
+  graphs = NULL,
+  misc = TRUE
+)
+
+saveRDS(object = sod, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir, prefix))
+
+```
+
+if needed, add Sample metadata from the database
+Currently prefers to have it separated (object size, easier to update): Sample_metadata_david_20240324_v3.txt
+```{r}
+
+m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
+m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = ".")
+
+someta = so@meta.data
+someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
+m2 = merge(someta, m, by  = "sample_id", all.x = T)
+m2$sample_id[which(is.na(m2$exp_number))]
+m2$is_spleen_standard[which(is.na(m2$exp_number))] #missing metadata about spleen standards!!
+m2$colnames[which(is.na(m2$exp_number))]
+
+all(m2$colnames %in% rownames(so@meta.data))
+rownames(m2) = m2$colnames
+m2 = m2[rownames(so@meta.data),]
+all(m2$colnames %in% rownames(so@meta.data))
+
+as(bpcells_mat, "dgCMatrix")
+
+so@meta.data = m2
+```
+
+
+

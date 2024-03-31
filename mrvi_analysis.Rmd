@@ -1,0 +1,105 @@
+---
+title: "mrVI_analysis"
+output: html_document
+date: "2024-03-27"
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```
+
+Install mrVI
+
+**Create a new environment in Midway3 for mrVI /project/zemmour/david/envs/mrVI_20240326**
+installation messed up the previous environment...
+
+```{bash}
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+
+cd /project/zemmour/david/envs
+
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+conda env export > scvi_formrvi.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_20240326
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/mrvi_20240326 -f scvi_formrvi.yml
+#if issues with "strict repo priority", delete the line in .condarc
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate /project/zemmour/david/envs/mrvi_20240326
+
+pip install --pre mrvi
+
+
+```
+
+```{python}
+import warnings; warnings.simplefilter('ignore')
+
+#import scvi
+from mrvi import MrVI
+import os
+import scanpy as sc
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+
+adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
+
+MrVI.setup_anndata(adata,  sample_key="my_sample_key", batch_key="my_batch_key")
+
+n_var_genes = 2000
+
+#adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
+model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+mdata = mu.MuData({"RNA": model.adata})
+protein_data = model.adata.obsm['protein']
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+#del mdata["RNA"].obsm['protein']
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+
+adata = mdata.mod["RNA"]
+#Remove genes with no counts
+gene_sums = np.sum(adata.X, axis=0)
+genes_non_zero = gene_sums > 0
+adata = adata[:, genes_non_zero]
+adata.layers["counts"] = adata.X.copy()
+adata.layers["counts_csc"] = adata.layers["counts"].tocsc()
+
+```
+

@@ -377,12 +377,15 @@ n_var_genes = 2000
 #adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
 model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
 mdata = mu.MuData({"RNA": model.adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
 protein_data = model.adata.obsm['protein']
 protein_adata = sc.AnnData(X=protein_data)
 mdata.mod['protein'] = protein_adata
-#del mdata["RNA"].obsm['protein']
+del mdata["RNA"].obsm['protein']
 TOTALVI_LATENT_KEY = "X_totalVI"
 mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+
+
 
 adata = mdata.mod["RNA"]
 #Remove genes with no counts

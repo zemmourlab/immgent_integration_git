@@ -12,21 +12,325 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=5:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --nodes=1 --mem=96GB
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=184GB
 cd $LABHOME
 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
 
-#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
 
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-
-cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 
 python
 
 ```
+
+
+**TOTALVI: totalvi_igt1_56_allgenes_Treg_20240327_organregressedout**
+
+```{python}
+import warnings; warnings.simplefilter('ignore')
+
+import scvi
+import os
+import scanpy as sc
+import muon as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+prefix = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
+
+mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+#adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
+model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+mdata = mu.MuData({"RNA": model.adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+protein_data = model.adata.obsm['protein']
+non_zero_columns = np.sum(protein_data, axis=0) > 0
+protein_data = protein_data.loc[:,non_zero_columns]
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+del mdata.mod["RNA"].obsm["protein"]
+#mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+mdata = mu.read(file_path)
+
+#import metadata
+m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
+#m
+m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '_' + m['hashtag_number'].astype(str)
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '_' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+meta = mdata.mod['RNA'].obs
+
+cols_to_keep = ['sample_id', 'hashtag_number'] + list(set(meta.columns) - set(m.columns))
+meta = meta[cols_to_keep]
+m2 = pd.merge(meta, m, on='sample_id', how='left')
+m2.shape
+m2[m2['exp_number'].isna()].shape
+#print(m2[m2['exp_number'].isna()]['sample_id']) 
+#print(m2[m2['exp_number'].isna()]['is_spleen_standard']) 
+m2[m2['exp_number'].isna()]['organ'] = 'spleen'
+m2[m2['exp_number'].isna()]['condition_broad'] = 'healthy'
+
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+#set(m2['colnames']) == set(mdata.mod['RNA'].obs.index)
+m2.index = m2['colnames']
+m2 = m2.reindex(mdata.mod['RNA'].obs.index, axis=0)
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+
+mdata.mod['RNA'].obs = m2
+
+#simplify the organ columns
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod['RNA'].obs['organ']
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('object')
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('lymph node|LN', na=False, case=False), 'organ_simplified'] = 'lymph node'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('skin', na=False, case=False), 'organ_simplified'] = 'skin'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('colon', na=False, case=False), 'organ_simplified'] = 'colon'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('duoden|ileal|ileum|jejun|small intestine', na=False, case=False), 'organ_simplified'] = 'small intestine'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'organ_simplified'] = 'spleen'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'condition_broad'] = 'healthy'
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].str.replace('[^0-9a-zA-Z]', '.', regex=True)
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('category')
+
+for mod_key in mdata.mod.keys():
+    # Convert all columns in .obs to string type to avoid error in writing
+    mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
+
+mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+#Setup mu_data
+scvi.model.TOTALVI.setup_mudata(
+    mdata,
+    rna_layer="counts",
+    categorical_covariate_keys = ['organ_simplified'], #make sure this is a list!
+    protein_layer=None,
+    batch_key='IGT',
+    modalities={
+        "rna_layer": "RNA",
+        "protein_layer": "protein",
+        "batch_key": "RNA",
+        "categorical_covariate_keys":"RNA"
+    },
+)
+
+model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb")
+
+model.train()
+
+model.save(prefix, save_anndata=True)
+
+fig, ax = plt.subplots(1, 1)
+model.history["elbo_train"].plot(ax=ax, label="train")
+model.history["elbo_validation"].plot(ax=ax, label="validation")
+ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
+ax.legend()
+fig.savefig(prefix+"_training_elbo_plot.pdf")
+
+latent_representation = model.get_latent_representation()
+TOTALVI_LATENT_KEY = "X_totalVI_organ"
+mdata.mod['RNA'].obsm[TOTALVI_LATENT_KEY] = latent_representation
+latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
+
+latent_df.to_csv(prefix+"_X_totalVI_organ.csv", index=True)
+mdata.write(prefix+"/adata.h5mu")
+
+denoised = model.get_normalized_expression() 
+
+mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
+mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+mdata.write(prefix+"/adata_withdenoised.h5mu")
+
+#export mu data in separate AnnData for R
+mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
+mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
+
+```
+
+
+**add new TOTALVI space and protein denoised to totalvi_igt1_56_allgenes_Treg_20240306**
+add denoised protein data to the seurat object and new totalvi embedding
+
+```{python}
+model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+mdata = mu.MuData({"RNA": model.adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+protein_data = model.adata.obsm['protein']
+non_zero_columns = np.sum(protein_data, axis=0) > 0
+protein_data = protein_data.loc[:,non_zero_columns]
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+del mdata.mod["RNA"].obsm["protein"]
+mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+
+denoised = model.get_normalized_expression() 
+(mdata.mod['protein'].obs.index == denoised[1].index).all()
+protein_columns = mdata.mod['protein'].var_names
+denoised_filtered = denoised[1].loc[:, denoised[1].columns.intersection(protein_columns)]
+(mdata.mod['protein'].var_names == denoised_filtered.columns ).all()
+(mdata.mod['protein'].obs.index == denoised_filtered.index ).all()
+
+mdata.mod['protein'].layers["protein_denoised"] = denoised_filtered
+mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+#export mu data in separate AnnData for R
+mdata.mod['RNA'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/rna_data.h5ad")
+mdata.mod['protein'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/protein_data.h5ad")
+
+denoised[1].to_csv('totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv', index=True)
+```
+
+Add to seurat object
+```{r}
+so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240306_BPCells_so.Rds")
+
+protein_denoised = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv", header = T, sep = ",", row.names = 1)
+pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
+#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
+rownames(protein_denoised) = gsub(pattern, "\\1", rownames(protein_denoised))
+protein_denoised = t(protein_denoised)
+all(colnames(protein_denoised) == colnames(so[["ADT"]]))
+all(rownames(protein_denoised) == rownames(so[["ADT"]]))
+make.names(rownames(so[["ADT"]]))
+all(rownames(protein_denoised) %in% rownames(so[["ADT"]]))
+all(make.names(rownames(protein_denoised)) %in% make.names(rownames(so[["ADT"]])))
+#protein_denoised = protein_denoised[make.names(rownames(so[["ADT"]])),]
+colnames(protein_denoised)
+
+so[["protein_denoised"]] = CreateAssayObject(counts = protein_denoised)
+
+
+##Add new totalvi dim
+totalvi = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout_X_totalVI_organ.csv", header = T, sep = ",", row.names = 1)
+pattern = "(IGT\\S*)_(\\d+)"
+rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+all(rownames(totalvi) == rownames(so[["totalvi"]]))
+totalvi = as.matrix(totalvi)
+
+totalVI_dimreduc = CreateDimReducObject(embeddings = totalvi, key = "totalvi_organregressed_")
+so[["RNA"]]@reductions[["totalvi_organregressed"]] = totalvi
+
+so[["totalvi_organregressed"]] = CreateDimReducObject(embeddings = totalvi, key = "totalviorganregressed_", assay = "RNA")
+
+so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 2, reduction.name = "umap_totalvi_organregressed")
+so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 1, reduction.name = "umap_totalvi_organregressed1D")
+#so = JoinLayers(so)
+message("Saving regular seurat object V5")
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
+
+
+
+```
+
+**Export IGT1-56 data for Maria/Nir and Tal**
+
+```{r}
+prefix = "totalvi_igt1_56_20231030_allgenes"
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
+
+colnames(so)[so$IGT == "IGT1"]
+nm = gsub( "(_\\d+)", "", colnames(so)[so$IGT == "IGT1"])
+nm = paste("IGT1", nm, sep = ".")
+colnames(so)[so$IGT == "IGT1"] = nm
+
+write.table(so[["umap_totalvi"]]@cell.embeddings, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
+
+m = so@meta.data[,c("Rosetta_RNA_clusters","Rosetta_Protein_clusters","iNKT","MAIT","ClusterTOTALVI_Res1")]
+all(rownames(so@meta.data) == rownames(so[["umap_totalvi"]]@cell.embeddings))
+m = data.frame(m, so[["umap_totalvi"]]@cell.embeddings)
+m = data.frame(m, so[["totalvi"]]@cell.embeddings)
+
+write.table(m, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi_andothermetadata.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
+
+
+```
+
+
+```{python}
+
+adata = sc.read_h5ad("totalvi_igt1_56_20231030_allgenes/adata.h5ad")
+mdata = mu.MuData({"RNA": adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+protein_data = adata.obsm['protein']
+non_zero_columns = np.sum(protein_data, axis=0) > 0
+protein_data = protein_data.loc[:,non_zero_columns]
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+#TOTALVI_LATENT_KEY = "X_totalVI"
+#mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+del mdata.mod["RNA"].obsm["protein"]
+#mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+#import metadata
+m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
+#m
+m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '_' + m['hashtag_number'].astype(str)
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '_' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+meta = mdata.mod['RNA'].obs
+
+cols_to_keep = ['sample_id', 'hashtag_number'] + list(set(meta.columns) - set(m.columns))
+meta = meta[cols_to_keep]
+m2 = pd.merge(meta, m, on='sample_id', how='left')
+m2.shape
+m2[m2['exp_number'].isna()].shape
+#print(m2[m2['exp_number'].isna()]['sample_id']) 
+#print(m2[m2['exp_number'].isna()]['is_spleen_standard']) 
+m2[m2['exp_number'].isna()]['organ'] = 'spleen'
+m2[m2['exp_number'].isna()]['condition_broad'] = 'healthy'
+
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+#set(m2['colnames']) == set(mdata.mod['RNA'].obs.index)
+m2.index = m2['colnames']
+m2 = m2.reindex(mdata.mod['RNA'].obs.index, axis=0)
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+
+mdata.mod['RNA'].obs = m2
+
+#simplify the organ columns
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod['RNA'].obs['organ']
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('object')
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('lymph node|LN', na=False, case=False), 'organ_simplified'] = 'lymph node'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('skin', na=False, case=False), 'organ_simplified'] = 'skin'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('colon', na=False, case=False), 'organ_simplified'] = 'colon'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('duoden|ileal|ileum|jejun|small intestine', na=False, case=False), 'organ_simplified'] = 'small intestine'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'organ_simplified'] = 'spleen'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'condition_broad'] = 'healthy'
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].str.replace('[^0-9a-zA-Z]', '.', regex=True)
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('category')
+
+for mod_key in mdata.mod.keys():
+    # Convert all columns in .obs to string type to avoid error in writing
+    mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
+
+mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+```
+
+
 
 Notes on Anndata. Not really made for CITEseq. Protein data stored in obsm
 !!Indexing into AnnData will assume that integer arguments to [] behave like .iloc in pandas, whereas string arguments behave like .loc. AnnData always assumes string indices.
@@ -49,6 +353,7 @@ adata.obsm["protein"].loc["AAACCTGAGGCTCTTA_1","B220"]
 adata.obsm["protein"].iloc[0:10,0:10] #iloc because integers!
 adata.obsm["protein"].to_numpy()  
 model.adata.obsm["protein"].columns.tolist()
+
 
 
 ```
