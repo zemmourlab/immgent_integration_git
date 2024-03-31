@@ -7,6 +7,58 @@ editor_options:
   chunk_output_type: console
 ---
 
+README file in the export_data folder
+
+Data export from 2024/03/30
+IGT1-56
+code for data export on github immgent_integration_git/export_data.Rmd
+
+Each IGT represents a 10x lane (typically one experiment) and contains several samples (typically 10 different, with different hashtags)
+
+Sample metadata is in Sample_metadata_david_20240324_v3.csv (sampleID is in the column sample_id_david, with format <IGTXX.HTXX> IGT from immgent_IGT_10xlane_id column and HT from the hashtag_number column). 
+In the cell metadata, sampleID can be reconstructed by concatenating IGT and hashtag_number columns (i.e. paste(so$IGT, so$hashtag_number, sep = "."))
+
+Data is exported in several formats and always contains the following:
+- RNA expression (counts)
+- Protein expression (aka ADT) (counts)
+- totalvi latent space and 2D UMAP ("reductions")
+- cell metadata
+
+1) BPCells V5 Seurat object (in-disk): 
+in the bpcells folder load totalvi_igt1_56_20231030_allgenes_BPCells_so.Rds
+- RNA expression: seurat_object[["RNA"]]
+- Protein expression ("ADT"): seurat_object[["ADT"]]
+- totalvi latent space and 2D UMAP ("reductions"): seurat_object[["umap_totalvi"]], seurat_object[["totalvi"]]
+- cell metadata: seurat_object@meta.data
+
+2) In-memory V5 Seurat object: 
+load  totalvi_igt1_56_20231030_allgenes_inmemory_diet_seurat.Rds
+- RNA expression: seurat_object[["RNA"]]
+- Protein expression ("ADT"): seurat_object[["ADT"]]
+- totalvi latent space and 2D UMAP ("reductions"): seurat_object[["umap_totalvi"]], seurat_object[["totalvi"]]
+- cell metadata: seurat_object@meta.data
+
+3) Individual files:
+matrix_rna.mtx
+matrix_protein.mtx
+genes.tsv
+proteins.tsv
+cells.tsv
+cell_metadata.tsv
+reductions.tsv
+
+4) AnnData object (for python):
+load  totalvi_igt1_56_20231030_allgenes_adata.h5ad
+- RNA expression: adata.X
+- Protein expression: adata.obsm['protein']
+- totalvi latent space and 2D UMAP ("reductions"): adata.obsm['X_ umap_totalvi'] adata.obsm['X_totalvi'] 
+- cell metadata: adata.obs
+
+The totalvi model used is in totalvi_igt1_56_20231030_allgenes. It contains the exact adata.h5ad used (same data but cell names were not reformatted and are slightly different, and metadata isn't cleaned up).
+
+ClusterTOTALVI_Res1_quickannotation.csv contains broad annotation of ClusterTOTALVI_Res1
+
+
 **Start interactive session on Midway3**
 ```{bash}
 ssh -Y zemmour@midway3.rcc.uchicago.edu
@@ -44,7 +96,9 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 Original seurat object to export
 ```{r}
 prefix = "totalvi_igt1_56_20231030_allgenes"
-so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_sketched.Rds", prefix, prefix))
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_sketched_20231106.Rds", prefix, prefix))
+
+DefaultAssay(so) = "RNA"
 
 #write.table(so[["umap_totalvi"]]@cell.embeddings, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
 
@@ -60,21 +114,33 @@ so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysi
 
 Update the metadata in seurat object
 ```{r}
-
+message("check colnames to be IGT.BARCODE")
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#and adjust colnames if needed:
+unique(so$IGT[which(matches == F)])
 #Adjust colnames(so) 
-pattern = "(IGT\\S*)_(\\d+)"
-so$colnames = gsub(pattern, "\\1", so$colnames)
+#pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = colnames(so)
+sample(colnames(so), 100)
+pattern = "(\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
+sample(so$colnames, 100)
+unique(so$IGT[!grepl("^IGT", so$colnames)])
+so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
+sample(so$colnames, 100)
 any(duplicated(so$colnames))
-colnames(so) = so$colnames
-
-#Update cell names to be IGT.BARCODE
-colnames(so)[so$IGT == "IGT1"]
-nm = gsub( "(_\\d+)", "", colnames(so)[so$IGT == "IGT1"])
-nm = paste("IGT1", nm, sep = ".")
-colnames(so)[so$IGT == "IGT1"] = nm
+#recheck
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#so@meta.data[which(matches == F),]
+if(all(matches)) {colnames(so) = so$colnames}
+all(grepl(pattern, colnames(so)))
 
 #add sample_id: IGT.HT
-so$sample_id = paste(so$IGT, so$hashtag_number, sep = ".")
+so$sample_id_david = paste(so$IGT, so$hashtag_number, sep = ".")
 
 #order IGT
 unique(so$IGT)
@@ -87,7 +153,7 @@ so$IGT = factor(so$IGT, levels = ordered_vector)
 #Clean up metadata
 cat(colnames(so@meta.data), sep = '\",\"')
 #someta = so@meta.data
-so@meta.data = so@meta.data[,c("nCount_RNA","nFeature_RNA","nCount_ADT","nFeature_ADT","percent_mito","signature_1T.enriched","signature_1mnp.enriched","signature_1B.enriched","signature_1ILC.enriched","IGT","is_spleen_standard","Rosetta_RNA_clusters","Rosetta_Protein_clusters","hashtag_number","ClusterTOTALVI_Res1","iNKT","MAIT")]
+so@meta.data = so@meta.data[,c("nCount_RNA","nFeature_RNA","nCount_ADT","nFeature_ADT","percent_mito","signature_1T.enriched","signature_1mnp.enriched","signature_1B.enriched","signature_1ILC.enriched","IGT","is_spleen_standard","Rosetta_RNA_clusters","Rosetta_Protein_clusters","hashtag_number","ClusterTOTALVI_Res0.25","ClusterTOTALVI_Res0.5","ClusterTOTALVI_Res1","ClusterTOTALVI_Res2","ClusterTOTALVI_Res3","ClusterTOTALVI_Res4","iNKT","MAIT", "sample_id_david")]
 
 ```
 
@@ -105,13 +171,13 @@ counts.mat = open_matrix_dir(dir = sprintf("%s/%s_counts", file_dir, prefix))
 so_bp = so
 so_bp[["RNA"]]$counts = counts.mat
 
-#message("Saving Seurat BPCells object")
+message("Saving Seurat BPCells object")
 saveRDS( object = so_bp,
-         file = sprintf("%s_BPCells_so.Rds", prefix),
+         file = sprintf("%s_BPCells_seurat.Rds", prefix),
          destdir = file_dir
 )
 
-#so_bp = readRDS(sprintf("export_data/bpcells/%s_BPCells_so.Rds", prefix))
+#so_bp = readRDS(sprintf("export_data/bpcells/%s_BPCells_seurat.Rds", prefix))
 
 ```
 
@@ -120,6 +186,7 @@ Export in-memory diet seurat object
 file_dir = "export_data"
 sod = so
 sod[["RNA"]]$counts = as(object = sod[["RNA"]]$counts, Class = "dgCMatrix")
+DefaultAssay(sod) = "RNA"
 
 sod = DietSeurat(sod,
   layers = c("counts"),
@@ -138,7 +205,9 @@ saveRDS(object = sod, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir,
 Export individual files (like for GEO)
 ```{r}
 library(Matrix)
+
 file_dir = "export_data/individual_files"
+dir.create(file_dir)
 
 #message("Exporting data")
 message("Exporting matrix_rna.mtx...")
@@ -186,30 +255,56 @@ adata_protein = convertFormat(altExp(sce), from="sce", to="anndata", main_layer=
 adata$obsm[["protein"]] = adata_protein$to_df()
 print(adata) # Note generally in Python, dataset conventions are obs x var
 
-write_h5ad(adata, filename = sprintf("%s/adata.h5ad", file_dir))
+write_h5ad(adata, filename = sprintf("%s/%s_adata.h5ad", file_dir, prefix))
           
 ```
 
-EXTRA:
+Export the sample metadata and ClusterTOTALVI_Res1_quickannotation.csv
+```{r}
+command = "cp ClusterTOTALVI_Res1_quickannotation.csv export_data/"
+system(command)
+
+command = "cp Sample_metadata_david_20240324_v3.csv export_data/"
+system(command)
+
+```
+
+Export the totalvi model
+```{r}
+command = "cp totalvi_igt1_56_20231030_allgenes export_data/"
+system(command)
+
+```
+
+EXTRA
 Export sketched data only
 ```{bash}
 file_dir = "export_data"
+#so = readRDS("bpcells/totalvi_igt1_56_20231030_allgenes_counts/totalvi_igt1_56_20231030_allgenes_BPCells_so_sketched_20231106.Rds")
+
 DefaultAssay(so) = "sketch"
 length(colnames(so[["sketch"]]))
 
-so[["sketch"]]$counts = as(object = so[["sketch"]]$counts, Class = "dgCMatrix")
-so[["ADT"]] = so[["ADT"]][,colnames(so[["sketch"]])]
+#check  colnames of so[["sketch"]] and ADT if needed
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+all(grepl(pattern, colnames(so[["RNA"]])))
+all(grepl(pattern, colnames(so[["sketch"]])))
+all(grepl(pattern, colnames(so[["ADT"]])))
 
-so = DietSeurat(so,
+sketch = subset(so, cells = colnames(so[["sketch"]]))
+DefaultAssay(sketch) = "RNA"
+sketch[["RNA"]]$counts = as(object = sketch[["RNA"]]$counts, Class = "dgCMatrix")
+
+sketch = DietSeurat(sketch,
   layers = c("counts"),
   features = NULL,
-  assays = c("sketch", "ADT"),
+  assays = c("RNA", "ADT"),
   dimreducs = c("totalvi", "umap_totalvi"),
   graphs = NULL,
   misc = TRUE
 )
 
-saveRDS(object = sod, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir, prefix))
+saveRDS(sketch, file = sprintf("%s/%s_seurat_sketch.Rds", file_dir, prefix)) #saves in memory by default
 
 ```
 
@@ -218,7 +313,7 @@ Currently prefers to have it separated (object size, easier to update): Sample_m
 ```{r}
 
 m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
-m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = ".")
+#m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = ".")
 
 someta = so@meta.data
 someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
