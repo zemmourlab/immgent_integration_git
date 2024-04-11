@@ -65,7 +65,7 @@ print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
 print(mdata.mod["RNA"].obs[confounding1].unique().tolist())
 
 #Setup mu_data
-print("Setup mu_data)
+print("Setup mu_data")
 scvi.model.TOTALVI.setup_mudata(
     mdata,
     rna_layer="counts",

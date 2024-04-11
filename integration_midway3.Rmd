@@ -2409,6 +2409,9 @@ for (i in 1:length(to_subset_list)) {
     
 ```
 
+**TOTAL-VI INTEGRATION IGT 1-56, all genes, removing organ effect using PYTHON SCRIPT**
+see totalvi_python.Rmd
+
 
 **Integration evaluation: conservation of HVG**
 Calculate mean intracluster distances in one batch before and after integration

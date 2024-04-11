@@ -164,11 +164,103 @@ mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
 
 ```
 
+**add new TOTALVI space and protein denoised to totalvi_igt1_56_allgenes_Treg_20240306**
+add denoised protein data to the seurat object and new totalvi embedding
+
+```{python}
+model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+mdata = mu.MuData({"RNA": model.adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+protein_data = model.adata.obsm['protein']
+non_zero_columns = np.sum(protein_data, axis=0) > 0
+protein_data = protein_data.loc[:,non_zero_columns]
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+del mdata.mod["RNA"].obsm["protein"]
+mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+
+denoised = model.get_normalized_expression() 
+(mdata.mod['protein'].obs.index == denoised[1].index).all()
+protein_columns = mdata.mod['protein'].var_names
+denoised_filtered = denoised[1].loc[:, denoised[1].columns.intersection(protein_columns)]
+(mdata.mod['protein'].var_names == denoised_filtered.columns ).all()
+(mdata.mod['protein'].obs.index == denoised_filtered.index ).all()
+
+mdata.mod['protein'].layers["protein_denoised"] = denoised_filtered
+mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+#export mu data in separate AnnData for R
+mdata.mod['RNA'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/rna_data.h5ad")
+mdata.mod['protein'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/protein_data.h5ad")
+
+denoised[1].to_csv('totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv', index=True)
+```
+
+Add to seurat object
+```{r}
+so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240306_BPCells_so.Rds")
+
+protein_denoised = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv", header = T, sep = ",", row.names = 1)
+pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
+#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
+rownames(protein_denoised) = gsub(pattern, "\\1", rownames(protein_denoised))
+protein_denoised = t(protein_denoised)
+all(colnames(protein_denoised) == colnames(so[["ADT"]]))
+all(rownames(protein_denoised) == rownames(so[["ADT"]]))
+make.names(rownames(so[["ADT"]]))
+all(rownames(protein_denoised) %in% rownames(so[["ADT"]]))
+all(make.names(rownames(protein_denoised)) %in% make.names(rownames(so[["ADT"]])))
+#protein_denoised = protein_denoised[make.names(rownames(so[["ADT"]])),]
+colnames(protein_denoised)
+
+so[["protein_denoised"]] = CreateAssayObject(counts = protein_denoised)
+
+
+##Add new totalvi dim
+totalvi = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout_X_totalVI_organ.csv", header = T, sep = ",", row.names = 1)
+pattern = "(IGT\\S*)_(\\d+)"
+rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+all(rownames(totalvi) == rownames(so[["totalvi"]]))
+totalvi = as.matrix(totalvi)
+
+totalVI_dimreduc = CreateDimReducObject(embeddings = totalvi, key = "totalvi_organregressed_")
+so[["RNA"]]@reductions[["totalvi_organregressed"]] = totalvi
+
+so[["totalvi_organregressed"]] = CreateDimReducObject(embeddings = totalvi, key = "totalviorganregressed_", assay = "RNA")
+
+so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 2, reduction.name = "umap_totalvi_organregressed")
+so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 1, reduction.name = "umap_totalvi_organregressed1D")
+#so = JoinLayers(so)
+message("Saving regular seurat object V5")
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
+
+
+
+```
+
+
+**TOTAL-VI INTEGRATION IGT 1-56, all genes, removing organ effect using PYTHON SCRIPT**
+
+
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+$SCRIPT_DIR/run_totalvi.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56 \
+/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu \
+totalvi_igt1_56_20231030_allgenes_organregressed \
+IGT organ_simplified _X_totalVI_rmorgan
+```
+
 run_totalvi.py [cwd] [path to mdata] [prefix] [batchkey] [confounding] [name of latent space]
 run_totalvi.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56 \
 /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu \
 totalvi_igt1_56_20231030_allgenes_organregressed \
 IGT organ_simplified _X_totalVI_rmorgan
+
 
 
 ```{python}
@@ -292,85 +384,6 @@ mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
 mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
 
 print("Done")
-```
-
-**add new TOTALVI space and protein denoised to totalvi_igt1_56_allgenes_Treg_20240306**
-add denoised protein data to the seurat object and new totalvi embedding
-
-```{python}
-model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
-mdata = mu.MuData({"RNA": model.adata})
-mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
-protein_data = model.adata.obsm['protein']
-non_zero_columns = np.sum(protein_data, axis=0) > 0
-protein_data = protein_data.loc[:,non_zero_columns]
-protein_adata = sc.AnnData(X=protein_data)
-mdata.mod['protein'] = protein_adata
-TOTALVI_LATENT_KEY = "X_totalVI"
-mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
-del mdata.mod["RNA"].obsm["protein"]
-mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
-
-denoised = model.get_normalized_expression() 
-(mdata.mod['protein'].obs.index == denoised[1].index).all()
-protein_columns = mdata.mod['protein'].var_names
-denoised_filtered = denoised[1].loc[:, denoised[1].columns.intersection(protein_columns)]
-(mdata.mod['protein'].var_names == denoised_filtered.columns ).all()
-(mdata.mod['protein'].obs.index == denoised_filtered.index ).all()
-
-mdata.mod['protein'].layers["protein_denoised"] = denoised_filtered
-mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
-mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
-
-#export mu data in separate AnnData for R
-mdata.mod['RNA'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/rna_data.h5ad")
-mdata.mod['protein'].write_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/protein_data.h5ad")
-
-denoised[1].to_csv('totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv', index=True)
-```
-
-Add to seurat object
-```{r}
-so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240306_BPCells_so.Rds")
-
-protein_denoised = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240306/protein_denoised.csv", header = T, sep = ",", row.names = 1)
-pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
-#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
-rownames(protein_denoised) = gsub(pattern, "\\1", rownames(protein_denoised))
-protein_denoised = t(protein_denoised)
-all(colnames(protein_denoised) == colnames(so[["ADT"]]))
-all(rownames(protein_denoised) == rownames(so[["ADT"]]))
-make.names(rownames(so[["ADT"]]))
-all(rownames(protein_denoised) %in% rownames(so[["ADT"]]))
-all(make.names(rownames(protein_denoised)) %in% make.names(rownames(so[["ADT"]])))
-#protein_denoised = protein_denoised[make.names(rownames(so[["ADT"]])),]
-colnames(protein_denoised)
-
-so[["protein_denoised"]] = CreateAssayObject(counts = protein_denoised)
-
-
-##Add new totalvi dim
-totalvi = read.csv(file = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout_X_totalVI_organ.csv", header = T, sep = ",", row.names = 1)
-pattern = "(IGT\\S*)_(\\d+)"
-rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
-colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
-all(rownames(totalvi) == rownames(so[["totalvi"]]))
-totalvi = as.matrix(totalvi)
-
-totalVI_dimreduc = CreateDimReducObject(embeddings = totalvi, key = "totalvi_organregressed_")
-so[["RNA"]]@reductions[["totalvi_organregressed"]] = totalvi
-
-so[["totalvi_organregressed"]] = CreateDimReducObject(embeddings = totalvi, key = "totalviorganregressed_", assay = "RNA")
-
-so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 2, reduction.name = "umap_totalvi_organregressed")
-so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = "totalvi_organregressed", n.components = 1, reduction.name = "umap_totalvi_organregressed1D")
-#so = JoinLayers(so)
-message("Saving regular seurat object V5")
-saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
-saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/bpcells/totalvi_igt1_56_allgenes_Treg_20240306_counts/totalvi_igt1_56_allgenes_Treg_20240328_withorganregressed_withdenoisedprot_so.Rds")
-
-
-
 ```
 
 
