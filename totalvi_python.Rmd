@@ -164,11 +164,11 @@ mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
 
 ```
 
-run_totalvi.py [cwd] [path to mdata] [prefix] [batchkey] [confounding]  
+run_totalvi.py [cwd] [path to mdata] [prefix] [batchkey] [confounding] [name of latent space]
 run_totalvi.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56 \
 /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu \
 totalvi_igt1_56_20231030_allgenes_organregressed \
-IGT organ_simplified
+IGT organ_simplified _X_totalVI_rmorgan
 
 
 ```{python}
@@ -188,36 +188,52 @@ import mplscience
 import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
+import torch
 
 # Global configurations
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
+sc.set_figure_params(figsize=(6, 6), frameon=False)
+sns.set_theme()
+
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+#%config InlineBackend.print_figure_kwargs={"facecolor": "w"}
+#%config InlineBackend.figure_format="retina"
 
 print("Arguments")
-working_dir = sys.argv[0]
-path_to_mdata = sys.argv[1]
-prefix = sys.argv[2] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
-batchkey = sys.argv[3]
-confounding1 = sys.argv[4]
+# working_dir = sys.argv[0]
+# path_to_mdata = sys.argv[1]
+# prefix = sys.argv[2] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
+# batchkey = sys.argv[3]
+# confounding1 = sys.argv[4]
+# space_name = sys.argv[5]
 
-#working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
-#path_to_mdata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
-#prefix = "totalvi_igt1_56_20231030_allgenes_organregressed"
-#batchkey = "IGT"
-#confounding1 = "organ_simplified"
+working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
+path_to_mdata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
+prefix = "totalvi_igt1_56_20231030_allgenes_organregressed"
+batchkey = "IGT"
+confounding1 = "organ_simplified"
+totalvi_latent_key = "X_totalvi_rmorgan"
 
 print("working_dir:"+working_dir)
 print("path_to_mdata:"+path_to_mdata)
 print("prefix:"+prefix)
 print("batchkey:"+batchkey)
 print("confounding1:"+confounding1)
+print("totalvi_latent_key:"+totalvi_latent_key)
 
 #Read mdata
 print("Read mdata")
 os.chdir(working_dir)
-
 mdata = mu.read(path_to_mdata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
 print(mdata)
+
+print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
+print(mdata.mod["RNA"].obs[confounding1].unique().tolist())
 
 #Setup mu_data
 print("Setup mu_data)
@@ -248,15 +264,14 @@ model.history["elbo_train"].plot(ax=ax, label="train")
 model.history["elbo_validation"].plot(ax=ax, label="validation")
 ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
 ax.legend()
-fig.savefig(prefix+"_training_elbo_plot.pdf")
+fig.savefig(prefix+"/training_elbo_plot.pdf")
 
 latent_representation = model.get_latent_representation()
-TOTALVI_LATENT_KEY = "X_totalVI"
-mdata.mod['RNA'].obsm[TOTALVI_LATENT_KEY] = latent_representation
+mdata.mod['RNA'].obsm[totalvi_latent_key] = latent_representation
 latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
 
 print("Save latent data in csv file")
-latent_df.to_csv(prefix+"_X_totalVI.csv", index=True)
+latent_df.to_csv(prefix +'/'+  prefix + '_' + totalvi_latent_key + ".csv", index=True)
 
 print("Save adata.h5mu")
 mdata.write(prefix+"/adata.h5mu")
