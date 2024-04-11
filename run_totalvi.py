@@ -40,7 +40,7 @@ path_to_mdata = sys.argv[1]
 prefix = sys.argv[2] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
 batchkey = sys.argv[3]
 confounding1 = sys.argv[4]
-space_name = sys.argv[5]
+totalvi_latent_key = sys.argv[5]
 
 # working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
 # path_to_mdata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"

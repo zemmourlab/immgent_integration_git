@@ -259,7 +259,7 @@ run_totalvi.py [cwd] [path to mdata] [prefix] [batchkey] [confounding] [name of 
 run_totalvi.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56 \
 /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu \
 totalvi_igt1_56_20231030_allgenes_organregressed \
-IGT organ_simplified _X_totalVI_rmorgan
+IGT organ_simplified X_totalVI_rmorgan
 
 
 
