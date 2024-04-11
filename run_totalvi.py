@@ -35,12 +35,12 @@ if torch.cuda.is_available():
 #%config InlineBackend.figure_format="retina"
 
 print("Arguments")
-working_dir = sys.argv[0]
-path_to_mdata = sys.argv[1]
-prefix = sys.argv[2] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
-batchkey = sys.argv[3]
-confounding1 = sys.argv[4]
-totalvi_latent_key = sys.argv[5]
+working_dir = sys.argv[1]
+path_to_mdata = sys.argv[2]
+prefix = sys.argv[3] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
+batchkey = sys.argv[4]
+confounding1 = sys.argv[5]
+totalvi_latent_key = sys.argv[6]
 
 # working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
 # path_to_mdata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
