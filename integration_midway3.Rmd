@@ -48,14 +48,16 @@ ColorRamp = rev(rainbow(10, end = 4/6))
 
 n = 70
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-mypal = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
-mypal = mypal[-4]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
 
 library("pals")
 parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
 length(glasbey())
 length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
 #pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
 
 #pdf("mypal.pdf", 10, 10)
@@ -2270,10 +2272,142 @@ prefix = sprintf("totalvi_igt1_56_allgenes_%s_20240306", to_subset)
 sprintf("sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240306_%s.sh", to_subset) #runs the 2 following scripts, modifies those lines : 
 sprintf("Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ immgent_IGT1_56_%s.Rds totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset, to_subset)
 sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/ totalvi_igt1_56_allgenes_%s_20240306", to_subset, to_subset)
-
-
 ```
 
+Plot the ClusterTOTALVI_Res1 ton the different subset UMAPs
+
+```{r}
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+    
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal) + ggtitle(label = sprintf("color: %s", color_by))
+    print(plot1)
+    
+
+    message("Plot 2: UMAP split")
+    if (!is.null(split_by1)) { 
+        
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+        p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+        
+        if (is.null(split_by2)) {
+            plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+        } else {
+            plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+        print(plot2)
+        
+    }
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+        
+        
+        if (is.null(split_by2)) {
+            plot3 = p + p2  + 
+                scale_color_manual(values = c("black", "red")) + 
+                scale_alpha_manual(values = c(0.5,1))  + 
+                theme_bw()  + 
+                facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+                ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        } else {
+            plot3 = p + p2  + 
+                scale_color_manual(values = c("black", "red")) + 
+                scale_alpha_manual(values = c(0.5,1))  + 
+                theme_bw() + 
+                facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+                ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+    
+}
+
+prefix = "totalvi_igt1_56_20231030_allgenes"
+alldata = readRDS(file = sprintf("bpcells/%s_counts/%s_BPCells_so.Rds", prefix, prefix))
+
+to_subset_list = c("activated_CD4", "activated_CD4_noTreg", "Treg", "activated_CD8", "resting_CD4", "resting_CD8", "bottom_right", "unconventional")
+
+for (i in 1:length(to_subset_list)) {
+    
+    print(to_subset_list[i])
+    
+    so = readRDS(sprintf("%s/totalvi_igt1_56_allgenes_%s_20240306_so.Rds",to_subset_list[i], to_subset_list[i]))
+    any(is.na(alldata@meta.data[colnames(so),"ClusterTOTALVI_Res1"]))
+    so$ClusterTOTALVIRes1_all = alldata@meta.data[colnames(so),"ClusterTOTALVI_Res1"]
+    so$ClusterTOTALVIRes2_all = alldata@meta.data[colnames(so),"ClusterTOTALVI_Res2"]
+    so$ClusterTOTALVIRes3_all = alldata@meta.data[colnames(so),"ClusterTOTALVI_Res3"]
+    so$ClusterTOTALVIRes4_all = alldata@meta.data[colnames(so),"ClusterTOTALVI_Res4"]
+    
+    pdf(sprintf("%s/totalvi_igt1_56_allgenes_%s_20240306_UMAP_previousClusterTOTALVIRes.pdf", to_subset_list[i], to_subset_list[i]), 20, 20, useDingbats = F)
+    MyPlots(seurat_object = so, 
+            dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+            dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+            color_by = "ClusterTOTALVIRes1_all", 
+            split_by1 = NULL,
+            split_by2 =  NULL, 
+            genes = NULL, 
+            cluster_key = NULL, mypal = mypal) #glasbey()
+    
+    MyPlots(seurat_object = so, 
+            dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+            dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+            color_by = "ClusterTOTALVIRes2_all", 
+            split_by1 = NULL,
+            split_by2 =  NULL, 
+            genes = NULL, 
+            cluster_key = NULL, mypal = mypal) #glasbey()
+    
+    MyPlots(seurat_object = so, 
+            dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+            dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+            color_by = "ClusterTOTALVIRes3_all", 
+            split_by1 = NULL,
+            split_by2 =  NULL, 
+            genes = NULL, 
+            cluster_key = NULL, mypal = mypal) #glasbey()
+    
+    MyPlots(seurat_object = so, 
+            dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], 
+            dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], 
+            color_by = "ClusterTOTALVIRes4_all", 
+            split_by1 = NULL,
+            split_by2 =  NULL, 
+            genes = NULL, 
+            cluster_key = NULL, mypal = mypal) #glasbey()
+    dev.off()
+    
+    rm(so)
+    
+}
+    
+```
 
 
 **Integration evaluation: conservation of HVG**

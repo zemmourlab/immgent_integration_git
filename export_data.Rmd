@@ -234,7 +234,7 @@ write.table(reductions, file = sprintf("%s/reductions.tsv", file_dir), sep = "\t
 ```
 
 Export Anndata h5ad file
-Don't forget to activate the scvi python environment before laouching R
+Don't forget to activate the scvi python environment before launching R
 ```{r}
 file_dir = "export_data"
 library(SingleCellExperiment)
@@ -332,5 +332,118 @@ as(bpcells_mat, "dgCMatrix")
 so@meta.data = m2
 ```
 
+Export MuData file
+Don't forget to activate the scvi python environment before launching R
+source activate /project/zemmour/david/envs/scvi_20240315
+```{python}
+import warnings; warnings.simplefilter('ignore')
+
+import scvi
+import os
+import scanpy as sc
+import muon as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/"+file_dir)
+prefix = "totalvi_igt1_56_20231030_allgenes"
+
+#mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+
+adata = sc.read_h5ad("totalvi_igt1_56_20231030_allgenes_adata.h5ad")
+
+#model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+mdata = mu.MuData({"RNA": adata})
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+protein_data = adata.obsm['protein']
+non_zero_columns = np.sum(protein_data, axis=0) > 0
+protein_data = protein_data.loc[:,non_zero_columns]
+protein_adata = sc.AnnData(X=protein_data)
+mdata.mod['protein'] = protein_adata
+TOTALVI_LATENT_KEY = "X_totalVI"
+#mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+del mdata.mod["RNA"].obsm["protein"]
+#mdata.write(prefix+"_mdata.h5mu")
+#mdata = mu.read(file_path)
+
+#import metadata
+m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
+#m
+m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '.' + m['hashtag_number'].astype(str)
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '.' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+meta = mdata.mod['RNA'].obs
+
+cols_to_keep = ['sample_id', 'hashtag_number'] + list(set(meta.columns) - set(m.columns))
+meta = meta[cols_to_keep]
+m2 = pd.merge(meta, m, on='sample_id', how='left')
+m2.shape
+m2[m2['exp_number'].isna()].shape
+#print(m2[m2['exp_number'].isna()]['sample_id']) 
+#print(m2[m2['exp_number'].isna()]['is_spleen_standard']) 
+m2[m2['exp_number'].isna()]['organ'] = 'spleen'
+m2[m2['exp_number'].isna()]['condition_broad'] = 'healthy'
+
+#(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+(m2["nFeature_RNA"].values == mdata.mod['RNA'].obs['nFeature_RNA'].values).all()
+#set(m2['colnames']) == set(mdata.mod['RNA'].obs.index)
+#m2.index = m2['colnames']
+m2.index = mdata.obs.index
+#m2 = m2.reindex(mdata.mod['RNA'].obs.index, axis=0)
+#(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+(m2.index == mdata.mod['RNA'].obs.index).all()
+
+#clean up columns
+m2.columns
+m2.columns[m2.iloc[0,].duplicated()]
+
+(m2.sample_id.values == m2.sample_id_david.values).all()
+m2.sample_id[m2.sample_id.values != m2.sample_id_david.values]
+m2.sample_id_david[m2.sample_id.values != m2.sample_id_david.values]
+
+(m2.hashtag_number_x.values.to_numpy() == m2.hashtag_number_y.values).all()
+m2.hashtag_number_x[(m2['hashtag_number_x'] != m2['hashtag_number_y'])]
+m2.hashtag_number_y[(m2['hashtag_number_x'] != m2['hashtag_number_y'])]
+
+(m2.IGT.values.to_numpy() == m2.immgent_IGT_10xlane_id.values).all()
+m2.IGT[(m2['IGT'] != m2['immgent_IGT_10xlane_id'])]
+m2.immgent_IGT_10xlane_id[(m2['IGT'] != m2['immgent_IGT_10xlane_id'])]
+m2.immgent_IGT_10xlane_id[(m2['hashtag_number_x'] != m2['hashtag_number_y'])]
+
+columns_to_drop = ['hashtag_number_y', 'sample_id_david', 'count_unique', "immgent_IGT_10xlane_id", "ident", "igt_number", "ht_number"]
+
+# Use the drop method to remove the columns
+m2 = m2.drop(columns=columns_to_drop)
+
+mdata.mod['RNA'].obs = m2
+
+#simplify the organ columns
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod['RNA'].obs['organ']
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('object')
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('lymph node|LN', na=False, case=False), 'organ_simplified'] = 'lymph node'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('skin', na=False, case=False), 'organ_simplified'] = 'skin'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('colon', na=False, case=False), 'organ_simplified'] = 'colon'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('duoden|ileal|ileum|jejun|small intestine', na=False, case=False), 'organ_simplified'] = 'small intestine'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'organ_simplified'] = 'spleen'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'condition_broad'] = 'healthy'
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].str.replace('[^0-9a-zA-Z]', '.', regex=True)
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('category')
+
+for mod_key in mdata.mod.keys():
+    # Convert all columns in .obs to string type to avoid error in writing
+    mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
+
+mdata.write(prefix+"_mdata.h5mu")
+
+          
+```
 
 

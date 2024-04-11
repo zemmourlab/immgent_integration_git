@@ -1,0 +1,45 @@
+
+
+
+```{bash}
+ssh -Y CNETID@midway3.rcc.uchicago.edu
+
+cd /project/zemmour/youssef
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 
+
+source activate mamba-env  
+mamba create -p /project/zemmour/youssef/envs/scvi python=3.9
+#log out and log back in to activate the new environment
+source activate /project/zemmour/youssef/envs/scvi
+
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install jax jaxlib -c conda-forge
+
+mamba install scvi-tools -c conda-forge
+
+#check installation and GPU works:
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 —-mem=8GB
+module load python/anaconda-2022.05
+source activate /project/zemmour/youssef/envs/scvi
+#on midway3-0283 GPU
+#import torch
+#torch.cuda.is_available()
+#True
+#torch.cuda.device_count()
+#1
+#torch.cuda.current_device()
+#0
+#torch.cuda.device(0)
+#<torch.cuda.device object at 0x7f4d19f42af0>
+#torch.cuda.get_device_name(0)
+#'Quadro RTX 6000'
+
+#install R in this environment, if needed
+mamba install -c conda-forge r-base=4.2 r-essentials r-reticulate
+#then install seuratv5, BP cells, ggrastr 
+module load hdf5/1.12.0 #for BPCells but also others
+```
+
