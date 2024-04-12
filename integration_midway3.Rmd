@@ -2158,12 +2158,10 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 
 **TOTAL-VI INTEGRATION for Rocky IGT 47 and 66, all genes**
 
-Merge IGT47 and 66
-
 ```{bash}
 mkdir IGT47_66_Rocky
 ```
-
+Merge IGT47 and 66
 ```{r}
 ImportIGTData = function(dir, IGT) {
     
@@ -2306,7 +2304,6 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts:
 
 
 ```
-
 
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, resting CD4, activated CD4, rCD8, aCD8, unconventional, bottom right**
 

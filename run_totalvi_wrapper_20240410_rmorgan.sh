@@ -22,5 +22,6 @@ SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 CWD=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
 cd $CWD
 
-python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
+# python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
 
+python $SCRIPT_DIR/run_totalvi_denoising_v2.py $CWD totalvi_igt1_56_20231030_allgenes_organregressed

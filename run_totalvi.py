@@ -106,19 +106,19 @@ latent_df.to_csv(prefix +'/'+  prefix + '_' + totalvi_latent_key + ".csv", index
 print("Save adata.h5mu")
 mdata.write(prefix+"/adata.h5mu")
 
-print("Calculate denoised data")
-denoised = model.get_normalized_expression() 
-
-mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
-mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
-mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
-
-print("Save denoised data")
-mdata.write(prefix+"/adata_withdenoised.h5mu")
-
-#export mu data in separate AnnData for R
-print("Export data rna_data.h5ad and protein_data.h5ad in AnnData for R")
-mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
-mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
-
-print("Done")
+# print("Calculate denoised data")
+# denoised = model.get_normalized_expression() 
+# 
+# mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+# mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
+# mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+# 
+# print("Save denoised data")
+# mdata.write(prefix+"/adata_withdenoised.h5mu")
+# 
+# #export mu data in separate AnnData for R
+# print("Export data rna_data.h5ad and protein_data.h5ad in AnnData for R")
+# mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
+# mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
+# 
+# print("Done")
