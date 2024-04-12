@@ -14,7 +14,9 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
-sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=152GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+
 cd $LABHOME
 
 module load python/anaconda-2022.05 
@@ -2154,6 +2156,157 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 
 ```
 
+**TOTAL-VI INTEGRATION for Rocky IGT 47 and 66, all genes**
+
+Merge IGT47 and 66
+
+```{bash}
+mkdir IGT47_66_Rocky
+```
+
+```{r}
+ImportIGTData = function(dir, IGT) {
+    
+    spleen_test = file.exists(sprintf("%s/spleen.Rds", dir))
+    sample_test = file.exists(sprintf("%s/dataset_clean.Rds", dir))
+    
+    if (!sample_test) {
+        stop("no data")
+    }
+    
+    if (spleen_test) {
+        message("Loading spleen standard")
+        tmp = readRDS(sprintf("%s/spleen.Rds", dir))
+        tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+        tmp2[["ADT"]] = CreateAssayObject(counts = tmp@assays$ADT$counts)
+        print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+        tmp2$IGT = IGT
+        tmp2$is_spleen_standard = T
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(tmp2), split = "\\."))[,1])
+        message("IGT in spleen standard match IGT")
+        print(all(igt_incolnames %in% IGT))
+    }    
+    
+    if (sample_test) {
+        message("Loading samples")
+        samples = readRDS(sprintf("%s/dataset_clean.Rds", dir))
+        DefaultAssay(samples) = "RNA"
+        samples2 = CreateSeuratObject(counts = samples@assays$RNA$counts, meta.data = samples@meta.data, assay = "RNA")
+        samples2[["ADT"]] = CreateAssayObject(counts = samples@assays$ADT$counts) #samples@assays$ADT$counts
+        print(all(colnames(samples2@assays$RNA$counts) == colnames(samples2@assays$ADT$counts)))
+        samples2$IGT = IGT
+        samples2$is_spleen_standard = F
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(samples2), split = "\\."))[,1])
+        message("IGT in sample match IGT")
+        print(all(igt_incolnames %in% IGT))
+        all(samples2$IGT %in% IGT)
+    }
+    
+    if (spleen_test) {
+        message("Spleen standard present to merge")
+        int = intersect(colnames(samples2), colnames(tmp2))
+        #print(length(int))
+        if (length(int) != 0) {
+            message(sprintf("removing %s spleen standard cells from the samples", length(int)))
+            samples2 = samples2[,!colnames(samples2) %in% int]
+        }
+    
+        #table(samples2[,int]@meta.data$HTO_classification.simplified)
+        #table(tmp2[,int]@meta.data$HTO_classification.simplified)
+    
+        m = merge(tmp2, samples2)
+        #m = JoinLayers(m)
+    } else {
+        message("No spleen standard to merge")
+        m = samples2
+    }
+    
+    # meta = m@meta.data
+    # meta$hashtag_number = meta$HTO_classification.simplified
+    # meta = meta[,!grepl("HTO|hash.ID|outliers|singler|lowCountADT|orig.ident", colnames(meta))]
+    # 
+    # metadata_sample = read.table(file = sprintf("%s/%s_specific_Sample_metadata.tsv", dir, IGT), sep = "\t", header = T, as.is = T) #metadata_sample = read.table(file = sprintf("%s/%s_sample_specific_metadata.csv", dir, IGT), sep = ",", header = T, as.is = T)
+    # metadata_sample = metadata_sample[,!colnames(metadata_sample) %in% "X"]
+    # metadata_sample$hashtag_number = paste("HT", metadata_sample$hashtag_number, sep = "")
+    # 
+    # message("IGT in seurat object match IGT in specific_Sample_metadata.csv")
+    # print(unique(metadata_sample[,grepl("IGT_10xlane_id", colnames(metadata_sample))]) %in% unique(gsub("IGT", "", meta$IGT)))
+    # 
+    # message("metadata_sample$hashtag_number match specific_Sample_metadata.csv hashtag_number")
+    # print(all(metadata_sample$hashtag_number[match(meta$hashtag_number, metadata_sample$hashtag_number)] == meta$hashtag_number))
+    # 
+    # meta = data.frame(meta, metadata_sample[match(meta$hashtag_number, metadata_sample$hashtag_number),])
+    # meta$sample_name = NULL
+    # meta$hashtag_number.1 = NULL
+    # meta[,grepl("IGT_10xlane_id", colnames(meta))] = NULL
+    # colnames(meta)[colnames(meta) == "RNA_clusters"] = "Rosetta_RNA_clusters"
+    # colnames(meta)[colnames(meta) == "Protein_clusters"] = "Rosetta_Protein_clusters"
+    # colnames(meta) = gsub("First.Of.|Avg.Of.","", colnames(meta))
+    # 
+    # m@meta.data = meta
+    
+    return(m)
+}
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+#files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+#dirs = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(1:48))
+#dirs = sprintf("/scratch/midway3/zemmour/exp_id/*/IGT%s", c(1:56))
+
+paths = list.files(path = "/project/jfkfloor2/zemmourlab/david/immgent/data/exp_id/", pattern = "dataset_clean.Rds", recursive = T, include.dirs=T)
+paths = do.call(rbind, strsplit(paths, split = "\\/"))[,c(1,2)] %>% as.data.frame() %>% distinct()
+colnames(paths) = c("exp_id", "IGT")
+paths = paths[!paths$IGT %in% "Old",] %>% as.data.frame()
+rownames(paths) = NULL
+rownames(paths) = paths$IGT
+#paths %>% write.table(file = "igt_exp.txt", row.names = F, quote = F, sep = ",")
+
+so_list = list()
+for (s in c("IGT47", "IGT66")) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    #print(IGT)
+    IGT = paths[s,"IGT"]
+    print(IGT)
+    dir = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/exp_id/%s/%s", paths[s,"exp_id"], paths[s,"IGT"])
+    so_list[[IGT]]  = tryCatch(ImportIGTData(dir, IGT), error = function(e) {message("no data")})
+}
+
+for (i in 1:length(so_list)) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    print(names(so_list)[i])
+    print(range(so_list[[i]][["ADT"]]$counts))
+    if (max(so_list[[i]][["ADT"]]$counts) < 100 | is.na(max(so_list[[i]][["ADT"]]$counts) )) {
+        print("changing ADT data to 0, check:")
+        m = Matrix(data = 0, nrow=nrow(so_list[[i]][["ADT"]]$counts), ncol=ncol(so_list[[i]][["ADT"]]$counts), sparse = TRUE)
+        rownames(m) = rownames(so_list[[i]][["ADT"]]$counts)
+        colnames(m) = colnames(so_list[[i]][["ADT"]]$counts)
+        so_list[[i]][["ADT"]]$counts = m
+        print(range(so_list[[i]][["ADT"]]$counts))
+    }
+}
+
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), project = "immgent_IGT47_66_rocky")
+so = JoinLayers(so)
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky/immgent_IGT47_66_rocky.Rds")
+
+```
+
+INTEGRATION AND PLOTS
+see github immgent_integration_git for latest code
+```{bash}
+
+prefix = "totalvi_igt47_66_rocky_20240412"
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts: 
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky IGT47_66_Rocky.Rds totalvi_igt47_66_rocky_20240412
+#Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky totalvi_igt47_66_rocky_20240412
+
+
+```
+
 
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, resting CD4, activated CD4, rCD8, aCD8, unconventional, bottom right**
 
@@ -2410,7 +2563,14 @@ for (i in 1:length(to_subset_list)) {
 ```
 
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, removing organ effect using PYTHON SCRIPT**
-see totalvi_python.Rmd
+
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
+##run the following scripts: 
+#python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
+
+```
 
 
 **Integration evaluation: conservation of HVG**
