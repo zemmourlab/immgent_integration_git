@@ -15,10 +15,12 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
 
 source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+module load openblas/0.3.13
 
-Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky IGT47_66_Rocky.Rds totalvi_igt47_66_rocky_20240412
+Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky immgent_IGT47_66_rocky.Rds totalvi_igt47_66_rocky_20240412
 
 #python run_totalvi_denoising.py /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration totalvi_igt1_48_20230706_allgenes 
 
