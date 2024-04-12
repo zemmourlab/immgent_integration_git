@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=64GB #184GB
 #SBATCH -J totalvi              
-#SBATCH -o totalvi_igt1_56_allgenes_rmorgan.log
-#SBATCH -t 16:00:00              ##SBATCH --mem=8G
+#SBATCH -o totalvi_igt1_56_allgenes_rmorgan2.log
+#SBATCH -t 48:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
