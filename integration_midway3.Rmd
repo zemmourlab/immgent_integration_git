@@ -2157,7 +2157,6 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20231119.sh #run the 2 following scripts:
 ```
 
 **TOTAL-VI INTEGRATION for Rocky IGT 47 and 66, all genes**
-
 ```{bash}
 mkdir IGT47_66_Rocky
 ```
@@ -2292,6 +2291,47 @@ saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integra
 
 ```
 
+
+**TOTAL-VI INTEGRATION for Kaplan and Mackay all genes**
+
+```{bash}
+mkdir IGT46_Mackay
+```
+Merge IGT46 and Mackay
+NB: IGT46 doesn't have ADT
+```{r}
+
+message("Loading dataset1")
+dataset1 = readRDS("dataset_clean.Rds")
+DefaultAssay(dataset1) = "RNA"
+dataset1.1 = CreateSeuratObject(counts = dataset1@assays$RNA$counts, meta.data = dataset1@meta.data, assay = "RNA")
+# dataset1.1[["ADT"]] = CreateAssayObject(counts = dataset1.1@assays$ADT$counts) #samples@assays$ADT$counts
+# print(all(colnames(dataset1.1@assays$RNA$counts) == colnames(dataset1.1@assays$ADT$counts)))
+dataset1.1$dataset = "IGT46"
+dataset1.1$is_spleen_standard = F
+
+message("Loading dataset2")
+dataset2 = readRDS("Mackay_Trm_data/batch1.Rds")
+DefaultAssay(dataset2) = "RNA"
+dataset2.1 = CreateSeuratObject(counts = dataset2@assays$RNA$counts, meta.data = dataset2@meta.data, assay = "RNA")
+# dataset1.1[["ADT"]] = CreateAssayObject(counts = dataset1.1@assays$ADT$counts) #samples@assays$ADT$counts
+# print(all(colnames(dataset1.1@assays$RNA$counts) == colnames(dataset1.1@assays$ADT$counts)))
+dataset2.1$dataset = "Mackay"
+dataset2.1$is_spleen_standard = F
+newcoln = gsub(x = colnames(dataset2.1), pattern = "\\-1_1", replacement = ".1")
+newcoln = gsub(x = colnames(dataset2.1), pattern = "\\-1_2", replacement = ".2")
+newcoln = paste("Mackay", newcoln, sep = ".")
+colnames(dataset2.1) = newcoln
+
+int.genes = intersect(rownames(dataset1.1), rownames(dataset2.1))
+
+m = merge(dataset1.1, dataset2.1, merge.dr = F)
+m = JoinLayers(m)
+
+saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky/immgent_IGT47_66_rocky.Rds")
+
+```
+
 INTEGRATION AND PLOTS
 see github immgent_integration_git for latest code
 ```{bash}
@@ -2304,6 +2344,27 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts:
 
 
 ```
+
+
+**TOTAL-VI INTEGRATION for Kaplan and Mackay all genes**
+
+
+
+INTEGRATION AND PLOTS
+see github immgent_integration_git for latest code
+```{bash}
+
+prefix = "totalvi_igt47_66_rocky_20240412"
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts: 
+#Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky IGT47_66_Rocky.Rds totalvi_igt47_66_rocky_20240412
+#Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky totalvi_igt47_66_rocky_20240412
+
+
+```
+
+
+
 
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, resting CD4, activated CD4, rCD8, aCD8, unconventional, bottom right**
 
@@ -2566,6 +2627,7 @@ SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
 ##run the following scripts: 
 #python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
+#python $SCRIPT_DIR/run_totalvi_denoising_v2.py $CWD totalvi_igt1_56_20231030_allgenes_organregressed
 
 ```
 

@@ -1,0 +1,33 @@
+---
+title: "topic_analysis"
+output: html_document
+date: "2024-04-30"
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+#R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```

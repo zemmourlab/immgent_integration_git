@@ -39,23 +39,31 @@ libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorB
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
-options(Seurat.object.assay.version = 'v5')
+#options(Seurat.object.assay.version = 'v5')
 
+#Gradients
+library(RColorBrewer)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
 ColorRamp = rev(rainbow(10, end = 4/6))
+
+#gradient for color-blind:
+library(viridis)
 ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
 
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
 
+#Large Color palette
+library("pals")
 n = 70
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
 mypal1 = mypal1[-4]
+pal.bands(mypal, main="Colormap suggestions")
 
-library("pals")
-parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
-
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 length(glasbey())
 length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
