@@ -87,12 +87,12 @@ model.train()
 print("Save model")
 model.save(prefix, save_anndata=True)
 
-fig, ax = plt.subplots(1, 1)
-model.history["elbo_train"].plot(ax=ax, label="train")
-model.history["elbo_validation"].plot(ax=ax, label="validation")
-ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
-ax.legend()
-fig.savefig(prefix+"/training_elbo_plot.pdf")
+# fig, ax = plt.subplots(1, 1)
+# model.history["elbo_train"].plot(ax=ax, label="train")
+# model.history["elbo_validation"].plot(ax=ax, label="validation")
+# ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
+# ax.legend()
+# fig.savefig(prefix+"/training_elbo_plot.pdf")
 
 latent_representation = model.get_latent_representation()
 adata.obsm[latent_key] = latent_representation
