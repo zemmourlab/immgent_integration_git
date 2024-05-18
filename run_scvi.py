@@ -66,47 +66,12 @@ if torch.cuda.is_available():
 #%config InlineBackend.print_figure_kwargs={"facecolor": "w"}
 #%config InlineBackend.figure_format="retina"
 
-# print("Arguments")
-# working_dir = sys.argv[1]
-# path_to_adata = sys.argv[2]
-# prefix = sys.argv[3] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
-# batchkey = sys.argv[4]
-# confoundings = sys.argv[5]
-# latent_key = sys.argv[6]
-
-
-# working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
-# path_to_adata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
-# prefix = "totalvi_igt1_56_20231030_allgenes_organregressed"
-# batchkey = "IGT"
-# confoundings = "organ_simplified"
-# latent_key = "X_totalvi_rmorgan"
-
-#Read mdata
 print("Read adata")
 os.chdir(working_dir)
 adata = sc.read_h5ad(path_to_adata)
-# mdata = mu.read(path_to_adata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-# print(mdata)
-# 
-# print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
-# print(mdata.mod["RNA"].obs[confoundings].unique().tolist())
 
 #Setup adata
 print("Setup anndata")
-# scvi.model.TOTALVI.setup_mudata(
-#     mdata,
-#     rna_layer="counts",
-#     categorical_covariate_keys = [confoundings], #make sure this is a list!
-#     protein_layer=None,
-#     batch_key=batchkey,
-#     modalities={
-#         "rna_layer": "RNA",
-#         "protein_layer": "protein",
-#         "batch_key": "RNA",
-#         "categorical_covariate_keys":"RNA"
-#     },
-# )
 
 scvi.model.SCVI.setup_anndata(
     adata,
@@ -133,5 +98,5 @@ latent_representation = model.get_latent_representation()
 adata.obsm[latent_key] = latent_representation
 latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
 
-latent_df.to_csv(prefix+"_X_SCVI_"+prefix2+".csv", index=True)
+latent_df.to_csv(prefix+"/latent_space.csv", index=True)
 adata.write(prefix+"/adata.h5ad")
