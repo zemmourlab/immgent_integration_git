@@ -82,17 +82,11 @@ scvi.model.SCVI.setup_anndata(
 model = scvi.model.SCVI(adata, n_latent = 30, n_hidden =128, n_layers = 2, gene_likelihood = "nb")
 
 print("Train model")
-model.train()
+# model.train()
 
 print("Save model")
-model.save(prefix, save_anndata=True)
-
-# fig, ax = plt.subplots(1, 1)
-# model.history["elbo_train"].plot(ax=ax, label="train")
-# model.history["elbo_validation"].plot(ax=ax, label="validation")
-# ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
-# ax.legend()
-# fig.savefig(prefix+"/training_elbo_plot.pdf")
+# model.save(prefix, save_anndata=True)
+scvi.model.SCVI.load(prefix)
 
 latent_representation = model.get_latent_representation()
 adata.obsm[latent_key] = latent_representation
@@ -100,3 +94,10 @@ latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
 
 latent_df.to_csv(prefix+"/latent_space.csv", index=True)
 adata.write(prefix+"/adata.h5ad")
+
+# fig, ax = plt.subplots(1, 1)
+# model.history["elbo_train"].plot(ax=ax, label="train")
+# model.history["elbo_validation"].plot(ax=ax, label="validation")
+# ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
+# ax.legend()
+# fig.savefig(prefix+"/training_elbo_plot.pdf")
