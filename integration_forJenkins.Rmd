@@ -400,7 +400,7 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 
-python $SCRIPT_DIR/run_scvi.py
+python $SCRIPT_DIR/run_scvi.py . Cd4Cd8_adata_norep.h5ad RmDataset dataset 
 ```
 
 

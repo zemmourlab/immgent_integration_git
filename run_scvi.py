@@ -12,7 +12,7 @@ parser.add_argument('--path_to_adata', help='Path to AnnData object')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', help='Batch key for analysis')
-parser.add_argument('--confounding1', default='', help='First confounding variable (default: empty)')
+parser.add_argument('--confoundings', default=None, help='Confounding variables (default: None)')
 parser.add_argument('--latent_key', help='Key for latent space')
 
 print("Arguments")
@@ -21,13 +21,20 @@ working_dir = args.working_dir
 path_to_adata = args.path_to_adata
 prefix = args.prefix
 batchkey = args.batchkey
-confounding1 = args.confounding1
+#confoundings = args.confoundings
+if args.confoundings:
+        # Split the string into a list by commas
+        confoundings = args.confoundings.split(',')
+        print(confoundings)
+    else:
+        confoundings = None
 latent_key = args.latent_key
+
 print(f"Working Directory: {working_dir}")
 print(f"Path to AnnData: {path_to_adata}")
 print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
-print(f"Confounding Variable: {confounding1}")
+print(f"Confounding Variable: {confoundings}")
 print(f"Latent Key: {latent_key}")
 
 print("Importing libraries")
@@ -64,7 +71,7 @@ if torch.cuda.is_available():
 # path_to_adata = sys.argv[2]
 # prefix = sys.argv[3] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
 # batchkey = sys.argv[4]
-# confounding1 = sys.argv[5]
+# confoundings = sys.argv[5]
 # latent_key = sys.argv[6]
 
 
@@ -72,7 +79,7 @@ if torch.cuda.is_available():
 # path_to_adata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
 # prefix = "totalvi_igt1_56_20231030_allgenes_organregressed"
 # batchkey = "IGT"
-# confounding1 = "organ_simplified"
+# confoundings = "organ_simplified"
 # latent_key = "X_totalvi_rmorgan"
 
 #Read mdata
@@ -83,14 +90,14 @@ adata = sc.read_h5ad(path_to_adata)
 # print(mdata)
 # 
 # print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
-# print(mdata.mod["RNA"].obs[confounding1].unique().tolist())
+# print(mdata.mod["RNA"].obs[confoundings].unique().tolist())
 
 #Setup adata
 print("Setup anndata")
 # scvi.model.TOTALVI.setup_mudata(
 #     mdata,
 #     rna_layer="counts",
-#     categorical_covariate_keys = [confounding1], #make sure this is a list!
+#     categorical_covariate_keys = [confoundings], #make sure this is a list!
 #     protein_layer=None,
 #     batch_key=batchkey,
 #     modalities={
@@ -103,7 +110,7 @@ print("Setup anndata")
 
 scvi.model.SCVI.setup_anndata(
     adata,
-    categorical_covariate_keys = [confounding1], #make sure this is a list!
+    categorical_covariate_keys = confoundings, #make sure this is a list!
     batch_key=batchkey
 )
 
