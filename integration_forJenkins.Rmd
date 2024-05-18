@@ -387,6 +387,7 @@ saveRDS(so, file = sprintf("%s_so_norep.Rds", prefix))
 
 see github immgent_integration_git for code: run_scvi.py
 ```{bash}
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_scvi_wrapper_20240518_jenkins.sh #run the 2 following scripts: 
 #python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI

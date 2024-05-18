@@ -19,13 +19,14 @@ source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+WD=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
 
-cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
+cd $WD
 
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
 
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
 
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
 
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
