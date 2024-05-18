@@ -26,8 +26,8 @@ if args.confoundings:
         # Split the string into a list by commas
         confoundings = args.confoundings.split(',')
         print(confoundings)
-        else:
-            confoundings = None
+else:
+    confoundings = None
 latent_key = args.latent_key
 
 print(f"Working Directory: {working_dir}")
