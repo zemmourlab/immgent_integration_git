@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=beagle3 
+#SBATCH --partition=gpu 
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=64GB #184GB
 #SBATCH -J Jenkins              
