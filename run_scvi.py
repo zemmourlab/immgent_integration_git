@@ -5,8 +5,32 @@
 #run_scvi.py [cwd] [path to h5ad] [prefix] [batchkey] [confounding] [name of latent space]
 
 import warnings; warnings.simplefilter('ignore')
-
 import argparse
+parser = argparse.ArgumentParser(description="run SCVI from a Anndata object specifying batch_key and categorical_covariate_keys if needed")
+parser.add_argument('--working_dir', help='Working directory')
+parser.add_argument('--path_to_adata', help='Path to AnnData object')
+parser.add_argument('--prefix', default='myprefix', 
+                    help='Prefix for the output files (default: myprefix)')
+parser.add_argument('--batchkey', help='Batch key for analysis')
+parser.add_argument('--confounding1', default='', help='First confounding variable (default: empty)')
+parser.add_argument('--latent_key', help='Key for latent space')
+
+print("Arguments")
+args = parser.parse_args()
+working_dir = args.working_dir
+path_to_adata = args.path_to_adata
+prefix = args.prefix
+batchkey = args.batchkey
+confounding1 = args.confounding1
+latent_key = args.latent_key
+print(f"Working Directory: {working_dir}")
+print(f"Path to AnnData: {path_to_adata}")
+print(f"Prefix: {prefix}")
+print(f"Batch Key: {batchkey}")
+print(f"Confounding Variable: {confounding1}")
+print(f"Latent Key: {latent_key}")
+
+print("Importing libraries")
 import scvi
 import os
 import sys
@@ -41,42 +65,15 @@ if torch.cuda.is_available():
 # prefix = sys.argv[3] #"totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
 # batchkey = sys.argv[4]
 # confounding1 = sys.argv[5]
-# totalvi_latent_key = sys.argv[6]
+# latent_key = sys.argv[6]
 
-parser = argparse.ArgumentParser(description="Process some paths and parameters for a script.")
-parser.add_argument('working_dir', help='Working directory')
-parser.add_argument('path_to_adata', help='Path to AnnData object')
-parser.add_argument('prefix', default='myprefix', 
-                    help='Prefix for the output files (default: myprefix)')
-parser.add_argument('batchkey', help='Batch key for analysis')
-parser.add_argument('confounding1', default='', help='First confounding variable (default: empty)')
-parser.add_argument('totalvi_latent_key', help='Key for latent space')
-
-# Parse arguments
-args = parser.parse_args()
-
-print("Arguments")
-working_dir = args.working_dir
-path_to_adata = args.path_to_adata
-prefix = args.prefix
-batchkey = args.batchkey
-confounding1 = args.confounding1
-totalvi_latent_key = args.totalvi_latent_key
-
-# Example use
-print(f"Working Directory: {working_dir}")
-print(f"Path to AnnData: {path_to_adata}")
-print(f"Prefix: {prefix}")
-print(f"Batch Key: {batchkey}")
-print(f"Confounding Variable: {confounding1}")
-print(f"Latent Key: {totalvi_latent_key}")
 
 # working_dir = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56"
 # path_to_adata = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu"
 # prefix = "totalvi_igt1_56_20231030_allgenes_organregressed"
 # batchkey = "IGT"
 # confounding1 = "organ_simplified"
-# totalvi_latent_key = "X_totalvi_rmorgan"
+# latent_key = "X_totalvi_rmorgan"
 
 #Read mdata
 print("Read adata")
@@ -126,7 +123,7 @@ ax.legend()
 fig.savefig(prefix+"/training_elbo_plot.pdf")
 
 latent_representation = model.get_latent_representation()
-adata.obsm[totalvi_latent_key] = latent_representation
+adata.obsm[latent_key] = latent_representation
 latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
 
 latent_df.to_csv(prefix+"_X_SCVI_"+prefix2+".csv", index=True)
