@@ -342,6 +342,7 @@ so$timepoint[grepl("D21", so$sample_name)] = "D21"
 so$timepoint[grepl("D60", so$sample_name)] = "D60"
 so$timepoint[grepl("D90", so$sample_name)] = "D90"
 table(so$timepoint, so$sample_name)
+so$timepoint = factor(so$timepoint, levels = c("D6","D7","D21","D60","D90"))
 
 so$cell_type = NA
 so$cell_type[so$dataset == "Jenkins"] = "CD4"
@@ -357,13 +358,16 @@ length(which(genes_d1))
 length(which(genes_d2))
 length(which(genes_d1 & genes_d2))
 so = so[which(genes_d1 & genes_d2),]
-so2 = so[,!so$sample_name %in% c("CD8.P14.D21.rep2", "CD8.P14.D21.rep2")]
+so = so[,!so$sample_name %in% c("CD8.P14.D7.rep2", "CD8.P14.D21.rep2")]
+so$sample_name = factor(so$sample_name, levels = c("CD4.tetp.D6", "CD4.tetp.D21", "CD4.tetp.D60", "CD8.P14.D6", "CD8.P14.D7.rep1", "CD8.P14.D21.rep1", "CD8.P14.D60", "CD8.P14.D90"))
 
+library(reticulate)
 library(SingleCellExperiment)
 library(sceasy)
 library(anndata)
 
 message("Loading python library")
+#use_python("/project/jfkfloor2/zemmourlab/david/envs/scvi/bin/python", required = TRUE) if error in loading np and get the following question: Would you like to create a default Python environment for the %s package?
 sc = tryCatch(import("scanpy", convert = FALSE), error = function(e) {message("this scanpy error is usually not a problem: undefined symbol: cblas_cdotc_sub")})
 scvi = import("scvi", convert = FALSE)
 sys = import ("sys", convert = FALSE)
@@ -385,11 +389,26 @@ saveRDS(so, file = sprintf("%s_so_norep.Rds", prefix))
 
 **SCVI integration**
 
-see github immgent_integration_git for code: run_scvi.py
+see github immgent_integration_git for code: run_scvi.py: 4 options
+--batchkey=dataset
+--confoundings='timepoint'
+--batchkey=dataset --confoundings='cell_type': dataset and celltype are the same (CD4 v CD8), no difference with --batchkey=dataset only
+--batchkey=dataset --confoundings='timepoint,cell_type': dataset and celltype are the same (CD4 v CD8), no difference with --batchkey=dataset only
+
+
 ```{bash}
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_scvi_wrapper_20240518_jenkins.sh #run the following scripts: 
+
+#sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=96GB
+#module load python/anaconda-2022.05 
+#module load hdf5/1.12.0 #for BPCells but also others
+#module load openblas/0.3.13
+#source activate /project/zemmour/david/envs/scvi_20240315
+#module load openblas/0.3.13 #load again or error
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 #python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
 #python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
 #python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
@@ -397,148 +416,192 @@ sbatch $SCRIPT_DIR/run_scvi_wrapper_20240518_jenkins.sh #run the following scrip
 
 ```
 
-```{bash}
-sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=96GB
-
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13
-
-source activate /project/zemmour/david/envs/scvi_20240315
-module load openblas/0.3.13 #load again or error
-
-cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
-
-```
-
-
-wrapper_run_scvi_jenkins.py
-```{python}
-#!/bin/bash
-#SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=beagle3 
-#SBATCH --gres=gpu:1 
-#SBATCH --mem=64GB #184GB
-#SBATCH -J Jenkins              
-#SBATCH -o Jenkins.log
-#SBATCH -t 24:00:00              ##SBATCH --mem=8G
-#SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
-#SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
-
-#run as: sbatch wrapper_run_scvi_jenkins.py
-
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13
-
-source activate /project/zemmour/david/envs/scvi_20240315
-module load openblas/0.3.13 #load again or error
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-
-cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_forJenkins/
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
-
-python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
-
-
-
-
-
-```
-
-
-batch_key='dataset'
-```{python}
-import warnings; warnings.simplefilter('ignore')
-
-import scvi
-import os
-import scanpy as sc
-import muon as mu
-
-import numpy as np
-import mplscience
-import matplotlib.pyplot as plt
-import pickle
-import pandas as pd
-pd.set_option('display.max_rows', 1000)
-pd.set_option('display.max_columns', 1000)
-
-#os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
-prefix = "Cd4Cd8"
-prefix2 = ""
-adata = sc.read_h5ad(prefix+"_adata.h5ad")
-
-#Setup anndata
-scvi.model.SCVI.setup_anndata(
-    adata,
-    #categorical_covariate_keys = ['organ_simplified'], #make sure this is a list!
-    batch_key='dataset'
-)
-
-model = scvi.model.SCVI(adata, n_latent = 30, n_hidden =128, n_layers = 2, gene_likelihood = "nb")
-
-model.train()
-
-model.save(prefix+prefix2, save_anndata=True)
-
-# fig, ax = plt.subplots(1, 1)
-# model.history["elbo_train"].plot(ax=ax, label="train")
-# model.history["elbo_validation"].plot(ax=ax, label="validation")
-# ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
-# ax.legend()
-# fig.savefig(prefix+"_training_elbo_plot.pdf")
-
-latent_representation = model.get_latent_representation()
-TOTALVI_LATENT_KEY = "X_SCVI_"+prefix2
-adata.obsm[TOTALVI_LATENT_KEY] = latent_representation
-latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
-
-latent_df.to_csv(prefix+"_X_SCVI_"+prefix2+".csv", index=True)
-adata.write(prefix+"_adata_SCVI_"+prefix2+".h5ad")
-
-```
-
-
-
-
-
-
-
-Add new totalvi dim in R
+Add new scvi dims in R
 ```{r}
-totalvi = read.csv(file = sprintf("%s_X_SCVI_%s.csv", prefix, prefix2), header = T, sep = ",", row.names = 1)
-# pattern = "(IGT\\S*)_(\\d+)"
-# rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
-colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
-all(rownames(totalvi) == colnames(so))
-totalvi = as.matrix(totalvi)
+so = readRDS("Cd4Cd8_so_norep.Rds")
 
-so[[sprintf("totalvi_%s", prefix2)]] = CreateDimReducObject(embeddings = totalvi, key = sprintf("totalvi_%s", prefix2), assay = "RNA")
+# sprintf("%s_X_SCVI_%s.csv", prefix, prefix2)
 
-so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = sprintf("totalvi_%s", prefix2), n.components = 2, reduction.name = sprintf("umap_totalvi_%s", prefix2))
+AddSCVILatent = function(so, latent_file, prefix) {
+    totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
+    # pattern = "(IGT\\S*)_(\\d+)"
+    # rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+    colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+    #all(rownames(totalvi) == colnames(so))
+    totalvi = as.matrix(totalvi)
+    totalvi = totalvi[colnames(so),]
+    if (all(colnames(so) == rownames(totalvi))) {
+        print("all cells ARE in the latent_file")
+        so[[prefix]] = CreateDimReducObject(embeddings = totalvi, key = prefix, assay = "RNA") #sprintf("totalvi_%s", prefix2)
+        so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = prefix, n.components = 2, reduction.name = sprintf("umap_%s", prefix))
+        return(so)
+    } else {
+        print("all cells ARE NOT in the latent_file")
+        return(so)
+    }
+}
 
-message("Saving regular seurat object V5")
-saveRDS(so, file = sprintf("%s_so.Rds", prefix))
+so = AddSCVILatent(so, latent_file = "RmDataset/latent_space.csv", prefix = "scvi_rmdataset")
+so = AddSCVILatent(so, latent_file = "RmDatasetTimepoint/latent_space.csv", prefix = "scvi_rmdatasettime")
+so = AddSCVILatent(so, latent_file = "RmDatasetCelltype/latent_space.csv", prefix = "scvi_rmdatasetcelltype")
+so = AddSCVILatent(so, latent_file = "RmDatasetTimepointCelltype/latent_space.csv", prefix = "scvi_rmdatasettimecelltype")
+
+saveRDS(so, file = "Cd4Cd8_so_norep_withSCVI_20250518.Rds")
+
 ```
 
 Plot UMAP
+
+```{r}
+message("loading R libraries and custom functions")
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal = mypal[-4]
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+length(glasbey())
+length(polychrome())
+mypal2 = c(glasbey(), polychrome(), mypal)
+names(mypal2) = NULL
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+    
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+    }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+        
+        
+        if (is.null(split_by2)) {
+            plot3 = p + p2  + 
+                scale_color_manual(values = c("black", "red")) + 
+                scale_alpha_manual(values = c(0.5,1))  + 
+                theme_bw()  + 
+                facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+                ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        } else {
+            plot3 = p + p2  + 
+                scale_color_manual(values = c("black", "red")) + 
+                scale_alpha_manual(values = c(0.5,1))  + 
+                theme_bw() + 
+                facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+                ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+    
+}
+
+prefix = "RmDataset"
+umap_to_plot = "umap_scvi_rmdataset"
+pdf(sprintf("%s_UMAP.pdf", prefix), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "dataset", 
+        split_by1 = "sample_name",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "sample_name", 
+        split_by1 = "dataset",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+dev.off()
+
+prefix = "RmDatasetTimepoint"
+umap_to_plot = "umap_scvi_rmdatasettime"
+pdf(sprintf("%s_UMAP.pdf", prefix), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "dataset", 
+        split_by1 = "sample_name",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "sample_name", 
+        split_by1 = "dataset",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+dev.off()
+
+prefix = "RmDatasetCelltype"
+umap_to_plot = "umap_scvi_rmdatasetcelltype"
+pdf(sprintf("%s_UMAP.pdf", prefix), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "dataset", 
+        split_by1 = "sample_name",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "sample_name", 
+        split_by1 = "dataset",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal2) #glasbey()
+dev.off()
+
+```
+
 
 ```{r}
 # David Zemmour

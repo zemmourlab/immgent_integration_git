@@ -11,7 +11,7 @@ parser.add_argument('--working_dir', help='Working directory')
 parser.add_argument('--path_to_adata', help='Path to AnnData object')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
-parser.add_argument('--batchkey', help='Batch key for analysis')
+parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
 parser.add_argument('--confoundings', default=None, help='Confounding variables (default: None)')
 parser.add_argument('--latent_key', help='Key for latent space')
 
