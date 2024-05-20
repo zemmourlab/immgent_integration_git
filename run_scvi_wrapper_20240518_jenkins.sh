@@ -23,16 +23,16 @@ WD=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/integration_
 
 cd $WD
 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=SCVI --latent_key=_X_SCVI
-# 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
-# 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
-# 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
-# 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
-# 
-# python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=SCVI --latent_key=_X_SCVI
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=SCVI --latent_key=_X_SCVI
+
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDataset --batchkey=dataset --latent_key=_X_SCVI
+
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepoint --batchkey=dataset --confoundings='timepoint' --latent_key=_X_SCVI
+
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetCelltype --batchkey=dataset --confoundings='cell_type' --latent_key=_X_SCVI
+
+python $SCRIPT_DIR/run_scvi.py  --working_dir=$WD --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=RmDatasetTimepointCelltype --batchkey=dataset --confoundings='timepoint,cell_type' --latent_key=_X_SCVI
+
+python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata_norep.h5ad --prefix=SCVI --latent_key=_X_SCVI
 
 python $SCRIPT_DIR/run_scvi.py  --working_dir=. --path_to_adata=Cd4Cd8_adata.h5ad --prefix=SCVI2 --latent_key=_X_SCVI
