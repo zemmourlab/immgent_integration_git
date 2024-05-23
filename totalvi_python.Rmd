@@ -49,6 +49,10 @@ import pandas as pd
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
+```
+
+Create muData object: totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+```{python}
 os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
 prefix = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
 
@@ -115,6 +119,10 @@ for mod_key in mdata.mod.keys():
 
 mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
 
+```
+
+Run totalVI with organ_simplified regressed out: totalvi_igt1_56_allgenes_Treg_20240327_organregressedout
+```{python}
 #Setup mu_data
 scvi.model.TOTALVI.setup_mudata(
     mdata,
@@ -164,7 +172,9 @@ mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
 
 ```
 
-**add new TOTALVI space and protein denoised to totalvi_igt1_56_allgenes_Treg_20240306**
+**totalvi_igt1_56_allgenes_Treg_20240306**
+
+add TOTALVI space and protein denoised to totalvi_igt1_56_allgenes_Treg_20240306
 add denoised protein data to the seurat object and new totalvi embedding
 
 ```{python}
@@ -243,9 +253,33 @@ saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integra
 
 ```
 
+Get corrected count data (for RNA and proteins)
+
+```{python}
+import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.io import mmwrite
+
+model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
+newcounts = model.posterior_predictive_sample() #RNA AND Proteins!
+newcounts.shape
+newcounts = newcounts.astype(int)
+newcounts_sparse = csr_matrix(newcounts)
+mmwrite("totalvi_igt1_56_allgenes_Treg_20240306/counts_corrected.mtx", newcounts_sparse)
+
+model.adata.var_names + model.adata.obsm['protein'].columns
+
+genes_prot = pd.DataFrame(model.adata.var_names.append(model.adata.obsm['protein'].columns))
+genes_prot.to_csv("totalvi_igt1_56_allgenes_Treg_20240306/genes.csv", index = False,header=False )
+
+cells = pd.DataFrame(model.adata.obs_names)
+cells.to_csv("totalvi_igt1_56_allgenes_Treg_20240306/cells.csv", index = False,header=False )
+
+```
 
 
 
+OLD
 ```{python}
 
 adata = sc.read_h5ad("totalvi_igt1_56_20231030_allgenes/adata.h5ad")

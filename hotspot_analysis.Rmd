@@ -251,7 +251,8 @@ sprintf("Rscript run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/
 #IGT1-56 subsets
 prefix = "totalvi_igt1_56_20240306_allgenes"
 to_subset = "Treg"
-so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+# so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
 ```
 
 Plots

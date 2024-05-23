@@ -10,7 +10,7 @@ ssh -Y zemmour@midway3.rcc.uchicago.edu
 sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
-sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
 cd $LABHOME
 
@@ -31,3 +31,639 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 #options(max.print=1000)
 #options(Seurat.object.assay.version = 'v5')
 ```
+
+**Initialize in R: load libraries and custom functions**
+
+```{r}
+# setwd("~/google_drive/ImmgenT/jamboree2/")
+# setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+
+libs = c("fastTopics", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+options(Seurat.object.assay.version = 'v5')
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = viridis(100)
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
+  newpal = c()
+  for (c in 1:length(splitvector)){
+    #print(c)
+    n = splitvector[c]
+    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
+    newcol[4,] = seq(50, 255, length.out = n)
+    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+  }
+  return(newpal)
+}
+sp = SplitColors
+#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
+
+library(org.Hs.eg.db)
+hs = org.Hs.eg.db
+go2eg = as.list(org.Hs.egGO2ALLEGS)
+symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+```
+
+**Documentation**
+https://stephenslab.github.io/fastTopics/articles/relationship.html:
+The ‘fastTopics’ approach aims to combine the advantages of Poisson NMF and topic modeling.
+The Poisson NMF is easier to fit because it doesn’t have the additional constraints (rows of L and columns of F sum to 1, i.e. probabilities).
+On ther other hand, the parameters of the topic model are typically more useful for for understanding data; for example, the 𝑙∗𝑖𝑘
+’s are topic proportions, which can be used to compare samples (documents), among other things.
+So we provide a function to fit the Poisson NMF model (fit_poisson_nmf), and another function to obtain the topic model fit (poisson2multinom).
+
+X = LF (poisson)
+X: data matrix cells x genes
+L: loadings: cells by k topics 
+F: factors/topics: genes x k topics 
+
+https://stephenslab.github.io/fastTopics/articles/topics_vs_clusters.html:
+In general, a clustering will align closely with the topic modeling whenever the samples can be largely explained by a single topic or gene program.
+X = FL (poisson) to model the data, easier to interpret: UMAP on L to cluster the cells based on topic proportions --> how much does it reproduce the original structure? Can we createa measure of that?
+Differential expression of topics in cell clusters?
+
+
+**Load data in R**
+```{r}
+#IGT1-56 subsets
+prefix = "totalvi_igt1_56_20240306_allgenes"
+to_subset = "Treg"
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+# so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+```
+
+update the metadata in seurat object
+```{r}
+m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
+
+m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = "_")
+so$sample_id = paste(so$IGT, so$hashtag_number, sep = "_")
+
+someta = so@meta.data
+someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
+m2 = merge(someta, m, by  = "sample_id", all.x = T)
+m2$sample_id[which(is.na(m2$exp_number))]
+m2$is_spleen_standard[which(is.na(m2$exp_number))] #missing metadata about spleen standards!!
+m2$colnames[which(is.na(m2$exp_number))]
+
+all(m2$colnames %in% rownames(so@meta.data))
+rownames(m2) = m2$colnames
+m2 = m2[rownames(so@meta.data),]
+all(m2$colnames %in% rownames(so@meta.data))
+
+so@meta.data = m2
+
+#Adjust colnames(so) that was modified when merged
+message("check colnames to be IGT.BARCODE")
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#and adjust colnames if needed:
+unique(so$IGT[which(matches == F)])
+#Adjust colnames(so) 
+#pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = colnames(so)
+sample(colnames(so), 100)
+pattern = "(\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
+sample(so$colnames, 100)
+unique(so$IGT[!grepl("^IGT", so$colnames)])
+so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
+sample(so$colnames, 10)
+any(duplicated(so$colnames))
+#recheck
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#so@meta.data[which(matches == F),]
+if(all(matches)) {colnames(so) = so$colnames}
+all(grepl(pattern, colnames(so)))
+
+#add sample_id: IGT.HT
+so$sample_id_david = paste(so$IGT, so$hashtag_number.x, sep = ".")
+
+#order IGT
+unique(so$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
+so$IGT = factor(so$IGT, levels = ordered_vector)
+
+#annotate spleen control samples
+so$organ[is.na(so$organ)] = "spleen"
+so$condition_broad[is.na(so$condition_broad)] = "healthy"
+
+#organ_simplified
+so$organ_simplified = so$organ
+so$organ_simplified[grep(pattern = "lymph node", so$organ)] = "LN"
+so$organ_simplified[grep(pattern = "skin", so$organ)] = "skin"
+so$organ_simplified[grep(pattern = "colon", so$organ)] = "colon"
+so$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", so$organ)] = "small intestine"
+#table(so$organ, so$organ_simplified)
+
+#add is_spleen_healthy (spleen control)
+so$is_spleen_healthy = F
+so$is_spleen_healthy[so$organ == "spleen" & so$condition_broad == "healthy"] = T
+so$is_spleen_healthy_igt = so$is_spleen_healthy
+so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_spleen_healthy == T])
+#table(so$is_spleen_healthy_igt, so$IGT)
+
+```
+
+
+**Fit the topic model**
+The fit_topic_model interface is intended to hide the details of model fitting, and it should work well for many data sets. Larger or more complex data sets my require some fine-tuning of the model fitting. See Part 2 for more on this.
+With the default settings, the model fitting is accomplished in four steps: 
+(1) initialize the Poisson NMF model fit (‘init_poisson_nmf’); 
+(2) perform the main model fitting step by running 100 EM updates using ‘fit_poisson_nmf’; 
+(3) refine the fit by running 100 extrapolated SCD updates, again using ‘fit_poisson_nmf’; and 
+(4) recover the multinomial topic model by calling ‘poisson2multinom’.
+
+For larger data sets, more than 200 updates may be needed to qobtain a good fit.
+
+```{r}
+prefix_topic = "fasttopics_K6_20240520"
+prefix_topic = "fasttopics_K10_20240520"
+prefix_topic = "fasttopics_K30_20240520"
+```
+
+--> fasttopics_K6_20240520_fit.RDS
+--> fasttopics_K10_20240520_fit.RDS
+--> fasttopics_K30_20240520_fit.RDS
+--> fasttopics_K6_20240521_fit.Rds
+
+```{r}
+genes_to_keep = rowSums(so[["RNA"]]$counts) >0
+length(which(genes_to_keep))
+
+counts = t(as(so[["RNA"]]$counts[genes_to_keep,], Class = "dgCMatrix") )
+
+fit = fit_topic_model(counts,k = 6, control.init = list(nc = 24), control.main = list(nc = 24),control.refine = list(nc = 24))
+fit = fit_topic_model(counts,k = 10, control.init = list(nc = 24), control.main = list(nc = 24),control.refine = list(nc = 24))
+fit = fit_topic_model(counts,k = 30, control.init = list(nc = 24), control.main = list(nc = 24),control.refine = list(nc = 24))
+dim(fit$L)
+dim(fit$F)
+pdf(sprintf("%s_convergence.pdf", prefix_topic), 5,5, useDingbats = F)
+plot_progress(fit,x = "iter",add.point.every = 10,colors = "black") #+ theme_cowplot(font_size = 10)
+dev.off()
+
+#saveRDS(fit, file = sprintf("%s_fit.Rds", prefix_topic))
+fit = readRDS(sprintf("%s_fit.Rds", prefix_topic))
+
+SubsetFit = function(fit, cell.names = names(which(so$is_spleen_healthy == T))) {
+    fit$L = fit$L[cell.names,]
+    fit$s = fit$s[cell.names]
+    return(fit)
+}
+
+```
+
+Plot L in each single cells
+```{r}
+topic_colors = mypal[1:ncol(fit$F)]#c("skyblue","forestgreen","darkmagenta","dodgerblue","gold","darkorange")
+
+pdf(sprintf("%s_structureplot.pdf", prefix_topic), 20,8, useDingbats = F)
+structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$organ_simplified)
+structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy)
+#structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy_igt)
+fit_spleenctrl = SubsetFit(fit, names(which(so$is_spleen_healthy == T)))
+structure_plot(fit_spleenctrl,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25, grouping = so$IGT[so$is_spleen_healthy == T])
+dev.off()
+
+
+pdf(sprintf("%s_UMAP.pdf", prefix_topic), 9,8, useDingbats = F)
+for (k in 1:ncol(fit$L) ) {
+    print(k)
+    #genes = module_genes %>% filter(Module == module) %>% pull(Gene)
+    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),1], dim2 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),2], size = fit$L[,k]) 
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+
+##########If needed: structure_plot equivalent
+#Plot modules in single cell UMAP_1D
+hc = hclust(dist(t(module_scores_percentile2)))
+ord_modules = colnames(module_scores_percentile2)[hc$order]
+
+#pca = prcomp(module_scores_percentile2, scale. = TRUE)
+#pca_1 = pca$x[, 1]
+#ordered_df = as.data.frame(module_scores_percentile2[order(pca_1),])
+ordered_df = as.data.frame(module_scores_percentile2[ord_cells,ord_modules])
+ordered_df$cell_id = factor(rownames(ordered_df), ordered = T)
+melted_df = melt(ordered_df)
+melted_df$variable = factor(melted_df$variable, levels = ord_modules, ordered = T)
+melted_df = melted_df %>% arrange(cell_id)
+
+pdf("modules_singlecell_barplot.pdf", 20,10, useDingbats = F)
+p = ggplot(melted_df, aes(x = cell_id, y = value, fill = variable)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = mypal)+
+    labs(x = "Cells", y = "Score", fill = "Module") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank()
+    )
+print(p)
+dev.off()
+
+
+```
+
+Differentially expressed genes in topics
+‘fastTopics’ extends the standard DE analysis to allow for partial membership to multiple groups (the methods are described here). 
+
+lfc.stat = "vsnull: compare against the probability under the null model
+lfc.stat = k: compare against a chosen topic, k
+lfc.stat = "le": default, computes the “least extreme” LFC, defined as LFC(j) = log2(f_j/f_k) such that k is the topic other than j that gives the ratio f_j/f_k closest to 1.
+```{r}
+set.seed(1)
+# rownames(fit$L) = rownames(counts)
+# all(rownames(counts) == rownames(fit$L))
+# all(colnames(counts) == rownames(fit$F))
+
+de = de_analysis(fit = fit,X = counts,pseudocount = 0.1, lfc.stat = "le", control= list(nc = 36))
+# saveRDS(de, file = sprintf("%s_de_leastextreme.Rds", prefix_topic))
+de = readRDS(sprintf("%s_de_leastextreme.Rds", prefix_topic))
+pdf(sprintf("%s_de_lse_volcano.pdf", prefix_topic))
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    print(volcano_plot(de,k = k,labels = rownames(de$lfsr)) )
+}
+dev.off()
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    p = volcano_plotly(de, k = k,file = sprintf("%s_de_leastextreme_volcano_K%s.html",prefix_topic, k), labels = rownames(de$lfsr),ymax = 100)
+
+}
+
+de = de_analysis(fit = fit,X = counts,pseudocount = 0.1, lfc.stat = "vsnull", control= list(nc = 36))
+# saveRDS(de, file = sprintf("%s_de_vsnull.Rds", prefix_topic))
+de = readRDS(sprintf("%s_de_leastextreme.Rds", prefix_topic))
+pdf(sprintf("%s_de_vsnull_volcano.pdf", prefix_topic))
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    print(volcano_plot(de,k = k,labels = rownames(de$lfsr)) )
+}
+dev.off()
+
+
+#for HTML visualization 
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    p = volcano_plotly(de, k = k,file = sprintf("%s_de_analysis_volcano_K%s.html",prefix_topic, k), labels = rownames(de$lfsr),ymax = 100)
+
+}
+
+```
+
+Loglik single cell: see below
+UMAP from fit$L: see below
+
+**With corrected counts from totalvi_igt1_56_allgenes_Treg_20240306**
+```{r}
+prefix_topic = "fasttopics_K6_20240521"
+prefix_topic = "fasttopics_K30_20240521"
+prefix_topic = "fasttopics_K30_20240521_filtgenes"
+```
+
+--> fasttopics_K6_20240521_fit.Rds
+fasttopics_K30_20240521_fit.Rds
+fasttopics_K30_20240521_filtgenes
+```{r}
+SubsetFit = function(fit, cell.names = names(which(so$is_spleen_healthy == T))) {
+    fit$L = fit$L[cell.names,]
+    fit$s = fit$s[cell.names]
+    return(fit)
+}
+counts = readMM("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240306/counts_corrected.mtx")
+# REMOVE PROTEIN!!
+counts = counts[,1:55487] # REMOVE PROTEIN!!
+rownames(counts) = colnames(so)
+colnames(counts) = rownames(so)
+genes_to_keep = colSums(counts) >0
+#if want to remove TCR, mt, ribo, Gm and Rik genes: use this
+tcr_genes = colnames(counts)[grepl(x = colnames(counts), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trbv|Trbd|Trbj|Trbc|Trdv|Trdj|Trdc")]
+gm_rik_genes = colnames(counts)[grepl(x = colnames(counts), pattern = "Gm|Rik$")]
+ribo_genes = colnames(counts)[grepl(x = colnames(counts), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
+mt_genes = colnames(counts)[grepl(x = colnames(counts), pattern = "^mt-")]
+genes_to_keep = colSums(counts) >0 & !(colnames(counts) %in% c(tcr_genes, gm_rik_genes, ribo_genes, mt_genes))
+length(which(genes_to_keep))
+
+counts = as(counts[,genes_to_keep], Class = "CsparseMatrix")
+
+fit = fit_topic_model(counts,k = 30, numiter.main = 100, numiter.refine = 100,control.init = list(nc = 36), control.main = list(nc = 36),control.refine = list(nc = 36))
+# saveRDS(fit, file = sprintf("%s_fit.Rds", prefix_topic))
+fit = readRDS(sprintf("%s_fit.Rds", prefix_topic))
+
+dim(fit$L)
+dim(fit$F)
+pdf(sprintf("%s_convergence.pdf", prefix_topic), 5,5, useDingbats = F)
+plot_progress(fit,x = "iter",add.point.every = 10,colors = "black") #+ theme_cowplot(font_size = 10)
+dev.off()
+
+topic_colors = mypal[1:ncol(fit$F)]#c("skyblue","forestgreen","darkmagenta","dodgerblue","gold","darkorange")
+
+pdf(sprintf("%s_structureplot.pdf", prefix_topic), 20,8, useDingbats = F)
+structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$organ_simplified)
+structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy)
+#structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy_igt)
+# fit_spleenctrl = fit
+# fit_spleenctrl$L = fit$L[so$is_spleen_healthy == T,]
+# fit_spleenctrl$s = fit$s[so$is_spleen_healthy == T]
+# structure_plot(fit_spleenctrl,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25, grouping = so$IGT[so$is_spleen_healthy == T])
+fit_spleenctrl = SubsetFit(fit, names(which(so$is_spleen_healthy == T)))
+structure_plot(fit_spleenctrl,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25, grouping = so$IGT[so$is_spleen_healthy == T])
+dev.off()
+
+pdf(sprintf("%s_UMAP.pdf", prefix_topic), 9,8, useDingbats = F)
+for (k in 1:ncol(fit$L) ) {
+    print(k)
+    #genes = module_genes %>% filter(Module == module) %>% pull(Gene)
+    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),1], dim2 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),2], size = fit$L[,k]) 
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+set.seed(1)
+# rownames(fit$L) = rownames(counts)
+# all(rownames(counts) == rownames(fit$L))
+# all(colnames(counts) == rownames(fit$F))
+
+de = de_analysis(fit = fit,X = counts,pseudocount = 0.1, lfc.stat = "le", control= list(nc = 36))
+saveRDS(de, file = sprintf("%s_de_leastextreme.Rds", prefix_topic))
+de = readRDS(sprintf("%s_de_leastextreme.Rds", prefix_topic))
+pdf(sprintf("%s_de_lse_volcano.pdf", prefix_topic))
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    print(volcano_plot(de,k = k,labels = rownames(de$lfsr)))
+}
+dev.off()
+pdf(sprintf("%s_de_lse_heatmap.pdf", prefix_topic), 10,30, useDingbats = F)
+genes = de$postmean %>% melt() %>% filter(value > 2) %>% group_by(Var2) %>% arrange(desc(value)) %>% top_n(20) %>% arrange(Var2) %>% pull(Var1) %>% as.character()
+tmp3 = de$postmean[genes,]
+tmp3[tmp3>3] = 3
+tmp3[tmp3 < -3] = -3
+ColorRamp = viridis(100)
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "FC in top 20 genes in topics")
+dev.off()
+
+de = de_analysis(fit = fit,X = counts,pseudocount = 0.1, lfc.stat = "vsnull", control= list(nc = 36))
+saveRDS(de, file = sprintf("%s_de_vsnull.Rds", prefix_topic))
+de = readRDS(sprintf("%s_de_vsnull.Rds", prefix_topic))
+pdf(sprintf("%s_de_vsnull_volcano.pdf", prefix_topic))
+for (k in 1:ncol(fit$L)) {
+    print(k)
+    print(volcano_plot(de,k = k,labels = rownames(de$lfsr)) )
+}
+dev.off()
+pdf(sprintf("%s_de_vsnull_heatmap.pdf", prefix_topic), 10,30, useDingbats = F)
+genes = de$postmean %>% melt() %>% filter(value > 2) %>% group_by(Var2) %>% arrange(desc(value)) %>% top_n(10) %>% arrange(Var2) %>% pull(Var1) %>% as.character()
+tmp3 = de$postmean[genes,]
+# tmp3[tmp3>3] = 3
+# tmp3[tmp3 < -3] = -3
+ColorRamp = viridis(100)
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "FC in top 20 genes in topics")
+dev.off()
+
+```
+
+UMAP from fit$L
+```{r}
+so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = fit$L, key = sprintf("%s_",prefix_topic), assay = "RNA")
+
+so = RunUMAP(so, dims = 1:ncol(fit$L), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
+# write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s_newUMAP.csv",prefix_topic), quote = F, row.names = TRUE, col.names = TRUE)
+tmp = read.csv(sprintf("%s_newUMAP.csv",prefix_topic), header = T, row.names = 1)
+so[[sprintf("umap_%s",prefix_topic)]] = CreateDimReducObject(embeddings = as.matrix(tmp), key = sprintf("%s_",prefix_topic), assay = "RNA")
+
+prefix = prefix_topic
+umap_to_plot = sprintf("umap_%s",prefix_topic)
+pdf(sprintf("%s_newUMAPembedding.pdf", prefix), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "is_spleen_healthy",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "organ_simplified",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+dev.off()
+
+pdf(sprintf("%s_newUMAPembedding_topic.pdf", prefix_topic), 9,8, useDingbats = F)
+for (k in 1:ncol(fit$L) ) {
+    print(k)
+    tmp = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),1], dim2 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),2], size = fit$L[,k]) 
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+
+```
+
+Visualize poor fit cells
+```{r}
+loglik = loglik_multinom_topic_model(counts,fit)
+pdat = data.frame(loglik = loglik, category = so$IGT)
+pdf(sprintf("%s_loglik_cellfit.pdf", prefix_topic), 8, 8, useDingbats = F)
+ggplot(pdat,aes(x = loglik,fill = category)) +
+  geom_histogram(bins = 64,color = "white",size = 0.25) +
+  scale_fill_manual(values = mypal) +
+  labs(y = "number of cells") +
+  theme_cowplot(font_size = 10)
+dev.off()
+
+```
+
+
+
+https://stephenslab.github.io/fastTopics/articles/single_cell_rnaseq_practical.html#identifying-clusters-from-the-topic-proportions
+
+
+**If we want: Predicting topics in other cells**
+https://stephenslab.github.io/fastTopics/articles/single_cell_rnaseq_basic.html#predicting-topics-in-other-cells
+
+fasttopics robust? concensus?
+calculate spatial autocorrelation of topics?
+Flashier to use not count data? ie corrected counts from scvi?
+
+
