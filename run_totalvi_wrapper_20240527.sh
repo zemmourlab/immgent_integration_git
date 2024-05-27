@@ -19,13 +19,13 @@ source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
-path_to_mudata='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
-prefix='totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
-batchkey='IGT'
-categorical_covariate_keys='sample_id'
-corrected_counts='True'
-denoised_data='False'
+working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/
+path_to_mudata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu
+prefix=totalvi_igt1_56_allgenes_20240526_igtsampleregressedout
+batchkey=IGT
+categorical_covariate_keys=sample_id
+corrected_counts=True
+denoised_data=False
 
 cd $working_dir
 
