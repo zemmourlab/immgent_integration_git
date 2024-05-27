@@ -29,4 +29,4 @@ denoised_data='False'
 
 cd $working_dir
 
-python $SCRIPT_DIR/run_totalvi_v2.py $working_dir $path_to_mudata $prefix $batchkey $categorical_covariate_keys $corrected_counts $denoised_data
+python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
