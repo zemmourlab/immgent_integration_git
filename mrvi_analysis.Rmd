@@ -11,95 +11,372 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
-sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=96GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
 cd $LABHOME
 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
+module load cuda/12.2
 
 #sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
 
 #source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-source activate /project/zemmour/david/envs/scvi_20240315
+source activate /project/zemmour/david/envs/scvi113_20240525 #works but error saving the model, pickle error
+source activate /project/zemmour/david/envs/mrvi_test5 #torch worjks but scvi not, jax error
 module load openblas/0.3.13 #load again or error
 
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 #cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
 
-R
+#R
 #options(max.print=1000)
 #options(Seurat.object.assay.version = 'v5')
 ```
 
-Install mrVI
 
-**Create a new environment in Midway3 for mrVI /project/zemmour/david/envs/mrVI_20240326**
-installation messed up the previous environment...
+https://docs.scvi-tools.org/en/latest/tutorials/notebooks/scrna/MrVI_tutorial.html
 
-```{bash}
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
-
-cd /project/zemmour/david/envs
-
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-conda env export > scvi_formrvi.yml
-#modify yml to change the name to /project/zemmour/david/envs/mrvi_20240326
-#exit and log in again
-source activate mamba-env  
-mamba env create -p /project/zemmour/david/envs/mrvi_20240326 -f scvi_formrvi.yml
-#if issues with "strict repo priority", delete the line in .condarc
-
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
-source activate /project/zemmour/david/envs/mrvi_20240326
-
-pip install --pre mrvi
-
-
-```
+Import libraries
 
 ```{python}
 import warnings; warnings.simplefilter('ignore')
 
-#import scvi
-from mrvi import MrVI
 import os
-import scanpy as sc
+import tempfile
 
-import numpy as np
-import mplscience
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scanpy as sc
+import mudata as mu
+# import seaborn as sns
+import scvi
+from scvi.external import MRVI
+import torch
+import pymde
 import pickle
 
+scvi.__version__
+torch.cuda.is_available()
+scvi.settings.seed = 0  # optional: ensures reproducibility
+
+```
+
+```{python}
 os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT"
+prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT_test2"
+```
 
-adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
 
-MrVI.setup_anndata(adata,  sample_key="my_sample_key", batch_key="my_batch_key")
+Load data
+```{python}
+mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
 
-n_var_genes = 2000
+```
 
-#adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
-model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
-mdata = mu.MuData({"RNA": model.adata})
-protein_data = model.adata.obsm['protein']
-protein_adata = sc.AnnData(X=protein_data)
-mdata.mod['protein'] = protein_adata
-#del mdata["RNA"].obsm['protein']
-TOTALVI_LATENT_KEY = "X_totalVI"
-mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
+Add metadata
+CAREFUL SPLEEN control are not in the Sample_metadata_david_20240324_v3.csv, so lots of NA for them
+```{python}
+m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
+#m
+m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '.' + m['hashtag_number'].astype(str)
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '.' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+meta = mdata.mod['RNA'].obs
 
-adata = mdata.mod["RNA"]
-#Remove genes with no counts
-gene_sums = np.sum(adata.X, axis=0)
-genes_non_zero = gene_sums > 0
-adata = adata[:, genes_non_zero]
-adata.layers["counts"] = adata.X.copy()
-adata.layers["counts_csc"] = adata.layers["counts"].tocsc()
+cols_to_keep = ['sample_id', 'hashtag_number'] + list(set(meta.columns) - set(m.columns))
+meta = meta[cols_to_keep]
+m2 = pd.merge(meta, m, on='sample_id', how='left')
+m2.shape
+m2[m2['exp_number'].isna()].shape
+#print(m2[m2['exp_number'].isna()]['sample_id']) 
+#print(m2[m2['exp_number'].isna()]['is_spleen_standard']) 
+m2[m2['exp_number'].isna()]['organ'] = 'spleen'
+m2[m2['exp_number'].isna()]['condition_broad'] = 'healthy'
+
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+#set(m2['colnames']) == set(mdata.mod['RNA'].obs.index)
+m2.index = m2['colnames']
+m2 = m2.reindex(mdata.mod['RNA'].obs.index, axis=0)
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+
+mdata.mod['RNA'].obs = m2
+
+#simplify the organ columns
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod['RNA'].obs['organ']
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('object')
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('lymph node|LN', na=False, case=False), 'organ_simplified'] = 'lymph node'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('skin', na=False, case=False), 'organ_simplified'] = 'skin'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('colon', na=False, case=False), 'organ_simplified'] = 'colon'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('duoden|ileal|ileum|jejun|small intestine', na=False, case=False), 'organ_simplified'] = 'small intestine'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'organ_simplified'] = 'spleen'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'condition_broad'] = 'healthy'
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].str.replace('[^0-9a-zA-Z]', '.', regex=True)
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('category')
+
+for mod_key in mdata.mod.keys():
+    # Convert all columns in .obs to string type to avoid error in writing
+    mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
+    
+sample_id_equal = mdata.mod['RNA'].obs["sample_id"].values == mdata.mod['RNA'].obs["sample_id_david"].values
+false_indices = np.where(sample_id_equal == False)[0]
+different_rows = mdata.mod['RNA'].obs.iloc[false_indices]
+print(different_rows[['sample_id', 'sample_id_david']])
+del mdata.mod['RNA'].obs["sample_id_david"]
+    
+```
+
+from mudata to adata
+```{python}
+adata = mdata.mod['RNA']
+adata.obs['sample_id']
+
+```
+
+Fit MRVI model
+```{python}
+sample_key = "sample_id"  # target covariate
+batch_key="IGT" # nuisance variable identifier
+MRVI.setup_anndata(adata, sample_key=sample_key, batch_key = batch_key)
+model = MRVI(adata)
+model.train(max_epochs=10)
+prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT_test2"
+model.save(prefix, save_anndata=True)
+
+plt.plot(model.history["elbo_validation"].iloc[5:])
+plt.xlabel("Epoch")
+plt.ylabel("Validation ELBO")
+plt.show()
+```
+
+Save latent dims U and Z
+```{python}
+u = model.get_latent_representation()
+latent_df = pd.DataFrame(u, index = adata.obs.index)
+latent_df.to_csv(prefix+"/latent_u.csv", index=True)
+z = model.get_latent_representation(give_z=True) #to get z instead of u
+latent_df = pd.DataFrame(z, index = adata.obs.index)
+latent_df.to_csv(prefix+"/latent_z.csv", index=True)
+
+sc.pp.neighbors(pancreas_ref, use_rep=SCVI_LATENT_KEY)
+sc.tl.leiden(pancreas_ref)
+sc.tl.umap(pancreas_ref)
+
+
+u_mde = scvi.model.utils.mde(u)
+adata.obsm["u_mde"] = u_mde
+sc.pl.embedding(
+    adata,
+    basis="u_mde",
+    color=["cell_type", "organ_simplified","condition_broad"],
+    ncols=1,
+    save="u_plot.pdf"
+)
+
+z_mde = scvi.model.utils.mde(z)
+adata.obsm["z_mde"] = z_mde
+sc.pl.embedding(
+    adata,
+    basis="z_mde",
+    color=["cell_type", "organ_simplified","condition_broad"],
+    ncols=1,
+    save="z_plot.pdf"
+)
+
+
+```
+
+
+**Install mrVI**
+
+Create a new environment in Midway3 for mrVI
+
+```{bash}
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+####Try1: works but not on GPU
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/scvi113_20240525 python=3.9
+source activate /project/zemmour/david/envs/scvi113_20240525
+conda install scvi-tools -c conda-forge 
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+conda install -c conda-forge scanpy python-igraph leidenalg
+conda install -c pytorch -c conda-forge pymde
+
+
+### doesn't work: GPU recognized but error with loading SCVI ImportError: cannot import name 'linear_util' from 'jax' (/project/zemmour/david/envs/mrvi_test5/lib/python3.9/site-packages/jax/__init__.py)
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+conda env export > formrvitest5.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_test5
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/mrvi_test5 -f formrvitest5.yml
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/mrvi_test5
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+pip install -U "jax[cuda12]"
+#conda install jax=0.4.23 jaxlib=0.4.23 -c conda-forge #didn't work
+
+It uninstall and installs this:
+Installing collected packages: werkzeug, tensorboard-data-server, protobuf, multidict, ml-dtypes, grpcio, frozenlist, async-timeout, yarl, sparse, markdown, jaxlib, jax, aiosignal, xarray, tensorboard, numpyro, aiohttp, lightning, scvi-tools
+  Attempting uninstall: ml-dtypes
+    Found existing installation: ml-dtypes 0.1.0
+    Uninstalling ml-dtypes-0.1.0:
+      Successfully uninstalled ml-dtypes-0.1.0
+  Attempting uninstall: jaxlib
+    Found existing installation: jaxlib 0.4.7
+    Uninstalling jaxlib-0.4.7:
+      Successfully uninstalled jaxlib-0.4.7
+  Attempting uninstall: jax
+    Found existing installation: jax 0.4.8
+    Uninstalling jax-0.4.8:
+      Successfully uninstalled jax-0.4.8
+  Attempting uninstall: numpyro
+    Found existing installation: numpyro 0.11.0
+    Uninstalling numpyro-0.11.0:
+      Successfully uninstalled numpyro-0.11.0
+  Attempting uninstall: scvi-tools
+    Found existing installation: scvi-tools 0.20.3
+    Uninstalling scvi-tools-0.20.3:
+      Successfully uninstalled scvi-tools-0.20.3
+Successfully installed aiohttp-3.9.5 aiosignal-1.3.1 async-timeout-4.0.3 frozenlist-1.4.1 grpcio-1.64.0 jax-0.4.28 jaxlib-0.4.28 lightning-2.2.5 markdown-3.6 ml-dtypes-0.4.0 multidict-6.0.5 numpyro-0.15.0 protobuf-5.27.0 scvi-tools-1.1.3 sparse-0.15.4 tensorboard-2.16.2 tensorboard-data-server-0.7.2 werkzeug-3.0.3 xarray-2024.5.0 yarl-1.9.4
+
+
+### didn't work, same error: ImportError: cannot import name 'linear_util' from 'jax' (/project/zemmour/david/envs/mrvi_test5/lib/python3.9/site-packages/jax/__init__.py)
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+module load cuda/12.2
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+conda env export > formrvitest5.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_test5
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/mrvi_test6 -f formrvitest5.yml
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/mrvi_test6
+pip install -U "jax[cuda12]"
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+conda install -c conda-forge scanpy python-igraph leidenalg
+#conda install -c pytorch -c conda-forge pymde
+
+### mrvi_test7: conda install jax=0.4.23 jaxlib=0.4.23 -c conda-forge doens't work
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+module load cuda/12.2
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+conda env export > formrvitest5.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_test5
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/mrvi_test7 -f formrvitest5.yml
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/mrvi_test7
+conda install jax=0.4.23 jaxlib=0.4.23 -c conda-forge
+#pip install -U "jax[cuda12]"
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+conda install -c conda-forge scanpy python-igraph leidenalg
+conda install -c pytorch -c conda-forge pymde
+
+### mrvi_test8: fails at mamba install pytorch...
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+module load cuda/12.2
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/mrvi_test8 python=3.11
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/mrvi_test8
+mamba install pytorch torchvision torchaudio  -c pytorch -c nvidia #fails there
+#pip install -U "jax[cuda12]"
+#mamba install jax jaxlib -c conda-forge
+#conda install jax=0.4.23 jaxlib=0.4.23 -c conda-forge
+#pip install -U "jax[cuda12]"
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+conda install -c conda-forge scanpy python-igraph leidenalg
+conda install -c pytorch -c conda-forge pymde
+
+
+#### torch doesn't recognize CUDA
+ #need this one to avoid cblas_ somthing error when loading packages
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/mrvi_test3 python=3.9
+source activate /project/zemmour/david/envs/mrvi_test3
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install jax jaxlib -c conda-forge
+
+####New try: 
+module load python/anaconda-2022.05 
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/mrvi_test4 python=3.9
+exit
+module load python/anaconda-2022.05
+source activate /project/zemmour/david/envs/mrvi_test4
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install jax jaxlib -c conda-forge
+
+
+####doesn't work : didn't even download pytorch; cudatoolkit=12.2 isn't a thing
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/mrvi_test python=3.9
+source activate /project/zemmour/david/envs/mrvi_test
+mamba install pytorch torchvision torchaudio tensorflow-gpu jax jaxlib scvi-tools -c pytorch -c nvidia -c conda-forge
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+#checking CUDA in my GPU session with command < nvidia-smi > shows CUDA 12.2
+conda install -c conda-forge scanpy python-igraph leidenalg
+conda install -c pytorch -c conda-forge pymde
+
+
+###using scvi_20240524 env prior doesn't work
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate /project/zemmour/david/envs/scvi_20240315
+conda env export > scvi_20240315.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_20240326
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/scvi_20240524 -f scvi113.yml
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/scvi_20240524
+
+conda install scvi-tools -c conda-forge
+
+####didn't work
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate mamba-env  
+cd /project/zemmour/david/envs
+mamba create -p /project/zemmour/david/envs/scvi113_mrvi python=3.9
+source activate /project/zemmour/david/envs/scvi113_mrvi
+mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install jax jaxlib -c conda-forge
+conda install scvi-tools -c conda-forge 
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
+
+
+#### doesn't work on GPU, didn't install pytorch and jax before
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate mamba-env  
+cd /project/zemmour/david/envs
+mamba create -p /project/zemmour/david/envs/scvi113_20240525 python=3.9
+source activate /project/zemmour/david/envs/scvi113_20240525
+conda install scvi-tools -c conda-forge 
+pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
 
 ```
 

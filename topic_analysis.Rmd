@@ -564,7 +564,7 @@ for (k in 1:ncol(fit$L)) {
     print(volcano_plot(de,k = k,labels = rownames(de$lfsr)))
 }
 dev.off()
-pdf(sprintf("%s_de_lse_heatmap.pdf", prefix_topic), 10,30, useDingbats = F)
+pdf(sprintf("%s_de_lse_heatmap.pdf", prefix_topic), 10,15, useDingbats = F)
 genes = de$postmean %>% melt() %>% filter(value > 2) %>% group_by(Var2) %>% arrange(desc(value)) %>% top_n(20) %>% arrange(Var2) %>% pull(Var1) %>% as.character()
 tmp3 = de$postmean[genes,]
 tmp3[tmp3>3] = 3
@@ -582,8 +582,8 @@ for (k in 1:ncol(fit$L)) {
     print(volcano_plot(de,k = k,labels = rownames(de$lfsr)) )
 }
 dev.off()
-pdf(sprintf("%s_de_vsnull_heatmap.pdf", prefix_topic), 10,30, useDingbats = F)
-genes = de$postmean %>% melt() %>% filter(value > 2) %>% group_by(Var2) %>% arrange(desc(value)) %>% top_n(10) %>% arrange(Var2) %>% pull(Var1) %>% as.character()
+pdf(sprintf("%s_de_vsnull_heatmap.pdf", prefix_topic), 10,15, useDingbats = F)
+genes = de$postmean %>% melt() %>% filter(value > 2) %>% group_by(Var2) %>% arrange(desc(value)) %>% top_n(20) %>% arrange(Var2) %>% pull(Var1) %>% as.character()
 tmp3 = de$postmean[genes,]
 # tmp3[tmp3>3] = 3
 # tmp3[tmp3 < -3] = -3
@@ -596,9 +596,8 @@ dev.off()
 UMAP from fit$L
 ```{r}
 so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = fit$L, key = sprintf("%s_",prefix_topic), assay = "RNA")
-
 so = RunUMAP(so, dims = 1:ncol(fit$L), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
-# write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s_newUMAP.csv",prefix_topic), quote = F, row.names = TRUE, col.names = TRUE)
+write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s_newUMAP.csv",prefix_topic), quote = F, row.names = TRUE, col.names = TRUE)
 tmp = read.csv(sprintf("%s_newUMAP.csv",prefix_topic), header = T, row.names = 1)
 so[[sprintf("umap_%s",prefix_topic)]] = CreateDimReducObject(embeddings = as.matrix(tmp), key = sprintf("%s_",prefix_topic), assay = "RNA")
 

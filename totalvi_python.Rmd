@@ -31,7 +31,7 @@ python
 ```
 
 
-**TOTALVI: totalvi_igt1_56_allgenes_Treg_20240327_organregressedout**
+**import data**
 
 ```{python}
 import warnings; warnings.simplefilter('ignore')
@@ -49,15 +49,22 @@ import pandas as pd
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
+torch.cuda.is_available()
+
 ```
 
-Create muData object: totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
 ```{python}
 os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
 prefix = "totalvi_igt1_56_allgenes_Treg_20240327_organregressedout"
+prefix = "totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout"
+```
 
-mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+ muData object: 
+--> totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+```{python}
+mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #load this one (resutls of this block)
 
+#Create the mudata
 #adata = sc.read_h5ad("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5ad")
 model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
 mdata = mu.MuData({"RNA": model.adata})
@@ -76,9 +83,10 @@ mdata = mu.read(file_path)
 #import metadata
 m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
 #m
-m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '_' + m['hashtag_number'].astype(str)
-mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '_' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+m['sample_id'] = m['immgent_IGT_10xlane_id'].astype(str) + '.' + m['hashtag_number'].astype(str)
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '.' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
 meta = mdata.mod['RNA'].obs
+
 
 cols_to_keep = ['sample_id', 'hashtag_number'] + list(set(meta.columns) - set(m.columns))
 meta = meta[cols_to_keep]
@@ -117,11 +125,17 @@ for mod_key in mdata.mod.keys():
     # Convert all columns in .obs to string type to avoid error in writing
     mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
 
+sample_id_equal = mdata.mod['RNA'].obs["sample_id"].values == mdata.mod['RNA'].obs["sample_id_david"].values
+false_indices = np.where(sample_id_equal == False)[0]
+different_rows = mdata.mod['RNA'].obs.iloc[false_indices]
+print(different_rows[['sample_id', 'sample_id_david']])
+del mdata.mod['RNA'].obs["sample_id_david"]
+
 mdata.write("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
 
 ```
 
-Run totalVI with organ_simplified regressed out: totalvi_igt1_56_allgenes_Treg_20240327_organregressedout
+**Run totalVI with organ_simplified regressed out: totalvi_igt1_56_allgenes_Treg_20240327_organregressedout**
 ```{python}
 #Setup mu_data
 scvi.model.TOTALVI.setup_mudata(
@@ -159,6 +173,64 @@ latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.ind
 latent_df.to_csv(prefix+"_X_totalVI_organ.csv", index=True)
 mdata.write(prefix+"/adata.h5mu")
 
+denoised = model.get_normalized_expression() 
+
+mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
+mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+mdata.write(prefix+"/adata_withdenoised.h5mu")
+
+#export mu data in separate AnnData for R
+mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
+mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
+
+```
+
+**Run totalVI with batch_key=IGT and categorical_covariate_keys=sample_id_david: totalvi_igt1_56_allgenes_Treg_20240525_sampleregressedout**
+```{python}
+#Setup mu_data
+
+(mdata.mod['RNA'].obs["sample_id"].values.isna()).any()
+
+scvi.model.TOTALVI.setup_mudata(
+    mdata,
+    rna_layer="counts",
+    categorical_covariate_keys = ['sample_id'], #make sure this is a list!
+    protein_layer=None,
+    batch_key='IGT',
+    modalities={
+        "rna_layer": "RNA",
+        "protein_layer": "protein",
+        "batch_key": "RNA",
+        "categorical_covariate_keys":"RNA"
+    },
+)
+
+model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb")
+
+model.train()
+
+model.save(prefix, save_anndata=True)
+
+fig, ax = plt.subplots(1, 1)
+model.history["elbo_train"].plot(ax=ax, label="train")
+model.history["elbo_validation"].plot(ax=ax, label="validation")
+ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
+ax.legend()
+fig.savefig(prefix+"/training_elbo_plot.pdf")
+
+#save latent
+latent_representation = model.get_latent_representation()
+TOTALVI_LATENT_KEY = "X_totalVI_igtsample"
+mdata.mod['RNA'].obsm[TOTALVI_LATENT_KEY] = latent_representation
+latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
+
+latent_df.to_csv(prefix+"/latent.csv", index=True)
+# mdata.write(prefix+"/adata.h5mu")
+
+#save corrected counts --> see below
+
+#save denoised
 denoised = model.get_normalized_expression() 
 
 mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
@@ -253,7 +325,7 @@ saveRDS(so, file = "/project/jfkfloor2/zemmourlab/david/immgent/analysis/integra
 
 ```
 
-Get corrected count data (for RNA and proteins)
+Get corrected count data (for RNA and protein)
 
 ```{python}
 import numpy as np
@@ -265,17 +337,77 @@ newcounts = model.posterior_predictive_sample() #RNA AND Proteins!
 newcounts.shape
 newcounts = newcounts.astype(int)
 newcounts_sparse = csr_matrix(newcounts)
-mmwrite("totalvi_igt1_56_allgenes_Treg_20240306/counts_corrected.mtx", newcounts_sparse)
+mmwrite(prefix+"/counts_corrected.mtx", newcounts_sparse)
 
 model.adata.var_names + model.adata.obsm['protein'].columns
 
 genes_prot = pd.DataFrame(model.adata.var_names.append(model.adata.obsm['protein'].columns))
-genes_prot.to_csv("totalvi_igt1_56_allgenes_Treg_20240306/genes.csv", index = False,header=False )
+genes_prot = pd.DataFrame(model.adata.var_names)
+genes_prot.to_csv(prefix+"/genes.csv", index = False,header=False )
 
 cells = pd.DataFrame(model.adata.obs_names)
-cells.to_csv("totalvi_igt1_56_allgenes_Treg_20240306/cells.csv", index = False,header=False )
+cells.to_csv(prefix+"/cells.csv", index = False,header=False )
 
 ```
+
+**Run totalVI with ALL CELLS batch_key=IGT and categorical_covariate_keys=sample_id_david: totalvi_igt1_56_allgenes_sampleregressedout**
+
+wrapper
+```{bash}
+#!/bin/bash
+#SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
+#SBATCH --partition=beagle3 
+#SBATCH --gres=gpu:1 
+#SBATCH --mem=96GB #184GB
+#SBATCH -J totalvi              
+#SBATCH -o totalvi_igt1_56_allgenes_Treg_20240306.log
+#SBATCH -t 12:00:00              ##SBATCH --mem=8G
+#SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
+#SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
+
+#run as: sbatch run_totalvi_wrapper_20231030.sh
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+path_to_mudata='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+prefix='totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+batchkey='IGT'
+categorical_covariate_keys='sample_id'
+corrected_counts='True'
+denoised_data='False'
+
+cd $working_dir
+
+python $SCRIPT_DIR/run_totalvi_v2.py $working_dir $path_to_mudata $prefix $batchkey $categorical_covariate_keys $corrected_counts $denoised_data
+
+# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+# batchkey = 'IGT'
+# categorical_covariate_keys = ['sample_id']
+
+```
+
+```{python}
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+prefix = "totalvi_igt1_56_allgenes_20240526_igtsampleregressedout"
+
+mdata = mu.read("export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu") 
+
+#see above main code
+
+```
+
+
+
+
 
 
 
