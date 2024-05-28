@@ -27,7 +27,7 @@ batchkey = args.batchkey
 if args.categorical_covariate_keys:
         # Split the string into a list by commas
         categorical_covariate_keys = args.categorical_covariate_keys.split(',')
-        print(categorical_covariate_keys)
+        #print(categorical_covariate_keys)
 else:
     categorical_covariate_keys = None
 corrected_counts = args.corrected_counts
