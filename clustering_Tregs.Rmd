@@ -1,0 +1,359 @@
+---
+title: "clustering_Tregs"
+output: html_document
+date: "2024-05-30"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize in R: load libraries and custom functions**
+
+```{r}
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+options(Seurat.object.assay.version = 'v5')
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = viridis(100)
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+```
+
+**Load seurat expression data**
+```{r}
+so = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_so_withclusters.Rds")
+so
+```
+
+```{r}
+prefix = "totalvi20240525rmigtsample"
+#setwd(prefix)
+reduc = "totalvi_20240525_rmigtsample"
+```
+
+```{r}
+RenameCluster = function(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl") {
+    cl = as.numeric(cluster.vector)
+    ordered = order(unique(cl))
+    cl = sprintf("%s%s", cluster.prefix, cl )
+    renamed.vector = factor(cl, levels = unique(cl)[ordered])
+    return(renamed.vector)
+}
+
+n_latent = 30
+so = FindNeighbors(so, dims = 1:n_latent, reduction = reduc)
+so = FindClusters(so, resolution = 0.25, cluster.name = cluster.name)
+so = FindClusters(so, resolution = 0.5, cluster.name = sprintf("Cluster_%s_Res0.5",prefix))
+so = FindClusters(so, resolution = 0.75, cluster.name = sprintf("Cluster_%s_Res0.75",prefix))
+so = FindClusters(so, resolution = 1, cluster.name = sprintf("Cluster_%s_Res1",prefix))
+so = FindClusters(so, resolution = 1.5, cluster.name = sprintf("Cluster_%s_Res1.5",prefix))
+so = FindClusters(so, resolution = 2, cluster.name = sprintf("Cluster_%s_Res2",prefix))
+so = FindClusters(so, resolution = 3, cluster.name = sprintf("Cluster_%s_Res3",prefix))
+so = FindClusters(so, resolution = 4, cluster.name = sprintf("Cluster_%s_Res4",prefix))
+
+
+cluster.name = sprintf("Cluster_%s_Res0.25",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res0.5",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res0.75",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res1",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res1.5",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res2",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res3",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+cluster.name = sprintf("Cluster_%s_Res4",prefix)
+so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
+
+```
+
+PDF with clusters
+```{r}
+pdf(sprintf("%s_UMAP_Clusters.pdf", prefix), 20, 20, useDingbats = F)
+for (i in c(0.25,0.5,0.75,1,1.5,2,3,4)) {
+    MyPlots(seurat_object = so, 
+        dim1 = so[["umap_totalvi_20240525_rmigtsample"]]@cell.embeddings[,1], 
+        dim2 = so[["umap_totalvi_20240525_rmigtsample"]]@cell.embeddings[,2], 
+        color_by = sprintf("Cluster_%s_Res%s",prefix,i), 
+        split_by1 = "organ_simplified",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+}
+dev.off()
+```
+
+res 0.5 and 0.75 makes most sense biologically
+Also the most robusts. 0.5 seems a bit more robust than 0.75 regarding skin mostly.
+Robustness of clusters with silhouette analysis for cluster.name at all resolution + deeper analysis for resolution 0.75 and 0.5 (the optimum)
+in all dataset
+in each organ
+in each IGT
+```{r}
+library(cluster)
+SilhouetteSummaryPlots = function(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name) {
+    message("plot silhouettes")
+    for (i in categories) {
+        print(i)
+        sil = sil_list[[i]]
+        # prepare colours:
+        clust.col <- mypal#scater:::.get_palette("tableau10medium") # hidden scater colours
+        sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
+        sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
+        plot(sil,
+             main = sprintf("Silhouette in %s in %s:%s", cluster.name, i, column_name),
+             border = sil.cols,
+             col = sil.cols,
+             do.col.sort = FALSE)
+    }
+    
+    message("Plot Boxplot")
+    sil_summary_list = list()
+    for (i in categories) {
+        sil = sil_list[[i]]
+        sil_summary_list[[i]] = as.data.frame(sil) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        sil_summary_list[[i]][,column_name] = i
+    }
+    sil_summary = Reduce(rbind,sil_summary_list)
+    
+    #sil_summary[sample(size = 20, x = 1:nrow(sil_summary),replace = F),]
+    
+    averaged_data <- sil_summary %>%
+        group_by(cluster, column_name = sil_summary[,column_name]) %>%
+        summarise(mean_of_means = mean(mean_sil_width, na.rm = TRUE), mean_of_percentage_positive = mean(percentage_positive, na.rm = TRUE), .groups = 'drop') %>% data.frame()
+    
+    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_means)) +
+        geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.7, color = "black") +  # Draw boxplots
+        geom_point(aes(color = column_name), position = position_jitter(width = 0.2, height = 0), size = 3, alpha = 0.6) +  # Add jittered points
+        scale_color_manual(values=mypal) +  # Color scheme for points
+        labs(title = "Boxplot of Average Mean Silhouette Width per Cluster",
+             x = "Cluster",
+             y = "Average of Mean Silhouette Width",
+             color = column_name) +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Improve x-axis label readability
+              legend.position = "right")  # Adjust the legend position
+    print(p)
+    
+    message("Plot Individual")
+    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_means, group = column_name, color = column_name)) +
+        geom_line() +  # Add lines to connect points
+        geom_point(size = 3, alpha = 0.8) +  # Add points
+        scale_color_manual(values=mypal) +  # Use a distinguishable color palette
+        labs(title = "Line Plot of Average Mean Silhouette Width per Cluster",
+             x = "Cluster",
+             y = "Average of Mean Silhouette Width",
+             color = column_name) +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "right") 
+        
+    print(p)
+    print(p + facet_wrap(~column_name))
+    
+     p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_percentage_positive)) +
+        geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.7, color = "black") +  # Draw boxplots
+        geom_point(aes(color = column_name), position = position_jitter(width = 0.2, height = 0), size = 3, alpha = 0.6) +  # Add jittered points
+        scale_color_manual(values=mypal) +  # Color scheme for points
+        labs(title = "Boxplot of Average Percentage of Cells with Positive Width per Cluster",
+             x = "Cluster",
+             y = "Average of Percentage of Cells with Positive Width",
+             color = column_name) +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Improve x-axis label readability
+              legend.position = "right")  # Adjust the legend position
+    print(p)
+    
+    message("Plot Individual")
+    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_percentage_positive, group = column_name, color = column_name)) +
+        geom_line() +  # Add lines to connect points
+        geom_point(size = 3, alpha = 0.8) +  # Add points
+        scale_color_manual(values=mypal) +  # Use a distinguishable color palette
+        labs(title = "Line Plot of Average Percentage of Cells with Positive per Cluster",
+             x = "Cluster",
+             y = "Average of Percentage of Cells with Positive Width",
+             color = column_name) +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "right") 
+        
+    print(p)
+    print(p + facet_wrap(~column_name))
+}
+cluster.name = sprintf("Cluster_%s_Res0.5",prefix)
+#cluster.name = sprintf("Cluster_%s_Res0.75",prefix)
+
+#1 in all the data
+reduc.dist = dist(so[["totalvi_20240525_rmigtsample"]]@cell.embeddings)
+cl = as.integer(so[[cluster.name]][,1])
+sil = silhouette(cl, dist = reduc.dist)
+clust.col <- mypal
+sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
+sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
+pdf(sprintf("%s_%s_silhouette.pdf", prefix, cluster.name), 10, 10, useDingbats = F)
+plot(sil,
+     main = sprintf("Silhouette in %s in %s:%s", cluster.name, i, column_name),
+     border = sil.cols,
+     col = sil.cols,
+     do.col.sort = FALSE)
+dev.off()
+
+#2 in each organ_simplified: how much does it fit each organ?
+sil_list = list()
+column_name = "organ_simplified"
+categories = unique(so[[column_name]][,1])
+cluster.name =  cluster.name
+
+for (i in categories) {
+    print(i)
+    reduc.dist = dist(so[["totalvi_20240525_rmigtsample"]]@cell.embeddings[so[[column_name]] == i,])
+    cl = as.integer(so[[cluster.name]][so[[column_name]] == i,1])
+    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
+}
+
+pdf(sprintf("%s_%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 10, 10, useDingbats = F)
+SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
+dev.off()
+
+#3. By IGT
+sil_list = list()
+column_name = "IGT"
+categories = levels(so[[column_name]][,1])
+cluster.name =  cluster.name
+
+for (i in categories) {
+    print(i)
+    reduc.dist = dist(so[["totalvi_20240525_rmigtsample"]]@cell.embeddings[so[[column_name]] == i,])
+    cl = as.integer(so[[cluster.name]][so[[column_name]] == i,1])
+    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
+}
+
+pdf(sprintf("%s_%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 10, 10, useDingbats = F)
+SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
+dev.off()
+
+```
+
+(My silhouette code)
+```{r}
+#my silhouette code
+# Load necessary library
+library(stats)
+
+# Simulated data
+set.seed(123)
+data <- rbind(matrix(rnorm(100, mean = 0), ncol = 2),
+              matrix(rnorm(100, mean = 5), ncol = 2))
+
+# K-means clustering
+cl <- kmeans(data, 2)
+
+
+custom_silhouette <- function(data, clusters) {
+  # Number of clusters
+  num_clusters <- length(unique(clusters$cluster))
+  
+  # Initialize the silhouette width vector
+  s_widths <- numeric(nrow(data))
+  
+  # Calculate for each point
+  for (i in 1:nrow(data)) {
+    # Cluster of the current point
+    own_cluster <- clusters$cluster[i]
+    
+    # Points in the same cluster
+    own_cluster_points <- data[clusters$cluster == own_cluster, ]
+    
+    # a(i): Average distance to points in the same cluster
+    a_i <- mean(sqrt(colSums((own_cluster_points - data[i, ])^2)))
+    
+    # Initialize b_i to a large number
+    b_i <- Inf
+    
+    # Calculate b(i): Minimum average distance to any other cluster
+    for (k in 1:num_clusters) {
+      if (k != own_cluster) {
+        other_cluster_points <- data[clusters$cluster == k, ]
+        dist_to_other_cluster <- mean(sqrt(colSums((other_cluster_points - data[i, ])^2)))
+        b_i <- min(b_i, dist_to_other_cluster)
+      }
+    }
+    
+    # Silhouette width calculation
+    s_widths[i] <- (b_i - a_i) / max(a_i, b_i)
+  }
+  
+  return(s_widths)
+}
+
+sil_widths <- custom_silhouette(data, cl)
+
+# Plot the silhouette widths
+plot(sil_widths, type = 'h', main = "Custom Silhouette Widths", xlab = "Index", ylab = "Silhouette Width")
+
+
+```
+

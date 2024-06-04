@@ -291,8 +291,6 @@ saveRDS(
 
 ```
 
-Export the data for Nir/Maria/Tal: see totalvi_python.Rmd
-
 **Plot UMAPs and expression**
 ```{r}
 #so = readRDS(file = "bpcells/totalvi_igt1_48_20230706_allgenes_counts/totalvi_igt1_48_20230706_allgenes_BPCells_so.Rds")

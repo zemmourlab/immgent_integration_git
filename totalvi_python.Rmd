@@ -30,7 +30,6 @@ python
 
 ```
 
-
 **import data**
 
 ```{python}
@@ -349,18 +348,6 @@ cells = pd.DataFrame(model.adata.obs_names)
 cells.to_csv(prefix+"/cells.csv", index = False,header=False )
 
 ```
-
-**Run totalVI with ALL CELLS batch_key=IGT and categorical_covariate_keys=sample_id_david: totalvi_igt1_56_allgenes_sampleregressedout**
-
-```{bash}
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
-##run the following scripts: 
-#python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
-#python $SCRIPT_DIR/run_totalvi_denoising_v2.py $CWD totalvi_igt1_56_20231030_allgenes_organregressed
-
-```
-
 
 
 

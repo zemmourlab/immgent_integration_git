@@ -480,7 +480,7 @@ for (k in 1:ncol(fit$L)) {
 Loglik single cell: see below
 UMAP from fit$L: see below
 
-**With corrected counts from totalvi_igt1_56_allgenes_Treg_20240306**
+**With CORRECTED counts from totalvi_igt1_56_allgenes_Treg_20240306**
 ```{r}
 prefix_topic = "fasttopics_K6_20240521"
 prefix_topic = "fasttopics_K30_20240521"
@@ -652,8 +652,6 @@ ggplot(pdat,aes(x = loglik,fill = category)) +
 dev.off()
 
 ```
-
-
 
 https://stephenslab.github.io/fastTopics/articles/single_cell_rnaseq_practical.html#identifying-clusters-from-the-topic-proportions
 

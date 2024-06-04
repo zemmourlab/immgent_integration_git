@@ -327,35 +327,10 @@ dev.off()
 
 ```
 
-
-**Create a new environment in Midway3 for module analysis: /project/zemmour/david/envs/scvi_20240315**
-just in case it messes up my SCVI environment
-
-```{bash}
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
-
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-conda env export > scvi.yml
-#modifyyml to change the name to /project/zemmour/david/envs/scvi_20240315
-#exit and log in again
-source activate mamba-env  
-mamba env create -p /project/zemmour/david/envs/scvi_20240315 -f scvi.yml
-#if issues with "strict repo priority", delete the line in .condarc
-
-module load python/anaconda-2022.05
-source activate /project/zemmour/david/envs/scvi_20240315
-
-mamba update scvi-tools #to 1.1.2
-pip install hotspot
-
-
-```
-
 **Method 1: Hotspot**
 based on latent space proximity
 caveat: each gene can be at most in one module, in contrasts to topic modeling
+Installation: see install_scvi.Rmd
 
 ```{python}
 import warnings; warnings.simplefilter('ignore')
@@ -549,26 +524,6 @@ print(p)
 dev.off()
 
 
-
-
-
 ```
-
-
-**Method 2: fastTopics**
-on count data
-in R
-- could do in each batch for example then goal would be to harmonize the topics?
-- topic on normalized data from SCVI
-
-IGT 24
-```{r}
-
-```
-
-
-**Method 3: SCVI Amortized LDA**
-but doesn't take into account the batch correction
-NMF and LDA are the 2 most popular calculation of topics. LDA requires count matrix.
 
 

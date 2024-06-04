@@ -1,7 +1,7 @@
 ---
 title: "Milo_analysis"
 output: html_document
-date: "2024-03-16"
+date: "2024-05-29"
 editor_options: 
   chunk_output_type: console
 ---
@@ -71,148 +71,46 @@ names(mypal) = NULL
 #pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
 #dev.off()
 
-MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
-
-    so = seurat_object
-    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
-    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
-    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
-    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
-    
-    alpha = 0.5
-    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
-    #names(sample_name_colors) = levels(so$sample_name)
-    #sample_name_colors2 = sample_name_colors
-    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
-    
-    message("Plot 1: UMAP")
-    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
-        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
-        theme_bw() + scale_color_manual(values = mypal)
-    print(plot1)
-    
-    message("Plot 2: UMAP split")
-    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
-    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-    
-    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
-    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
-    
-    if (is.null(split_by2)) {
-        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
-    } else {
-        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+MyplotDAbeeswarm = function (da.res, group.by = NULL, alpha = 0.1, subset.nhoods = NULL) 
+{
+    require(ggbeeswarm)
+    if (!is.null(group.by)) {
+        if (!group.by %in% colnames(da.res)) {
+            stop(group.by, " is not a column in da.res. Have you forgot to run annotateNhoods(x, da.res, ", 
+                group.by, ")?")
         }
-    print(plot2)
-    
-    message("Plot 3: UMAP genes")
-    
-    for (g in genes) {
-        print(g)
-        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
-        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-        
-        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
-        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
-        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
-    
-        
-        if (is.null(split_by2)) {
-        plot3 = p + p2  + 
-            scale_color_manual(values = c("black", "red")) + 
-            scale_alpha_manual(values = c(0.5,1))  + 
-            theme_bw()  + 
-            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
-            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
-    } else {
-         plot3 = p + p2  + 
-             scale_color_manual(values = c("black", "red")) + 
-             scale_alpha_manual(values = c(0.5,1))  + 
-             theme_bw() + 
-             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
-             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        if (is.numeric(da.res[, group.by])) {
         }
-        print(plot3)
-        
+        da.res <- mutate(da.res, group_by = da.res[, group.by])
     }
-
+    else {
+        da.res <- mutate(da.res, group_by = "g1")
+    }
+    if (!is.factor(da.res[, "group_by"])) {
+        message("Converting group_by to factor...")
+        da.res <- mutate(da.res, group_by = factor(group_by, 
+            levels = unique(group_by)))
+    }
+    if (!is.null(subset.nhoods)) {
+        da.res <- da.res[subset.nhoods, ]
+    }
+    beeswarm_pos <- ggplot_build(da.res %>% mutate(is_signif = ifelse(PValue < 
+        alpha, 1, 0)) %>% arrange(group_by) %>% ggplot(aes(group_by, 
+        logFC)) + geom_quasirandom())
+    pos_x <- beeswarm_pos$data[[1]]$x
+    pos_y <- beeswarm_pos$data[[1]]$y
+    n_groups <- unique(da.res$group_by) %>% length()
+    da.res %>% mutate(is_signif = ifelse(SpatialFDR < alpha, 
+        1, 0)) %>% mutate(logFC_color = ifelse(is_signif == 1, 
+        logFC, NA)) %>% arrange(group_by) %>% mutate(Nhood = factor(Nhood, 
+        levels = unique(Nhood))) %>% mutate(pos_x = pos_x, pos_y = pos_y) %>% 
+        ggplot(aes(pos_x, pos_y, color = logFC, size = PValue < 
+        alpha))  + scale_color_gradient2() + xlab(group.by) + ylab("Log Fold Change") + #guides(color = "none")
+        scale_x_continuous(breaks = seq(1, n_groups), labels = setNames(levels(da.res$group_by), 
+            seq(1, n_groups))) + geom_point() + coord_flip() + 
+        theme_bw(base_size = 22) + theme(strip.text.y = element_text(angle = 0))
 }
 
-ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
-    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
-    so.v3 = CreateSeuratObject(so.v3)
-    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
-    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
-    #all(colnames(so.v3) == colnames(so))
-    so.v3@meta.data = so@meta.data
-    return(so.v3)
-}
-
-Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
-  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
-  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
-  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
-  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
-  annotation_logticks(sides = "b") +
-  xlab(xlab) +
-  theme_bw() +
-  ylab("p value") +
-  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
-  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
-    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
-    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
-    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
-    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
-  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
-    annotation_logticks(sides = "bl") +
-    xlab(xlab) +
-    ylab(ylab) +
-    ggtitle(main) +
-    theme_bw() +
-    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
-  newpal = c()
-  for (c in 1:length(splitvector)){
-    #print(c)
-    n = splitvector[c]
-    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
-    newcol[4,] = seq(50, 255, length.out = n)
-    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
-  }
-  return(newpal)
-}
-sp = SplitColors
-#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
-
-library(org.Hs.eg.db)
-hs = org.Hs.eg.db
-go2eg = as.list(org.Hs.egGO2ALLEGS)
-symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
-secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
-
-library(org.Mm.eg.db)
-mm = org.Mm.eg.db
-go2eg = as.list(org.Mm.egGO2ALLEGS)
-symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
-effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
 
 ```
 
@@ -220,56 +118,21 @@ chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"
 
 Load seurat expression data
 ```{r}
-#IGT1-56 subsets
-prefix = "totalvi_igt1_56_20240306_allgenes"
-to_subset = "Treg"
-so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
-#so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+so = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_so_withclusters.Rds")
 ```
 
-update the metadata in seurat object
 ```{r}
-m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
-
-m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = "_")
-so$sample_id = paste(so$IGT, so$hashtag_number, sep = "_")
-
-someta = so@meta.data
-someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
-m2 = merge(someta, m, by  = "sample_id", all.x = T)
-m2$sample_id[which(is.na(m2$exp_number))]
-m2$is_spleen_standard[which(is.na(m2$exp_number))] #missing metadata about spleen standards!!
-m2$colnames[which(is.na(m2$exp_number))]
-
-all(m2$colnames %in% rownames(so@meta.data))
-rownames(m2) = m2$colnames
-m2 = m2[rownames(so@meta.data),]
-all(m2$colnames %in% rownames(so@meta.data))
-
-so@meta.data = m2
-
-#Adjust colnames(so) that was modified when merged
-#so$colnames = colnames(so)
-pattern = "(IGT\\S*)_(\\d+)" # "IGT19.TGACGGCAGTTCGCGC_18" \\S* matches any number of non-whitespace characters following "IGT". _(\\d+) matches an underscore followed by one or more digits. \\1 in the replacement means we only want to keep the first capture group (i.e., the part that matched IGT\\S*), thus removing the "_number" part.
-#cleaned_string = gsub(pattern, "\\1", original_string) # Replace the matched pattern with the first capture group
-so$colnames = gsub(pattern, "\\1", so$colnames)
-any(duplicated(so$colnames))
-colnames(so) = so$colnames
-
-#order IGT
-unique(so$IGT)
-extract_numeric = function(x) {
-  as.numeric(gsub("\\D", "", x))
-}
-ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
-so$IGT = factor(so$IGT, levels = ordered_vector)
-
+prefix = "milo_totalvi20240525rmigtsample"
+setwd(prefix)
+milo.dim = "TOTALVI_20240525_RMIGTSAMPLE"
 ```
 
-**Study organ effect in healthy organs only: milo in TOTALVI space**
+
+**Enrichments in condition_detailed ~ tissue in the totalVI IGT_sample space**
+
 Neighborhood optimization in TOTALVI
 d = 30 because 30 dims in TOTALVI
-Tip: best to have a distribution peaking between 50 and 100. Otherwise you might consider rerunning makeNhoods increasing k and/or prop. here changed k from 10 to 25. 
+Tip: best to have a distribution peaking between 50 and 100. Otherwise you might consider rerunning makeNhoods increasing k and/or prop. 
 Tip: can use the same k than for UMAP
 Tip: average neighbourhood size over 5 x N_samples (in the interested condition, e.g. colon)
 Tip:Prop 0.1 if <30K cells, 0.05 for larger. but it also depends on the sample size: if few cells in one condition (e.g. skin), need to increase prop to cover them
@@ -279,15 +142,15 @@ sce = as.SingleCellExperiment(so)
 mi = Milo(sce)
 
 #optimize k and prop
-pdf("milo_neighborhood_optimization.pdf", 10,10)
+pdf("neighborhood_optimization.pdf", 10,10, useDingbats = F)
 k_s = seq(10, 50, by = 10)
 prop_s = seq(0.1, 0.5, by = 0.1)
 for (k in k_s) {
     print(sprintf("k = %s",k))
     for (prop in prop_s) {
         print(sprintf("prop = %s",prop))
-        mi = buildGraph(mi, k = k, d = 30, reduced.dim = "TOTALVI") #d = 30 because 30 dims in TOTALVI
-        mi = makeNhoods(mi, reduced_dims = "TOTALVI", prop = prop, k = k, d = 30, refined = TRUE) #use same k and d as above
+        mi = buildGraph(mi, k = k, d = 30, reduced.dim = milo.dim) #d = 30 because 30 dims in TOTALVI
+        mi = makeNhoods(mi, reduced_dims = milo.dim, prop = prop, k = k, d = 30, refined = TRUE) #use same k and d as above
         
         print(plotNhoodSizeHist(mi, bins = 50) + ggtitle(sprintf("k=%s prop = %s", k, prop)) )
     }
@@ -297,17 +160,11 @@ dev.off()
 ```
 
 Running with  d=30, k=30, prop=10%
-(running with  d=30, k=50, prop=50%)
+( d=30, k=50, prop=50%: neighborhhod more dense, might be better to see more subtle signal)
 ```{r}
-mi = buildGraph(mi, k = 50, d = 30, reduced.dim = "TOTALVI") #d = 30 because 30 dims in TOTALVI
-mi = makeNhoods(mi, reduced_dims = "TOTALVI", prop = 0.5, k = 50, d = 30, refined = TRUE) #use same k and d as above
+mi = buildGraph(mi, k = 30, d = 30, reduced.dim = milo.dim) #d = 30 because 30 dims in TOTALVI, can use the same k than for UMAP
+mi = makeNhoods(mi, reduced_dims = milo.dim, prop = 0.1, k = 30, d = 30, refined = TRUE) #refinement_scheme="graph" for faster, use same k and d as above. Prop 0.1 is <30K cells, 0.05 for larger;
 mi = buildNhoodGraph(mi)
-#saveRDS(da_results.1, "milo_da_results.1_k50_prop50.Rds")
-
-mi = buildGraph(mi, k = 30, d = 30, reduced.dim = "TOTALVI") #d = 30 because 30 dims in TOTALVI, can use the same k than for UMAP
-mi = makeNhoods(mi, reduced_dims = "TOTALVI", prop = 0.1, k = 30, d = 30, refined = TRUE) #use same k and d as above. Prop 0.1 is <30K cells, 0.05 for larger
-mi = buildNhoodGraph(mi)
-saveRDS(mi, "milo_object_k30_prop10.Rds")
 
 plotNhoodSizeHist(mi) + ggtitle("") #best to have a distribution peaking between 50 and 100. Otherwise you might consider rerunning makeNhoods increasing k and/or prop. here changed k from 10 to 25. average neighbourhood size over 5 x N_samples
 
@@ -316,26 +173,28 @@ mi = countCells(mi, meta.data = data.frame(mi@colData), samples="sample_id")
 
 head(nhoodCounts(mi))
 
+saveRDS(mi, "milo_object_k30_prop10.Rds")
+
 ```
 
 Create the design matrix
 
 ```{r}
 mi = readRDS("milo_object_k30_prop10.Rds")
+
+#Add metadata if needed
+all(colnames(so) == colnames(mi))
+mi$Cluster_totalvi20240525rmigtsample_Res0.5 = so$Cluster_totalvi20240525rmigtsample_Res0.5[colnames(mi)]
+
 #create the design matrix
-mi$organ_simplified = mi$organ
-mi$organ_simplified[grep(pattern = "lymph node|LN", mi$organ)] = "lymph node"
-mi$organ_simplified[grep(pattern = "skin", mi$organ)] = "skin"
-mi$organ_simplified[grep(pattern = "colon", mi$organ)] = "colon"
-mi$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", mi$organ)] = "small intestine"
-mi$organ_simplified[is.na(mi$organ)] = "spleen"
-unique(mi$organ_simplified)
-mi$condition_broad[is.na(mi$condition_broad)] = "healthy"
+mi$organ_simplified.orig = mi$organ_simplified
+mi$condition_detailed.orig = mi$condition_detailed
+mi$sex.orig = mi$sex
 mi$organ_simplified = make.names(mi$organ_simplified)
-mi$condition_broad = make.names(mi$condition_broad)
+mi$condition_detailed = make.names(mi$condition_detailed)
 mi$sex = make.names(mi$sex)
 
-design = data.frame(mi@colData[,c("sample_id", "organ_simplified", "condition_broad", "sex")])
+design = data.frame(mi@colData[,c("sample_id", "organ_simplified", "condition_detailed", "sex")])
 #design$organ_simplified = make.names(design$organ_simplified)
 #design$condition_broad = make.names(design$condition_broad)
 design = distinct(design)
@@ -344,22 +203,67 @@ rownames(design) = design$sample_id
 design = design[colnames(nhoodCounts(mi)), , drop=FALSE]
 design
 
-#mi = calcNhoodDistance(mi, d=30, reduced.dim = "TOTALVI")
+
+```
+
+Milo uses an adaptation of the Spatial FDR correction introduced by cydar, where we correct p-values accounting for the amount of overlap between neighbourhoods. Specifically, each hypothesis test P-value is weighted by the reciprocal of the kth nearest neighbour distance. To use this statistic we first need to store the distances between nearest neighbors in the Milo object.
+```{r}
+#optional: takes too long for now
+#mi = calcNhoodDistance(mi, d=30, reduced.dim = milo.dim)
+```
+
+Custom UMAP of DA_res: Plot results in the original UMAP
+Key: mi@nhoodIndex isindex cells for UMAP
+```{r}
+
+# i = 1
+# da_res = da_results[[i]]
+# nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])]
+# color_by = "organ_simplified"
+# color_by = NULL
+# alpha = 0.5
+# umap_to_plot = sprintf("umap_%s",tolower(milo.dim))
+# title = names(da_results)[i]
+
+DA_UMAP = function(so = so, da_res = da_results[[i]], nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i]) {
+    df1 = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[,1], dim2 = so[[umap_to_plot]]@cell.embeddings[,2])
+    df2 = data.frame(da_res, dim1 = so[[umap_to_plot]]@cell.embeddings[nhoodIndex,1], dim2 = so[[umap_to_plot]]@cell.embeddings[nhoodIndex,2])
+    
+    plot1 = ggplot(df1) + geom_point_rast(aes(dim1, dim2), alpha = I(0.1), raster.dpi = 100) 
+    plot2 = geom_point(data = df2, aes(dim1, dim2, color = logFC, size = PValue<0.05), alpha = I(1)) #-log10(PValue)
+    p = plot1+plot2+ theme_minimal() + scale_color_gradientn(colours = ColorRamp) + ggtitle(title) + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_text(size=10), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+    
+    return(p)
+    
+}
+
+# i = 1
+# da_res = da_results[[i]]
+# DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_res)[i])
+
+```
+
+```{r}
+# alternative to pass multiple comparison at a time: this is the edgeR code called by `testNhoods` but the results are confusing, so not recommended.
+# model = model.matrix(~ 0 + organ_simplified, data=design.sub)
+# mod.constrast = makeContrasts(contrasts=contrasts, levels=model)
+# mod.constrast
+# contrast1.res = testNhoods(mi, design = ~ organ_simplified, design.df=design.sub, fdr.weighting="graph-overlap", model.contrasts = mod.constrast, reduced.dim = milo.dim, norm.method="TMM")
 ```
 
 make contrasts one organ vs all the others in Healthy and plots UMAP
+--> prefix = "daresults_OrgansInHealthy"
 ```{r}
-prefix = "milo_totalvi_daresults_OrganinHealthy"
+prefix = "daresults_OrgansInHealthy"
 
 group = as.character(mi$organ_simplified)
-group[!mi$condition_broad %in% c("healthy")] = "notincluded"
+group[!mi$condition_detailed %in% c("baseline")] = "notincluded"
 group = factor(group)
 x = levels(group)
 x = x[x != "notincluded"]
 
-design.sub = design[design$condition_broad %in% c("healthy"),]
+design.sub = design[design$condition_detailed %in% c("baseline"),]
 design.sub$organ_simplified = factor(design.sub$organ_simplified)
-
 contrasts = sapply(x, FUN = function(i) sprintf("organ_simplified%s-(%s)/%s", i, paste(sprintf("organ_simplified%s",x[x!= i]), collapse = "+"), length(x)-1)) #"organ_simplifiedspleen - organ_simplifiedcolon" # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel> 
 namescontrasts = paste(x, "_vs_OtherOrgansInHealthy", sep = "")
 names(contrasts) = namescontrasts
@@ -368,14 +272,417 @@ contrasts
 da_results = list()
 for (i in 1:length(contrasts)) {
     print(i)
-    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + organ_simplified, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0+ organ_simplified, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM") #doesn't work if not 0+
 }
-#saveRDS(da_results, "milo_totalvi_daresults_healthytissues_milo.Rds")
+# saveRDS(da_results, sprintf("%s_milo.Rds",prefix))
 
-da_results = readRDS("milo_totalvi_daresults_healthytissues_milo.Rds")
+# alternative to pass multiple comparison at a time: this is the edgeR code called by `testNhoods` but the results are confusing, so not recommended.
+# model = model.matrix(~ 0 + organ_simplified, data=design.sub)
+# mod.constrast = makeContrasts(contrasts=contrasts, levels=model)
+# mod.constrast
+# contrast1.res = testNhoods(mi, design = ~ organ_simplified, design.df=design.sub, fdr.weighting="graph-overlap", model.contrasts = mod.constrast, reduced.dim = milo.dim, norm.method="TMM")
+
+da_results = readRDS(sprintf("%s_milo.Rds",prefix))
+table(da_results[[1]]$SpatialFDR < 0.1)
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    p = DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i])
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s_plotDAbeeswarm.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    coldata_col = "Cluster_totalvi20240525rmigtsample_Res0.5"
+    da_res = annotateNhoods(mi, da_res , coldata_col = coldata_col)
+    da_res[[coldata_col]] = ifelse(da_res[[sprintf("%s_fraction",coldata_col)]] < 0.7, "Mixed", da_res[[coldata_col]])
+    #alpha = max(da_res$SpatialFDR[da_res$PValue<0.05]) if using miloR::plotDAbeeswarm
+    #y_lim = round(max(abs(da_res$logFC)))*1.1
+    da_res[[coldata_col]] = factor(da_res[[coldata_col]], levels = c(levels(so[[coldata_col]][,1]), "Mixed"))
+    p = MyplotDAbeeswarm(da_res, group.by = coldata_col, alpha = 0.05) + scale_color_gradient2(low = ColorRamp[1], mid = ColorRamp[50], high = ColorRamp[100],midpoint = 0 ) + ggtitle(names(da_results)[i]) #+ scale_color_gradient2(low = viridis(100)[1], mid = viridis(100)[50], high = viridis(100)[100], midpoint = 0 ) 
+    tryCatch(print(p), error = function(e) {message("too few data points")})
+}
+dev.off()
+
+
+```
+
+make contrasts condition_detailed in lung
+-->prefix = "daresults_ConditionDetailedInLung"
+```{r}
+prefix = "daresults_ConditionDetailedInLung"
+
+exclusion_column = "organ_simplified"
+contrast_column = "condition_detailed"
+
+group = as.character(mi[[contrast_column]])
+group[!mi[[exclusion_column]] %in% c("lung")] = "notincluded"
+group = factor(group)
+x = levels(group)
+x = x[x != "notincluded"]
+
+design.sub = design[design[[exclusion_column]] %in% c("lung"),]
+design.sub[[contrast_column]] = factor(design.sub[[contrast_column]])
+
+contrasts = sapply(x[x!="baseline"], FUN = function(i) sprintf("%s%s-%s%s", contrast_column,i, contrast_column, "baseline")) #"organ_simplifiedspleen - organ_simplifiedcolon" # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel> 
+namescontrasts = paste(x[x!="baseline"], "_vs_BaselineInLung", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+da_results = list()
+for (i in 1:length(contrasts)) {
+    print(i)
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_detailed, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
+}
+# saveRDS(da_results, sprintf("%s_milo.Rds",prefix))
+
+da_results = readRDS(sprintf("%s_milo.Rds",prefix))
+table(da_results[[1]]$SpatialFDR < 0.1)
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    p = DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i])
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s_plotDAbeeswarm.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    coldata_col = "Cluster_totalvi20240525rmigtsample_Res0.5"
+    da_res = annotateNhoods(mi, da_res , coldata_col = coldata_col)
+    da_res[[coldata_col]] = ifelse(da_res[[sprintf("%s_fraction",coldata_col)]] < 0.7, "Mixed", da_res[[coldata_col]])
+    #alpha = max(da_res$SpatialFDR[da_res$PValue<0.05]) if using miloR::plotDAbeeswarm
+    #y_lim = round(max(abs(da_res$logFC)))*1.1
+    da_res[[coldata_col]] = factor(da_res[[coldata_col]], levels = c(levels(so[[coldata_col]][,1]), "Mixed"))
+    p = MyplotDAbeeswarm(da_res, group.by = coldata_col, alpha = 0.05) + scale_color_gradient2(low = ColorRamp[1], mid = ColorRamp[50], high = ColorRamp[100],midpoint = 0 ) + ggtitle(names(da_results)[i]) #+ scale_color_gradient2(low = viridis(100)[1], mid = viridis(100)[50], high = viridis(100)[100], midpoint = 0 ) 
+    tryCatch(print(p), error = function(e) {message("too few data points")})
+}
+dev.off()
+
+```
+
+make contrasts condition_detailed in Colon
+-->prefix = "daresults_ConditionDetailedInColon"
+```{r}
+prefix = "daresults_ConditionDetailedInColon"
+
+exclusion_column = "organ_simplified"
+contrast_column = "condition_detailed"
+
+group = as.character(mi[[contrast_column]])
+group[!mi[[exclusion_column]] %in% c("colon")] = "notincluded"
+group = factor(group)
+x = levels(group)
+x = x[x != "notincluded"]
+
+design.sub = design[design[[exclusion_column]] %in% c("colon"),]
+design.sub[[contrast_column]] = factor(design.sub[[contrast_column]])
+
+contrasts = sapply(x[x!="baseline"], FUN = function(i) sprintf("%s%s-%s%s", contrast_column,i, contrast_column, "baseline")) #"organ_simplifiedspleen - organ_simplifiedcolon" # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel> 
+namescontrasts = paste(x[x!="baseline"], "_vs_BaselineInColon", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+da_results = list()
+for (i in 1:length(contrasts)) {
+    print(i)
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_detailed, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
+}
+#saveRDS(da_results, sprintf("%s_milo.Rds",prefix))
+
+da_results = readRDS(sprintf("%s_milo.Rds",prefix))
+table(da_results[[1]]$SpatialFDR < 0.1)
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    p = DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i])
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s_plotDAbeeswarm.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    coldata_col = "Cluster_totalvi20240525rmigtsample_Res0.5"
+    da_res = annotateNhoods(mi, da_res , coldata_col = coldata_col)
+    da_res[[coldata_col]] = ifelse(da_res[[sprintf("%s_fraction",coldata_col)]] < 0.7, "Mixed", da_res[[coldata_col]])
+    #alpha = max(da_res$SpatialFDR[da_res$PValue<0.05]) if using miloR::plotDAbeeswarm
+    #y_lim = round(max(abs(da_res$logFC)))*1.1
+    da_res[[coldata_col]] = factor(da_res[[coldata_col]], levels = c(levels(so[[coldata_col]][,1]), "Mixed"))
+    p = MyplotDAbeeswarm(da_res, group.by = coldata_col, alpha = 0.05) + scale_color_gradient2(low = ColorRamp[1], mid = ColorRamp[50], high = ColorRamp[100],midpoint = 0 ) + ggtitle(names(da_results)[i]) #+ scale_color_gradient2(low = viridis(100)[1], mid = viridis(100)[50], high = viridis(100)[100], midpoint = 0 ) 
+    tryCatch(print(p), error = function(e) {message("too few data points")})
+}
+dev.off()
+
+```
+
+make contrasts condition_detailed in Spleen
+-->prefix = "daresults_ConditionDetailedInSpleen"
+```{r}
+prefix = "daresults_ConditionDetailedInSpleen"
+
+exclusion_column = "organ_simplified"
+contrast_column = "condition_detailed"
+
+group = as.character(mi[[contrast_column]])
+group[!mi[[exclusion_column]] %in% c("spleen")] = "notincluded"
+group = factor(group)
+x = levels(group)
+x = x[x != "notincluded"]
+x
+
+design.sub = design[design[[exclusion_column]] %in% c("spleen"),]
+design.sub[[contrast_column]] = factor(design.sub[[contrast_column]])
+head(design.sub)
+
+contrasts = sapply(x[x!="baseline"], FUN = function(i) sprintf("%s%s-%s%s", contrast_column,i, contrast_column, "baseline")) #"organ_simplifiedspleen - organ_simplifiedcolon" # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel> 
+namescontrasts = paste(x[x!="baseline"], "_vs_BaselineInSpleen", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+da_results = list()
+for (i in 1:length(contrasts)) {
+    print(i)
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_detailed, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
+}
+#saveRDS(da_results, sprintf("%s_milo.Rds",prefix))
+
+da_results = readRDS(sprintf("%s_milo.Rds",prefix))
+table(da_results[[1]]$SpatialFDR < 0.1)
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    p = DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i])
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s_plotDAbeeswarm.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    coldata_col = "Cluster_totalvi20240525rmigtsample_Res0.5"
+    da_res = annotateNhoods(mi, da_res , coldata_col = coldata_col)
+    da_res[[coldata_col]] = ifelse(da_res[[sprintf("%s_fraction",coldata_col)]] < 0.7, "Mixed", da_res[[coldata_col]])
+    #alpha = max(da_res$SpatialFDR[da_res$PValue<0.05]) if using miloR::plotDAbeeswarm
+    #y_lim = round(max(abs(da_res$logFC)))*1.1
+    da_res[[coldata_col]] = factor(da_res[[coldata_col]], levels = c(levels(so[[coldata_col]][,1]), "Mixed"))
+    p = MyplotDAbeeswarm(da_res, group.by = coldata_col, alpha = 0.05) + scale_color_gradient2(low = ColorRamp[1], mid = ColorRamp[50], high = ColorRamp[100],midpoint = 0 ) + ggtitle(names(da_results)[i]) #+ scale_color_gradient2(low = viridis(100)[1], mid = viridis(100)[50], high = viridis(100)[100], midpoint = 0 ) 
+    tryCatch(print(p), error = function(e) {message("too few data points")})
+}
+dev.off()
+
+
+```
+
+make contrasts condition_detailed in LN
+-->prefix = "daresults_ConditionDetailedInLN"
+```{r}
+prefix = "daresults_ConditionDetailedInLN"
+
+exclusion_column = "organ_simplified"
+contrast_column = "condition_detailed"
+
+group = as.character(mi[[contrast_column]])
+group[!mi[[exclusion_column]] %in% c("LN")] = "notincluded"
+group = factor(group)
+x = levels(group)
+x = x[x != "notincluded"]
+x
+
+design.sub = design[design[[exclusion_column]] %in% c("LN"),]
+design.sub[[contrast_column]] = factor(design.sub[[contrast_column]])
+head(design.sub)
+
+contrasts = sapply(x[x!="baseline"], FUN = function(i) sprintf("%s%s-%s%s", contrast_column,i, contrast_column, "baseline")) #"organ_simplifiedspleen - organ_simplifiedcolon" # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel> 
+namescontrasts = paste(x[x!="baseline"], "_vs_BaselineInLN", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+
+da_results = list()
+for (i in 1:length(contrasts)) {
+    print(i)
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_detailed, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
+}
+saveRDS(da_results, sprintf("%s_milo.Rds",prefix))
+
+da_results = readRDS(sprintf("%s_milo.Rds",prefix))
+table(da_results[[1]]$SpatialFDR < 0.1)
+
+pdf(sprintf("%s_UMAP.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    p = DA_UMAP(so = so, da_res = da_res, nhoodIndex = colnames(mi)[unlist(mi@nhoodIndex[da_res$Nhood])], umap_to_plot = sprintf("umap_%s",tolower(milo.dim)), title = names(da_results)[i])
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s_plotDAbeeswarm.pdf", prefix), 10,10, useDingbats = F)
+for (i in 1:length(da_results)) {
+    print(names(da_results)[i])
+    da_res = da_results[[i]]
+    coldata_col = "Cluster_totalvi20240525rmigtsample_Res0.5"
+    da_res = annotateNhoods(mi, da_res , coldata_col = coldata_col)
+    da_res[[coldata_col]] = ifelse(da_res[[sprintf("%s_fraction",coldata_col)]] < 0.7, "Mixed", da_res[[coldata_col]])
+    #alpha = max(da_res$SpatialFDR[da_res$PValue<0.05]) if using miloR::plotDAbeeswarm
+    #y_lim = round(max(abs(da_res$logFC)))*1.1
+    da_res[[coldata_col]] = factor(da_res[[coldata_col]], levels = c(levels(so[[coldata_col]][,1]), "Mixed"))
+    p = MyplotDAbeeswarm(da_res, group.by = coldata_col, alpha = 0.05) + scale_color_gradient2(low = ColorRamp[1], mid = ColorRamp[50], high = ColorRamp[100],midpoint = 0 ) + ggtitle(names(da_results)[i]) #+ scale_color_gradient2(low = viridis(100)[1], mid = viridis(100)[50], high = viridis(100)[100], midpoint = 0 ) 
+    tryCatch(print(p), error = function(e) {message("too few data points")})
+}
+dev.off()
+
+```
+
+
+TO DO next
+sex in healthy tissues #specific genes: c("Xist","Eif2s3y","Ddx3y","Kdm5d","Uty","Gm34590")
+Sex effect in one disease, in different tissues
+```{r}
+prefix = "milo_totalvi_daresults_sex"
+#da_results = readRDS(sprintf("%s_daresults.Rds", prefix))
+table(mi$sex, mi$organ_simplified)
+#foxus on organs with male and female cells in healthy
+
+group = as.character(mi$sex)
+group[!mi$condition_broad %in% c("healthy")] = "notincluded"
+group[mi$sex %in% c("NA.")] = "notincluded"
+group[!mi$organ_simplified %in% c("colon", "kidney", "liver", "lung", "lymph.node", "skin", "small.intestine", "spleen", "submandibular.gland")] = "notincluded"
+group = factor(group)
+table(group)
+x = levels(group)
+x = x[x != "notincluded"]
+
+design.sub = design[design$sex %in% c("female", "male") & design$condition_broad %in% c("healthy") & design$organ_simplified %in% c("colon", "kidney", "liver", "lung", "lymph.node", "skin", "small.intestine", "spleen", "submandibular.gland"),]
+design.sub$sex = factor(design.sub$sex)
+design.sub$organ_simplified = factor(design.sub$organ_simplified)
+design.sub$condition_broad = factor(design.sub$condition_broad)
+
+contrasts = "sexfemale-sexmale"
+names(contrasts) = "Female_vs_MaleInHealthy"
+contrasts
+
+da_results = list()
+for (i in 1:length(contrasts)) {
+    print(i)
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + sex, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
+}
+
 table(da_results[[1]]$SpatialFDR < 0.1)
 
 #UMAP plots
+library("patchwork")
+library("EnhancedVolcano")
+library("scater")
+
+umap_pl = plotReducedDim(mi[,mi$condition_broad %in% c("healthy") & mi$sex %in% c("female", "male")  & mi$organ_simplified %in% c("colon", "kidney", "liver", "lung", "lymph.node", "skin", "small.intestine", "spleen", "submandibular.gland")], dimred = "UMAP_TOTALVI", colour_by="sex", text_by = "sex", text_size = 3, point_size=0.5) + guides(fill="none") #change to the same conditions as design.sub
+for (i in 1:length(da_results)) {
+    print(i)
+    da_results[[i]]$log2FC = da_results[[i]]$logFC/log(2)
+    pdf(sprintf("%s_%s_volcano.pdf", prefix, names(da_results)[i]), 10,10)
+    p = EnhancedVolcano(da_results[[i]], lab = da_results[[i]]$Nhood, x = 'log2FC', y = 'SpatialFDR', pCutoff = 0.1, FCcutoff = 1, col=c('black', 'green', 'blue', 'red3'),title= names(da_results)[i],subtitle = NULL ) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+    print(p)
+    dev.off()
+    nh_graph_pl = plotNhoodGraphDA(mi, da_results[[i]], layout="UMAP_TOTALVI",alpha=0.1) + ggtitle(names(da_results)[i] )
+    pdf(sprintf("%s_%s_UMAP.pdf", prefix, names(da_results)[i]), 15,10)
+    print(umap_pl + nh_graph_pl + plot_layout(guides="collect"))
+    dev.off()
+}
+
+# logFC vs 1D UMAP
+for (i in 1:length(da_results)) {
+    print(i)
+    da_results[[i]]$cell_index = colnames(mi)[unlist(mi@nhoodIndex)]
+    da_results[[i]]$cell_index_umap1 = reducedDims(mi)[["UMAP_TOTALVI_1D"]][da_results[[i]]$cell_index,]
+}
+
+da_results_long = lapply(names(da_results), function(name) { da_results[[name]] %>% mutate(id = name) }) # Add an id column
+da_results_long = do.call(rbind, da_results_long)
+
+saveRDS(da_results, sprintf("%s_daresults.Rds", prefix))
+write.table(da_results_long, file = sprintf("%s_daresults.csv", prefix),sep = ",", row.names = F, col.names = T, quote = F)
+
+#ggplot(da_results[[i]], aes(x = cell_index_umap1, y = log2FC)) + geom_point(aes(color = SpatialFDR < 0.1)) + geom_smooth() + theme_bw()
+p = ggplot(da_results_long) + geom_smooth(aes(x = cell_index_umap1, y = log2FC, group = id, color = id)) + theme_bw() + scale_color_manual(values = mypal) + theme(legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+p2 = ggplot(da_results_long) + geom_smooth(aes(x = cell_index_umap1, y = log2FC)) + theme_bw() + theme(legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+pdf(sprintf("%s_FCumap1D.pdf", prefix), 15,10, useDingbats = F)
+print(p)
+print(p2)
+dev.off()
+
+##DEG and DEP in the female neighborhood: CAREFUL the analysis isn't female vs male but cells enriched in the female neighborhoods!! (containing male and female)
+mi = logNormCounts(mi)
+
+da_nhood_genes = list()
+da_nhood_proteins = list()
+
+i = "Female_vs_MaleInHealthy"
+
+group1 = da_results[[i]]$Nhood[da_results[[i]]$NhoodGroup == 1]
+group0 = da_results[[i]]$Nhood[da_results[[i]]$NhoodGroup == 0]
+group1 = names(which(rowSums(mi@nhoods[,group1])>1 & mi$condition_broad %in% c("healthy") & mi$sex %in% c("female", "male")  & mi$organ_simplified %in% c("colon", "kidney", "liver", "lung", "lymph.node", "skin", "small.intestine", "spleen", "submandibular.gland")))
+group0 = names(which(rowSums(mi@nhoods[,group0])>1 & mi$condition_broad %in% c("healthy") & mi$sex %in% c("female", "male")  & mi$organ_simplified %in% c("colon", "kidney", "liver", "lung", "lymph.node", "skin", "small.intestine", "spleen", "submandibular.gland")))
+so$groups = NA
+so$groups[colnames(so) %in% group1] = "group1"
+so$groups[colnames(so) %in% group0] = "group0"
+Idents(so) = "groups"
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+da_nhood_proteins[[i]] = FindMarkers(so, ident.1 = 'group1', ident.2 = 'group0', assay = 'ADT', slot = "data", logfc.threshold = 0, min.pct = 0, pseudocount.use = 1)
+
+p = EnhancedVolcano(da_nhood_proteins[[i]], lab = rownames(da_nhood_proteins[[i]]), x = 'avg_log2FC', y = 'p_val', pCutoff = 0.05, FCcutoff = 0.5,drawConnectors = TRUE, col=c('black', 'black', 'black', 'red3'),subtitle = NULL, title= i ) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+pdf(sprintf("%s_%s_proteinvolcano.pdf", prefix, i), 10, 10, useDingbats = F)
+print(p)
+dev.off()
+
+da_nhood_genes[[i]] = FindMarkers(so, ident.1 = 'group1', ident.2 = 'group0', assay = 'RNA', slot = "data", logfc.threshold = 0, min.pct = 0.1, pseudocount.use = 1)
+
+da_nhood_genes[[i]][c("Xist","Eif2s3y","Ddx3y","Kdm5d","Uty","Gm34590"),]
+
+p = EnhancedVolcano(da_nhood_genes[[i]], lab = rownames(da_nhood_genes[[i]]), x = 'avg_log2FC', y = 'p_val', pCutoff = 0.05, FCcutoff = 0.5, drawConnectors = TRUE, col=c('black', 'black', 'black', 'red3'),subtitle = NULL, title= i ) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+pdf(sprintf("%s_%s_genevolcano.pdf", prefix, i), 10, 10, useDingbats = F)
+print(p)
+dev.off()
+
+# write DEG and DEP
+da_nhood_genes_long = lapply(names(da_nhood_genes), function(name) { da_nhood_genes[[name]] %>% mutate(id = name) }) # Add an id column
+da_nhood_genes_long = do.call(rbind, da_nhood_genes_long)
+saveRDS(da_nhood_genes, sprintf("%s_da_nhood_genes.Rds", prefix))
+write.table(da_nhood_genes_long, file = sprintf("%s_da_nhood_genes.csv", prefix),sep = ",", row.names = F, col.names = T, quote = F)
+
+da_nhood_proteins
+
+da_nhood_proteins_long = lapply(names(da_nhood_proteins), function(name) { da_nhood_proteins[[name]] %>% mutate(id = name) }) # Add an id column
+da_nhood_proteins_long = do.call(rbind, da_nhood_proteins_long)
+saveRDS(da_nhood_proteins_long, sprintf("%s_da_nhood_proteins.Rds", prefix))
+write.table(da_nhood_proteins_long, file = sprintf("%s_da_nhood_proteins.csv", prefix),sep = ",", row.names = F, col.names = T, quote = F)
+
+```
+
+
+
+
+
+
+##########
+
+
+UMAP plots
+```{r}
 library("patchwork")
 library("EnhancedVolcano")
 library("scater")
@@ -464,7 +771,7 @@ contrasts["Healthy_vs_DiseaseInColon"] = sprintf("condition_broadhealthy-(%s)/%s
 da_results = list()
 for (i in 1:length(contrasts)) {
     print(i)
-    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_broad, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + condition_broad, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
 }
 
 table(da_results[[1]]$SpatialFDR < 0.1)
@@ -636,7 +943,7 @@ contrasts
 da_results = list()
 for (i in 1:length(contrasts)) {
     print(i)
-    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + sex, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
+    da_results[[names(contrasts)[i]]] = testNhoods(mi, design = ~ 0 + sex, design.df = design.sub, model.contrasts = contrasts[i], fdr.weighting="graph-overlap", reduced.dim = milo.dim, norm.method="TMM")
 }
 
 table(da_results[[1]]$SpatialFDR < 0.1)
@@ -843,64 +1150,5 @@ highlight specific diseases and bugs too
 **Study disease effect in a specific organ: milo in TOTALVI space in LUNG**
 
 **Study disease effect: milo in TOTALVI space done removing the organ_simplified confounding**
-
-
-**OLD CODE**
-```{r}
-
-
-contrast.2 <- c("condition_broadhealthy - condition_broadbacteria") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-da_results.2 = testNhoods(mi, design = ~ 0 + condition_broad, design.df = design, model.contrasts = contrast.2, fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
-table(da_results.2$SpatialFDR < 0.1)
-
-contrast.3 <- c("condition_broadhealthy - condition_broadautoimmune") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-da_results.3 = testNhoods(mi, design = ~ 0 + condition_broad, design.df = design, model.contrasts = contrast.3, fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
-table(da_results.3$SpatialFDR < 0.1)
-
-contrast.4 = c("condition_broadhealthy - condition_broadbacteria") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-da_results.4 = testNhoods(mi, design = ~ 0+ organ_simplified + condition_broad, design.df = design2, model.contrasts = contrast.4, fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
-table(da_results.4$SpatialFDR < 0.1)
-
-# With contrasts
-contrast.1 <- c("organ_simplifiedspleen - organ_simplifiedcolon") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-da_results.1 = testNhoods(mi, design = ~ 0 + organ_simplified, design.df = design, model.contrasts = contrast.1, fdr.weighting="graph-overlap", reduced.dim = "TOTALVI", norm.method="TMM")
-
-pdf("milo_spleen_vs_colon_neighborhood_volcano_k30_prop10.pdf", 10,10)
-p = ggplot(da_results.1, aes(logFC, -log10(SpatialFDR))) + 
-    geom_point() +
-    geom_hline(yintercept = 1) + ## Mark significance threshold (10% FDR)
-    theme_bw() +
-    theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
-print(p)
-dev.off()
-   
-table(da_results.1$SpatialFDR < 0.1)
-
-mi = buildNhoodGraph(mi)
-
-umap_pl = plotReducedDim(mi, dimred = "UMAP_TOTALVI", colour_by="organ_simplified", text_by = "organ_simplified", text_size = 3, point_size=0.5) + guides(fill="none")
-nh_graph_pl = plotNhoodGraphDA(mi, da_results.1, layout="UMAP_TOTALVI",alpha=0.1)
-pdf("milo_spleen_vs_colon_neighborhood_UMAP_k50_prop50.pdf", 15,10)
-print(umap_pl + nh_graph_pl + plot_layout(guides="collect"))
-dev.off()
-
-# mi@nhoodIndex represent the index cell
-unlist(mi@nhoodIndex)
-colnames(mi)[unlist(mi@nhoodIndex)]
-plot(so[["umap_totalvi"]]@cell.embeddings[colnames(mi)[unlist(mi@nhoodIndex)],])
-# nhoodCounts could be used to calculate the nhood size if wanted to plot
-da_results.1$cell_index = colnames(mi)[unlist(mi@nhoodIndex)]
-da_results.1$cell_index_umap1 = so[["umap_totalvi"]]@cell.embeddings[colnames(mi)[unlist(mi@nhoodIndex)],1]
-da_results.1$cell_index_umap2 = so[["umap_totalvi"]]@cell.embeddings[colnames(mi)[unlist(mi@nhoodIndex)],2]
-
-saveRDS(mi, "milo_object_k30_prop10.Rds")
-write.table(da_results.1, file = "milo_da_results.1_k30_prop10.csv", sep = ",", row.names = F,col.names = T)
-
-saveRDS(mi, "milo_object_k50_prop50.Rds")
-
-
-
-```
 
 

@@ -1,0 +1,140 @@
+---
+title: "metadata_update.Rmd"
+output: html_document
+date: "2024-05-29"
+---
+
+
+Most uptodate
+```{r}
+
+
+so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
+```
+
+
+Load seurat object
+```{r}
+#IGT1-56 subsets
+prefix = "totalvi_igt1_56_20240306_allgenes"
+to_subset = "Treg"
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+# so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+
+so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
+```
+
+Load metadata csv file
+```{r}
+#m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
+m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv",header = T, sep = ",")
+```
+
+update the metadata in seurat object
+```{r}
+
+#Remvoe unwanted columns in Sample_metadata csv
+m$ht_number = NULL
+m$igt_number = NULL
+
+#m$sample_id = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = ".")
+#so$sample_id = paste(so$IGT, so$hashtag_number, sep = ".")
+
+someta = so@meta.data
+someta$cell_barcode = NULL
+someta$seurat_clusters = NULL
+someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number")))]
+m2 = merge(someta, m, by  = "sample_id", all.x = T)
+#Any missing data in sample_metadata?
+m2$sample_id[which(is.na(m2$exp_number))]
+m2$is_spleen_standard[which(is.na(m2$exp_number))] #missing metadata about spleen standards!!
+m2$colnames[which(is.na(m2$exp_number))]
+m2$sample_id[which(is.na(m2$exp_number))]
+
+all(m2$colnames %in% rownames(so@meta.data))
+rownames(m2) = m2$colnames
+m2 = m2[rownames(so@meta.data),]
+all(m2$colnames %in% rownames(so@meta.data))
+
+so@meta.data = m2
+
+#Adjust colnames(so) that was modified when merged
+message("check colnames to be IGT.BARCODE")
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, colnames(so))
+all(matches)
+#and adjust colnames if needed:
+unique(so$IGT[which(matches == F)])
+#Adjust colnames(so) 
+#pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = colnames(so)
+sample(colnames(so), 100)
+pattern = "(\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
+sample(so$colnames, 100)
+unique(so$IGT[!grepl("^IGT", so$colnames)])
+so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
+sample(so$colnames, 10)
+any(duplicated(so$colnames))
+#recheck
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#so@meta.data[which(matches == F),]
+if(all(matches)) {colnames(so) = so$colnames}
+all(grepl(pattern, colnames(so)))
+
+removeDuplicateColumns <- function(df) {
+    # Determine unique columns by comparing all pairs
+    uniqueCols <- !duplicated(as.list(df))
+    # Subset dataframe to keep only unique columns
+    dfUnique <- df[, uniqueCols]
+    print(colnames(df)[!uniqueCols])
+    return(dfUnique)
+}
+
+df = so@meta.data
+so@meta.data = removeDuplicateColumns(so@meta.data)
+#removes usually immgent_IGT_10xlane_id,hashtag_number.y,tumor,tumor_days,X: empty of repeated
+
+#remove .x or .y at the end of any colnames
+colnames(so@meta.data) = gsub("\\.x$|\\.y$","", colnames(so@meta.data))
+
+#add sample_id: IGT.HT. Now in sample_name_david in the metadata file
+#so$sample_id_david = paste(so$IGT, so$hashtag_number.x, sep = ".")
+
+#order IGT
+unique(so$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
+so$IGT = factor(so$IGT, levels = ordered_vector)
+
+#annotate spleen control samples, if missing: should not be necessary anymore
+#so$organ[is.na(so$organ)] = "spleen"
+#so$condition_broad[is.na(so$condition_broad)] = "healthy"
+
+#organ_simplified
+so$organ_simplified = so$organ
+so$organ_simplified[grep(pattern = "lymph node", so$organ)] = "LN"
+so$organ_simplified[grep(pattern = "skin", so$organ)] = "skin"
+so$organ_simplified[grep(pattern = "colon", so$organ)] = "colon"
+so$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", so$organ)] = "small intestine"
+#table(so$organ, so$organ_simplified)
+
+#add is_spleen_healthy (spleen control)
+so$is_spleen_healthy = F
+so$is_spleen_healthy[so$organ == "spleen" & so$condition_broad == "healthy"] = T
+so$is_spleen_healthy_igt = so$is_spleen_healthy
+so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_spleen_healthy == T])
+#table(so$is_spleen_healthy_igt, so$IGT)
+
+```
+
+Save
+```{r}
+saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
+```
+
+

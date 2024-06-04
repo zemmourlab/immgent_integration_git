@@ -24,7 +24,9 @@ module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
 #sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
 
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
 #cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
 
 R
@@ -144,38 +146,7 @@ ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
     return(so.v3)
 }
 
-Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
-  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
-  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
-  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
-  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
-  annotation_logticks(sides = "b") +
-  xlab(xlab) +
-  theme_bw() +
-  ylab("p value") +
-  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
-  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
-    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
-    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
-    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
-    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
-  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
-    annotation_logticks(sides = "bl") +
-    xlab(xlab) +
-    ylab(ylab) +
-    ggtitle(main) +
-    theme_bw() +
-    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-
-
-#PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
+PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
 
     so = seurat_object
     so@meta.data[,"split_by"] = so@meta.data[,split_by]
@@ -225,20 +196,6 @@ FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext 
     }
     
 }
-
-SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
-  newpal = c()
-  for (c in 1:length(splitvector)){
-    #print(c)
-    n = splitvector[c]
-    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
-    newcol[4,] = seq(50, 255, length.out = n)
-    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
-  }
-  return(newpal)
-}
-sp = SplitColors
-#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
 
 library(org.Hs.eg.db)
 hs = org.Hs.eg.db
@@ -2348,8 +2305,6 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts:
 
 **TOTAL-VI INTEGRATION for Kaplan and Mackay all genes**
 
-
-
 INTEGRATION AND PLOTS
 see github immgent_integration_git for latest code
 ```{bash}
@@ -2359,7 +2314,6 @@ SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240412.sh #run the 2 following scripts: 
 #Rscript run_totalvi.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky IGT47_66_Rocky.Rds totalvi_igt47_66_rocky_20240412
 #Rscript $SCRIPT_DIR/run_totalvi_plot.R /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT47_66_Rocky totalvi_igt47_66_rocky_20240412
-
 
 ```
 
@@ -2619,7 +2573,7 @@ for (i in 1:length(to_subset_list)) {
 ```
  
 **TOTAL-VI INTEGRATION IGT 1-56, all genes, removing organ effect using PYTHON SCRIPT**
-totalvi_igt1_56_20231030_allgenes_organregressed
+-->totalvi_igt1_56_20231030_allgenes_organregressed
 
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -2638,21 +2592,30 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
 
 ```
 
-
 **Run totalVI with ALL CELLS batch_key=IGT and categorical_covariate_keys=sample_id_david: totalvi_igt1_56_allgenes_sampleregressedout using PYTHON SCRIPT**
-
+--> totalvi_igt1_56_allgenes_20240526_igtsampleregressedout
 all cells
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240527.sh
-##run the following scripts: 
-#python $SCRIPT_DIR/run_totalvi.py $CWD $CWD/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu totalvi_igt1_56_20231030_allgenes_organregressed IGT organ_simplified X_totalVI_rmorgan
-#python $SCRIPT_DIR/run_totalvi_denoising_v2.py $CWD totalvi_igt1_56_20231030_allgenes_organregressed
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+#working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/
+#path_to_mudata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu
+#prefix=totalvi_igt1_56_allgenes_20240526_igtsampleregressedout
+#batchkey=IGT
+#categorical_covariate_keys=sample_id
+#corrected_counts=True
+#denoised_data=False
+
+#cd $working_dir
+
+#python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
 
 ```
 
-**Run totalVI with ALL CELLS batch_key=IGT and categorical_covariate_keys=sample_id_david on T cells and removing thymus**
+**Run totalVI with ALL CELLS batch_key=IGT and categorical_covariate_keys=sample_id_david on T cells only and removing thymus**
 Run removing non T cells and thymus
+-->totalvi_igt1_56_tcellonly_nothymus_igtsampleregressedout
 ```{bash}
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/
 ```
@@ -2707,6 +2670,147 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240527_2.sh
 #python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
 
 ```
+
+**Add new dims in seurat object Tregs**
+--> totalvi_igt1_56_allgenes_Treg_20240528_so.Rds
+
+Load data in R
+```{r}
+#IGT1-56 subsets
+prefix = "totalvi_igt1_56_20240306_allgenes"
+to_subset = "Treg"
+so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+# so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
+```
+
+update the metadata in seurat object : see metadata_update.Rmd
+
+Add new scvi dims in R Treg object
+```{r}
+setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+
+# sprintf("%s_X_SCVI_%s.csv", prefix, prefix2)
+
+AddSCVILatent = function(so, latent_file, prefix) {
+    totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
+    # pattern = "(IGT\\S*)_(\\d+)"
+    # rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+    colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+    #all(rownames(totalvi) == colnames(so))
+    totalvi = as.matrix(totalvi)
+    pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+    matches = grepl(pattern, rownames(totalvi))
+    if (!all(matches)) {
+        print("updating cell names in csv file, assuming same order as seurat object" )
+        #rownames(totalvi) = gsub(pattern = "(\\S*)_(\\d+)", replacement = "\\1", rownames(totalvi))
+        rownames(totalvi) = colnames(so)
+    }
+    totalvi = totalvi[colnames(so),]
+    if (all(colnames(so) == rownames(totalvi))) {
+        print("all cells ARE in the latent_file")
+        so[[prefix]] = CreateDimReducObject(embeddings = totalvi, key = prefix, assay = "RNA") #sprintf("totalvi_%s", prefix2)
+        so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = prefix, n.components = 2, reduction.name = sprintf("umap_%s", prefix))
+        return(so)
+    } else {
+        print("all cells ARE NOT in the latent_file")
+        return(so)
+    }
+}
+
+so[["umap_totalvi_20230306_rmIGT"]] = so[["umap_totalvi"]] 
+so[["totalvi_20230306_rmIGT"]] = so[["totalvi"]]
+
+so = AddSCVILatent(so, latent_file = "totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/latent.csv", prefix = "totalvi_20240525_rmigtsample")
+write.table(so[['umap_totalvi_20240525_rmigtsample']]@cell.embeddings, file = "totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/umap.csv", quote = F, sep = ",", row.names = T, col.names = T)
+
+
+```
+
+Plot UMAP
+
+```{r}
+message("loading R libraries and custom functions")
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal = mypal[-4]
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+length(glasbey())
+length(polychrome())
+mypal2 = c(glasbey(), polychrome(), mypal)
+names(mypal2) = NULL
+
+so[["RNA"]]$counts = as(so[["RNA"]]$counts, Class = "dgCMatrix")
+
+prefix = "totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout"
+umap_to_plot = "umap_totalvi_20240525_rmigtsample"
+
+pdf(sprintf("%s_UMAP_test.pdf", prefix), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "is_spleen_healthy",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "condition_broad",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "condition_detailed_organ",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "organ_simplified",
+        split_by2 =  NULL, 
+        genes = c("Foxp3", "Ccr7","Rorc", "Tbx21", "Pparg","Il1rl1", "Nr4a1", "Mki67", "Il10", "Il2ra", "Ctla4", "Ly6c1"), 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+dev.off()
+
+pdf(sprintf("%s_UMAP_conditionXorgan_test.pdf", prefix), 30, 90, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "hashtag_number", 
+        split_by1 = "condition_detailed",
+        split_by2 =  "organ_simplified", 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+dev.off()
+
+pdf(sprintf("%s_UMAP_genes.pdf", prefix), 10, 10, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = NULL,
+        split_by2 =  NULL, 
+        genes = c("Foxp3", "Ccr7","Rorc", "Tbx21", "Pparg","Il1rl1", "Nr4a1", "Mki67", "Il10", "Il2ra", "Ctla4", "Ly6c1"), 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+dev.off()
+#saveRDS(so, file = "totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
+```
+
 
 
 **Integration evaluation: conservation of HVG**
@@ -2786,47 +2890,6 @@ Compare sum of log2FC between RNA and protein to see how much RNA signal and pro
 - do sum of log2FC RNA
 - do sum of log2FC protein
 - are some clusters better identified by RNA or bny protein?
-
-
-**Install scvi and seurat v5 and scib**
-```{bash}
-
-module load python/anaconda-2022.05
-#conda env list
-
-mamba create -p /project/jfkfloor2/zemmourlab/david/envs/scvi python=3.9
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-
-mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
-mamba install jax jaxlib -c conda-forge
-
-mamba install scvi-tools -c conda-forge
-
-#check installation and GPU works:
-sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 —-mem=8GB
-module load python/anaconda-2022.05
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-#on midway3-0283 GPU
-import torch
-torch.cuda.is_available()
-#True
-torch.cuda.device_count()
-#1
-torch.cuda.current_device()
-#0
-torch.cuda.device(0)
-#torch.cuda.device object at 0x7f4d19f42af0>
-torch.cuda.get_device_name(0)
-#'Quadro RTX 6000'
-
-#install R in this environment
-mamba install -c conda-forge r-base=4.2 r-essentials r-reticulate
-#then install seuratv5, BP cells, ggrastr 
-module load hdf5/1.12.0 #for BPCells but also others
-
-#install scib
-pip install scib
-```
 
 
 
