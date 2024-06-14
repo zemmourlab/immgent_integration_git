@@ -1,5 +1,6 @@
 #custom functions
-
+#David Zemmour
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 
 
@@ -121,7 +122,37 @@ MyplotDAbeeswarm = function (da.res, group.by = NULL, alpha = 0.1, subset.nhoods
         theme_bw(base_size = 22) + theme(strip.text.y = element_text(angle = 0))
 }
 
-#VPlot and FCFCplot
+### TO run limma-trend DGE, VPlot and FCFCplot
+
+run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, confoundings = confoundings, formula.mod.matrix = formula.mod.matrix, contrasts =contrasts, gene_symbol= gene_symbol) { #count = count, dge = dge, 
+    suppressPackageStartupMessages(library(limma))
+    suppressPackageStartupMessages(library(edgeR))
+    message("limmatrend")
+    #dge = DGEList(count, group = group)
+    #dge = calcNormFactors(dge)
+    design = model.matrix(formula(formula.mod.matrix))
+    #colnames(design) = gsub("confoundings\\[\\[[0-9]\\]\\]", "", colnames(design))
+    colnames(design) = gsub(paste(c("group", sprintf("confoundings\\[\\[%s\\]\\]", 1:length(confoundings))), collapse = "|"), "", colnames(design))
+    cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+    colnames(cont.matrix) = names(contrasts)
+    #tmm = new("EList")
+    #message("TMM normalization")
+    #tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
+    message("lmFit")
+    fit = lmFit(tmm, design = design)
+    fit2 = contrasts.fit(fit, cont.matrix)
+    fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+    
+    tt_list = list()
+    for (i in colnames(cont.matrix)) {
+        print(i)
+        tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+        tt_list[[i]]$SYMBOL = gene_symbol
+    }
+    
+    return(tt_list)
+}
+
 
 Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
 p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
@@ -134,6 +165,73 @@ p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey
     ylab("p value") +
     theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
 return(p)
+}
+
+CollapseDiff_limmatrend = function(l) {
+    l = lapply(l, function(x) x = data.frame(x, rownames = rownames(x)))
+    
+    fc = data.frame(l[[1]][,c("rownames", "logFC")])
+    for (i in 2:length(l)) { fc = merge(x = fc, y = l[[i]][,c("rownames", "logFC")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    mean = data.frame(l[[1]][,c("rownames", "AveExpr")])
+    for (i in 2:length(l)) { mean = merge(x = mean, y = l[[i]][,c("rownames", "AveExpr")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    pv = data.frame(l[[1]][,c("rownames", "P.Value")])
+    for (i in 2:length(l)) { pv = merge(x = pv, y = l[[i]][,c("rownames", "P.Value")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    qcl = data.frame(l[[1]][,c("rownames", "adj.P.Val")])
+    for (i in 2:length(l)) { qcl = merge(x = qcl, y = l[[i]][,c("rownames", "adj.P.Val")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    rownames(fc) = fc[,1]
+    rownames(mean) = fc[,1]
+    rownames(pv) = pv[,1]
+    rownames(qcl) = qcl[,1]
+    fc = fc[,-1]
+    mean = mean[,-1]
+    pv = pv[,-1]
+    qcl = qcl[,-1]
+    colnames(fc) = paste("logFC", names(l), sep = "_")
+    colnames(mean) = paste("AveExpr", names(l), sep = "_")
+    colnames(pv) = paste("P.Value", names(l), sep = "_")
+    colnames(qcl) = paste("adj.P.Val", names(l), sep = "_")
+    all(rownames(fc) == rownames(pv))
+    all(rownames(fc) == rownames(mean))
+    all(rownames(fc) == rownames(qcl))
+    fc[is.na(fc)] = 0
+    pv[is.na(pv)] = 1
+    qcl[is.na(qcl)] = 1
+    diff = data.frame(fc, mean, pv, qcl)
+    which(is.na(diff))
+    
+    return(diff)
+    
+}
+
+VplotAddSig = function(p, vplot, y_text = 10^-100) {
+    a = length(which(vplot$fc < 1))
+    b = length(which(vplot$fc > 1))
+    c_up = length(which(vplot$fc[vplot$sig == "up"] < 1))
+    d_up = length(which(vplot$fc[vplot$sig == "up"] > 1))
+    cont_table = rbind(total = c(round(a/(a+b)*(c_up+d_up)), round(b/(a+b)*(c_up+d_up))), geneset = c(c_up, d_up))
+    colnames(cont_table) = c("FC<1", "FC>1")
+    c = chisq.test(cont_table)
+    pvalsigup = c$p.value
+    
+    a = length(which(vplot$fc < 1))
+    b = length(which(vplot$fc > 1))
+    c_down = length(which(vplot$fc[vplot$sig == "down"] < 1))
+    d_down = length(which(vplot$fc[vplot$sig == "down"] > 1))
+    cont_table = rbind(total = c(round(a/(a+b)*(c_down+d_down)), round(b/(a+b)*(c_down+d_down))), geneset = c(c_down, d_down))
+    colnames(cont_table) = c("FC<1", "FC>1")
+    c = chisq.test(cont_table)
+    pvalsigdown = c$p.value
+    
+    q = p + geom_point_rast(aes(fc,pval, color = sig), data = vplot[vplot$sig %in% c("up", "down"), ], raster.dpi = 100) + scale_color_manual(values = c("blue", "red")) + ggtitle(label = sigtoplot) + 
+        #annotate("text", label = sprintf("Expected: %s vs %s \n geneset: %s vs %s \n p = %s ", cont_table[1,1], cont_table[1,2], cont_table[2,1], cont_table[2,2], round(c$p.value, 6)), x = 1, y = 10^-6) + 
+        #annotate("text", label = sprintf("sigup: p = %s \n sigdown: p = %s", round(pvalsigup, 6), round(pvalsigdown, 6)), x = 1, y = 10^-6) +
+        annotate("text", label = sprintf("total = %s - %s \n sigup: p = %s, observed = %s - %s \n sigdown: p = %s, observed = %s - %s",a,b,round(pvalsigup, 6), c_up, d_up, round(pvalsigdown, 6), c_down, d_down), x = 1, y = y_text)
+    return(q)
+    
 }
 
 FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {

@@ -20,8 +20,11 @@ module load python/anaconda-2022.05
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
 
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 
 R
 
@@ -32,7 +35,7 @@ R
 ```{r}
 options(max.print=1000)
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
-source("")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 libs = c("limma", "edgeR", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
@@ -122,7 +125,7 @@ PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@
 }
 ```
 
-**Functions**
+**Functions** --> also in custom_functions_david.R
 ```{r}
 run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, confoundings = confoundings, formula.mod.matrix = formula.mod.matrix, contrasts =contrasts, gene_symbol= gene_symbol) { #count = count, dge = dge, 
   suppressPackageStartupMessages(library(limma))
@@ -255,6 +258,8 @@ FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext 
 **Import Seurat Object**
 
 ```{r}
+prefix = "totalvi_igt1_56_allgenes_Treg_20240529"
+
 so = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_so_withclusters.Rds")
 so
 
@@ -421,6 +426,15 @@ scanvi_20230429_Detailed_ttlist_20240429_with_meansdci_bysample_name.txt
 Create and save TMM for loading
 ```{r}
 tmm = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_tmm.Rds")
+# genes_to_keep = colSums(counts) >0
+# #if want to remove TCR, mt, ribo, Gm and Rik genes: use this
+# tcr_genes = rownames(so)[grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trbv|Trbd|Trbj|Trbc|Trdv|Trdj|Trdc")]
+# gm_rik_genes = rownames(so)[grepl(x = rownames(so), pattern = "Gm|Rik$")]
+# ribo_genes = rownames(so)[grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
+# mt_genes = rownames(so)[grepl(x = rownames(so), pattern = "^mt-")]
+# genes_to_keep = colSums(counts) >0 & !(rownames(so) %in% c(tcr_genes, gm_rik_genes, ribo_genes, mt_genes))
+# length(which(genes_to_keep))
+
 
 #Make tmm objet for limma
 suppressPackageStartupMessages(library(limma))
@@ -435,7 +449,13 @@ saveRDS(tmm, file = "totalvi_igt1_56_allgenes_Treg_20240529_tmm.Rds")
 
 ```
 
-Design matrix
+Design matrix, model and fit 
+--> 
+totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_id.Rds: 0 + Cluster_totalvi20240525rmigtsample_Res0.5 + sample_id 
+totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_id2.Rds: 0 + Cluster_totalvi20240525rmigtsample_Res0.5.sample_id
+totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_idWithInteraction.Rds: 0 + Cluster_totalvi20240525rmigtsample_Res0.5 + sample_id + Cluster_totalvi20240525rmigtsample_Res0.5:sample_id
+
+should be equivalent to analyze the data.
 ```{r}
 so$organ_simplified.orig = so$organ_simplified
 so$condition_detailed.orig = so$condition_detailed
@@ -444,14 +464,101 @@ so$organ_simplified = make.names(so$organ_simplified)
 so$condition_detailed = make.names(so$condition_detailed)
 so$sex = make.names(so$sex)
 
-design = data.frame(so@colData[,c("Cluster_totalvi_20240525_rmigtsample_Res0.5","sample_id", "organ_simplified", "condition_detailed", "sex")])
+design = data.frame(so@meta.data[,c("Cluster_totalvi20240525rmigtsample_Res0.5","sample_id")]) #c("Cluster_totalvi20240525rmigtsample_Res0.5","sample_id", "organ_simplified", "condition_detailed", "sex")
 #design$organ_simplified = make.names(design$organ_simplified)
 #design$condition_broad = make.names(design$condition_broad)
-design = distinct(design)
-rownames(design) = colnames(so)
-design
+#design = distinct(design)
+design$Cluster_totalvi20240525rmigtsample_Res0.5.sample_id = paste(design$Cluster_totalvi20240525rmigtsample_Res0.5, design$sample_id, sep = ".")
+all(rownames(design) == colnames(so))
+design = model.matrix(~ 0 + Cluster_totalvi20240525rmigtsample_Res0.5 + sample_id , data=design) #totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_id.Rds
+colnames(design) = gsub(paste(c("Cluster_totalvi20240525rmigtsample_Res0.5","sample_id"), collapse = "|"), "", colnames(design))
+design = model.matrix(~ 0 + Cluster_totalvi20240525rmigtsample_Res0.5.sample_id, data=design) #totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_id2.Rds
+colnames(design) = gsub("Cluster_totalvi20240525rmigtsample_Res0.5.sample_id", "", colnames(design))
+design = model.matrix(~ 0 + Cluster_totalvi20240525rmigtsample_Res0.5 + sample_id + Cluster_totalvi20240525rmigtsample_Res0.5:sample_id, data=design) 
+colnames(design) = gsub(paste(c("Cluster_totalvi20240525rmigtsample_Res0.5","sample_id"), collapse = "|"), "", colnames(design)) colnames(design)#totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_idWithInteraction.Rds
+#colnames(design) = gsub(paste(c("Cluster_totalvi20240525rmigtsample_Res0.5","sample_id"), collapse = "|"), "", colnames(design))
+
+
+# fit = lmFit(tmm, design = design)
+# saveRDS(fit, file = "totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_id2.Rds")
+
+fit = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5.sample_id.Rds")
 
 ```
+
+QUESTION 3: Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others, only in healthy tissues, independently of sample_id
+```{r}
+cl = so$Cluster_totalvi20240525rmigtsample_Res0.5
+cl = levels(cl)
+
+subsamples = so$sample_id[!so$condition_broad %in% c("healthy")] %>% unique()
+
+group = paste(cl, subsamples, ".")
+group = group[group %in% colnames(design)] # filter to only existing groups
+length(group)
+colnames(design)[colnames(design) %in% group]
+colnames(design)[!colnames(design) %in% group]
+
+# group = paste(so$Cluster_totalvi20240525rmigtsample_Res0.5, so$sample_id, sep = ".")
+# group[!so$condition_broad %in% c("healthy")] = "notincluded"
+# unique(group)
+# group = factor(group)
+# group = levels(group)
+# group = group[group != "notincluded"]
+# length(group)
+
+#group[grepl(sprintf("%s\\.",cl[1]), group)]
+contrasts = c()
+for (i in 1:length(cl)) {
+    print(i)
+    group1 = group[grepl(sprintf("%s\\.",cl[i]), group)]
+    group2 = group[!grepl(sprintf("%s\\.",cl[i]), group)]
+    any(group1 %in% group2)
+    contrasts[i] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+}
+# contrasts = sapply(x, FUN = function(i) sprintf("(%s)/%s-(%s)/%s", paste(x[grepl("cl1\\.", i)], collapse = "+"), length(i[grepl("cl1\\.", i)]), paste(i[!grepl("cl1\\.", i)], collapse = "+"), length(i[!grepl("cl1\\.", i)])))
+namescontrasts = paste(cl, "_vs_OtherClustersinHealthy2", sep = "")
+names(contrasts) = namescontrasts
+cont.matrix = makeContrasts( contrasts = contrasts, levels = model)
+colnames(cont.matrix) = names(contrasts)
+#contrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tt_list_2 = tt_list
+tmp = tt_list
+names(tmp)
+
+pdf(sprintf("%s_DiffExpression_volcano2.pdf", prefix), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+
+```
+
+
 
 Average expression and CI of the mean in each sample_type and sample_name
 ```{r}
@@ -492,9 +599,30 @@ write.table(x = tt2, file = "scanvi_20230429_Detailed_meansdci_bysample_type.txt
 write.table(x = tt2, file = "scanvi_20230429_Detailed_meansdci_bysample_name.txt", sep = "\t", quote = F)
 ```
 
-QUESTION 1: Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others independently of sample
 ```{r}
-group = paste(so$Cluster_totalvi_20240525_rmigtsample_Res0.5)
+table(so$sample_type, so$batch)
+group = as.character(so$ClusterCCA_Revised)
+group[!so$sample_type %in% c("WT.CD4")] = "notWT"
+group = factor(group)
+x = levels(group)
+x = x[x != "notWT"]
+
+contrasts = sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = paste(x, "_vs_OtherClustersInWT", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+gene_symbol = rownames(so@assays$RNA@counts)
+confoundings = list(so$sample_name, paste("exp", so$batch, sep = "_"))
+formula.mod.matrix = "~0+group+confoundings[[1]]+confoundings[[2]]"
+
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(edgeR))
+dge$samples$group = group
+```
+
+QUESTION 1: Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others independently of sample_id
+```{r}
+group = paste(so$Cluster_totalvi20240525rmigtsample_Res0.5)
 #group[!so$sample_type %in% c("DeltaFoxp3_DeltaFoxp1_PBS", "DeltaFoxp3")] = "notincluded"
 unique(group)
 group = factor(group)
@@ -505,25 +633,55 @@ table(group, so$sample_type)
 #groups  = unique(gsub("_rep.*$", "", x))
 cat(x,sep = "\",\"")
 
-grp1 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
-grp3 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp4 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS", x)]
-grp5 = x[grepl("Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp6 = x[grepl("Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
-
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
-names(contrasts) = c("Tregcl1InDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3",
-                    "TconvRestingInDeltaFoxp3DeltaFoxp1_vs_TconvRestingInDeltaFoxp3",
-                    "TconvActivatedInDeltaFoxp3DeltaFoxp1_vs_TconvActivatedInDeltaFoxp3")
-gene_symbol = rownames(so[["RNA"]])
+contrasts = sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = paste(x, "_vs_OtherClusters", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
 confoundings = list(so$sample_id)
 formula.mod.matrix = "~0+group+confoundings[[1]]"
 
+# grp1 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
+# grp3 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp4 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS", x)]
+# grp5 = x[grepl("Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp6 = x[grepl("Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
+
+# contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
+#               sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
+#                sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
+# names(contrasts) = c("Tregcl1InDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3",
+#                     "TconvRestingInDeltaFoxp3DeltaFoxp1_vs_TconvRestingInDeltaFoxp3",
+#                     "TconvActivatedInDeltaFoxp3DeltaFoxp1_vs_TconvActivatedInDeltaFoxp3")
+# gene_symbol = rownames(so[["RNA"]])
+# confoundings = list(so$sample_id)
+# formula.mod.matrix = "~0+group+confoundings[[1]]"
+
 tt_list_1 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
 
+tmp = tt_list_1
+names(tmp)
+
+pdf(sprintf("%s_DiffExpression_volcano1.pdf", prefix), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+#######
 tmm = tmm
 group = group
 confoundings = confoundings
@@ -564,42 +722,50 @@ run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, conf
 
 ```
 
-QUESTION 2: Tregs in KO vs DKO just in batch2 (same results but less mt and ribosomal genes shwoping up)
+QUESTION 2: Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others, only in healthy tissues, independently of sample_id
 ```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[!so$sample_type %in% c("DeltaFoxp3_DeltaFoxp1_PBS", "DeltaFoxp3")] = "notincluded"
+group = paste(so$Cluster_totalvi20240525rmigtsample_Res0.5)
+group[!so$condition_broad %in% c("healthy")] = "notincluded"
 unique(group)
 group = factor(group)
 x = levels(group)
 x = x[x != "notincluded"]
-table(group, so$sample_type)
+table(group, so$condition_broad)
 #table(group, so$sample_name)
 #groups  = unique(gsub("_rep.*$", "", x))
 cat(x,sep = "\",\"")
 
-grp1 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp2 = x[grepl("Treg.DeltaTreg_PBS", x)]
-grp3 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp4 = x[grepl("Tconv_resting.DeltaTreg_PBS", x)]
-grp5 = x[grepl("Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp6 = x[grepl("Tconv_activated.DeltaTreg_PBS", x)]
+contrasts = sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = paste(x, "_vs_OtherClustersinHealthy", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+confoundings = list(so$sample_id)
+formula.mod.matrix = "~0+group+confoundings[[1]]"
 
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
-names(contrasts) = c("TregInDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3_inbatch2",
-                    "TconvRestingInDeltaFoxp3DeltaFoxp1_vs_TconvRestingInDeltaFoxp3_inbatch2",
-                    "TconvActivatedInDeltaFoxp3DeltaFoxp1_vs_TconvActivatedInDeltaFoxp3_inbatch2")
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list()
-formula.mod.matrix = "~0+group"
+# grp1 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
+# grp3 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp4 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS", x)]
+# grp5 = x[grepl("Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp6 = x[grepl("Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
+
+# contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
+#               sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
+#                sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
+# names(contrasts) = c("Tregcl1InDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3",
+#                     "TconvRestingInDeltaFoxp3DeltaFoxp1_vs_TconvRestingInDeltaFoxp3",
+#                     "TconvActivatedInDeltaFoxp3DeltaFoxp1_vs_TconvActivatedInDeltaFoxp3")
+# gene_symbol = rownames(so[["RNA"]])
+# confoundings = list(so$sample_id)
+# formula.mod.matrix = "~0+group+confoundings[[1]]"
 
 tt_list_2 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
 
 tmp = tt_list_2
 names(tmp)
 
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano2.pdf", width = 10, height = 10)
+pdf(sprintf("%s_DiffExpression_volcano2.pdf", prefix), width = 10, height = 10)
 for (i in 1:length(tmp)) {
   print(i)
   vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
@@ -617,46 +783,53 @@ for (i in 1:length(tmp)) {
 }
 dev.off()
 
-#Geneset enrichment analysis
 
 ```
 
-QUESTION 3: Tregs in KO vs KO_STAT5CA (same results but less mt and ribosomal genes shwoing up)
+QUESTION 3: Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others, only in healthy tissues, independently of sample_id
 ```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[!so$sample_type %in% c("DeltaFoxp3_STAT5BCA", "DeltaFoxp3")] = "notincluded"
+group = paste(so$Cluster_totalvi20240525rmigtsample_Res0.5)
+group[!so$condition_broad %in% c("healthy")] = "notincluded"
 unique(group)
 group = factor(group)
 x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
+#x = x[x != "notincluded"]
+table(group, so$condition_broad)
 #table(group, so$sample_name)
 #groups  = unique(gsub("_rep.*$", "", x))
 cat(x,sep = "\",\"")
 
-grp1 = x[grepl("Treg.DeltaTreg_STAT5BCA", x)]
-grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
-grp3 = x[grepl("Tconv_resting.DeltaTreg_STAT5BCA", x)]
-grp4 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS", x)]
-grp5 = x[grepl("Tconv_activated.DeltaTreg_STAT5BCA", x)]
-grp6 = x[grepl("Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
+contrasts = sapply(x, FUN = function(i) sprintf("%s-(%s)/%s", i, paste(x[x!= i], collapse = "+"), length(x)-1))
+namescontrasts = paste(x, "_vs_OtherClustersinHealthy", sep = "")
+names(contrasts) = namescontrasts
+contrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+confoundings = list(so$organ_simplified,so$sample_id)
+formula.mod.matrix = "~0+group+confoundings[[1]]+group*confoundings[[1]]+confoundings[[2]]"
 
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
-names(contrasts) = c("TregInDeltaFoxp3STAT5BCA_vs_TregInDeltaFoxp3",
-                    "TconvRestingInDeltaFoxp3STAT5BCA_vs_TconvRestingInDeltaFoxp3",
-                    "TconvActivatedInDeltaFoxp3STAT5BCA_vs_TconvActivatedInDeltaFoxp3")
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group+confoundings[[1]]"
+# grp1 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
+# grp3 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp4 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS", x)]
+# grp5 = x[grepl("Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
+# grp6 = x[grepl("Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
 
-tt_list_3 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
+# contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
+#               sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
+#                sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
+# names(contrasts) = c("Tregcl1InDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3",
+#                     "TconvRestingInDeltaFoxp3DeltaFoxp1_vs_TconvRestingInDeltaFoxp3",
+#                     "TconvActivatedInDeltaFoxp3DeltaFoxp1_vs_TconvActivatedInDeltaFoxp3")
+# gene_symbol = rownames(so[["RNA"]])
+# confoundings = list(so$sample_id)
+# formula.mod.matrix = "~0+group+confoundings[[1]]"
 
-tmp = tt_list_3
+tt_list_2 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
+
+tmp = tt_list_2
 names(tmp)
 
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano3.pdf", width = 10, height = 10)
+pdf(sprintf("%s_DiffExpression_volcano2.pdf", prefix), width = 10, height = 10)
 for (i in 1:length(tmp)) {
   print(i)
   vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
@@ -674,327 +847,20 @@ for (i in 1:length(tmp)) {
 }
 dev.off()
 
-```
-
-QUESTION 4: Tregs in KO vs KO_STAT5CA in batch 2 only
-```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[!so$sample_type %in% c("DeltaFoxp3_STAT5BCA", "DeltaFoxp3")] = "notincluded"
-unique(group)
-group = factor(group)
-x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
-#table(group, so$sample_name)
-#groups  = unique(gsub("_rep.*$", "", x))
-cat(x,sep = "\",\"")
-
-grp1 = x[grepl("Treg.DeltaTreg_STAT5BCA", x)]
-grp2 = x[grepl("Treg.DeltaTreg_PBS", x)]
-grp3 = x[grepl("Tconv_resting.DeltaTreg_STAT5BCA", x)]
-grp4 = x[grepl("Tconv_resting.DeltaTreg_PBS", x)]
-grp5 = x[grepl("Tconv_activated.DeltaTreg_STAT5BCA", x)]
-grp6 = x[grepl("Tconv_activated.DeltaTreg_PBS", x)]
-
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)))
-names(contrasts) = c("TregInDeltaFoxp3STAT5BCA_vs_TregInDeltaFoxp3_inbatch2",
-                    "TconvRestingInDeltaFoxp3STAT5BCA_vs_TconvRestingInDeltaFoxp3_inbatch2",
-                    "TconvActivatedInDeltaFoxp3STAT5BCA_vs_TconvActivatedInDeltaFoxp3_inbatch2")
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group"
-
-tt_list_4 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
-
-tmp = tt_list_4
-names(tmp)
-
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano4.pdf", width = 10, height = 10)
-for (i in 1:length(tmp)) {
-  print(i)
-  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
-  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
-  library(ggrepel)
-  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-}
-dev.off()
-
-```
-
-QUESTION 5: Treg_v_Tconv in WT, KO, DKO KO_STAT5CA
-```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[so$sample_type %in% c("BMC.DeltaFoxp3", "BMC.WT", "DeltaFoxp3_DeltaFoxp1_IL2", "DeltaFoxp3_IL2", "WT.TC", "WT.TR")] = "notincluded"
-#group[!so$sample_type %in% c("DeltaFoxp3_STAT5BCA", "DeltaFoxp3")] = "notincluded"
-unique(group)
-group = factor(group)
-x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
-#table(group, so$sample_name)
-#groups  = unique(gsub("_rep.*$", "", x))
-cat(x,sep = "\",\"")
-
-grp1 = x[grepl("Treg.DeltaTreg_STAT5BCA", x)]
-grp2 = x[grepl("Tconv_resting.DeltaTreg_STAT5BCA|Tconv_activated.DeltaTreg_STAT5BCA", x)]
-grp3 = x[grepl("Treg.WT", x)]
-grp4 = x[grepl("Tconv_resting.WT|Tconv_activated.WT", x)]
-grp5 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
-grp6 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS|Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
-grp7 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp8 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS|Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
-
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp7, collapse = "+"), length(grp7), paste(grp8, collapse = "+"), length(grp8)))
-names(contrasts) = c("Treg_vs_TconvInDeltaFoxp3STAT5BCA",
-                    "Treg_vs_TconvInWT",
-                    "Treg_vs_TconvInDeltaFoxp3",
-                    "Treg_vs_TconvInDeltaFoxp3DeltaFoxp1")
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group+confoundings[[1]]"
-
-tt_list_5 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
-
-tmp = tt_list_5
-names(tmp)
-
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano5.pdf", width = 10, height = 10)
-for (i in 1:length(tmp)) {
-  print(i)
-  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
-  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
-  library(ggrepel)
-  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-}
-dev.off()
-
-```
-
-QUESTION 6: KO vs WT, KO vs DKO, KO vs KO_STAT5CA
-```{r}
-# so$sample_name2 = so$sample_name
-# table(so$sample_name)
-# so$sample_name2 = gsub("deltaFoxp3.CD4_", "deltaFoxp3_", so$sample_name2)
-# so$sample_name2 = gsub("WT.CD4_|WT_", "WT_", so$sample_name2)
-# table(so$sample_name2, so$sample_name)
-group = paste(so$sample_name, sep = ".")
-#group[!so$sample_type %in% c("DeltaFoxp3_STAT5BCA", "DeltaFoxp3")] = "notincluded"
-unique(group)
-group = factor(group)
-x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
-#table(group, so$sample_name)
-#groups  = unique(gsub("_rep.*$", "", x))
-cat(x,sep = "\",\"")
-
-grp1 = x[grepl("^deltaFoxp3|^DeltaTreg_PBS", x)]
-grp2 = x[grepl("^WT_|^WT.CD4", x)]
-grp3 = x[grepl("DeltaTreg_DeltaFoxp1_PBS", x)]
-grp4 = x[grepl("DeltaTreg_STAT5BCA", x)]
-
-
-contrasts = c(sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2)),
-              sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp3, collapse = "+"), length(grp3)),
-               sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp4, collapse = "+"), length(grp4)))
-names(contrasts) = c("deltaFoxp3_vs_WT",
-                    "deltaFoxp3_vs_deltaFoxp3deltaFoxp1",
-                    "deltaFoxp3_vs_deltaFoxp3STAT5BCA")
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group+confoundings[[1]]"
-
-tt_list_6 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
-
-tmp = tt_list_6
-names(tmp)
-
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano6.pdf", width = 10, height = 10)
-for (i in 1:length(tmp)) {
-  print(i)
-  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
-  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
-  library(ggrepel)
-  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-}
-dev.off()
-
-```
-
-QUESTION 7: Treg sig in WT - Treg sig in KO, DKO or STAT5CA
-```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[so$sample_type %in% c("BMC.DeltaFoxp3", "BMC.WT", "DeltaFoxp3_DeltaFoxp1_IL2", "DeltaFoxp3_IL2", "WT.TC", "WT.TR")] = "notincluded"
-unique(group)
-group = factor(group)
-x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
-#table(group, so$sample_name)
-#groups  = unique(gsub("_rep.*$", "", x))
-cat(x,sep = "\",\"")
-
-grp1 = x[grepl("Treg.DeltaTreg_STAT5BCA", x)]
-grp2 = x[grepl("Tconv_resting.DeltaTreg_STAT5BCA|Tconv_activated.DeltaTreg_STAT5BCA", x)]
-grp3 = x[grepl("Treg.WT", x)]
-grp4 = x[grepl("Tconv_resting.WT|Tconv_activated.WT", x)]
-grp5 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
-grp6 = x[grepl("Tconv_resting.deltaFoxp3.CD4|Tconv_resting.DeltaTreg_PBS|Tconv_activated.deltaFoxp3.CD4|Tconv_activated.DeltaTreg_PBS", x)]
-grp7 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp8 = x[grepl("Tconv_resting.DeltaTreg_DeltaFoxp1_PBS|Tconv_activated.DeltaTreg_DeltaFoxp1_PBS", x)]
-
-comp_stat5ca = sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2))
-comp_wt = sprintf("(%s)/%s-(%s)/%s", paste(grp3, collapse = "+"), length(grp3), paste(grp4, collapse = "+"), length(grp4))
-comp_ko = sprintf("(%s)/%s-(%s)/%s", paste(grp5, collapse = "+"), length(grp5), paste(grp6, collapse = "+"), length(grp6))
-comp_dko = sprintf("(%s)/%s-(%s)/%s", paste(grp7, collapse = "+"), length(grp7), paste(grp8, collapse = "+"), length(grp8))
-
-contrasts = c(sprintf("(%s) - (%s)", comp_wt, comp_ko),
-              sprintf("(%s) - (%s)", comp_wt, comp_dko),
-              sprintf("(%s) - (%s)", comp_wt, comp_stat5ca),
-              sprintf("(%s) - (%s)", comp_ko, comp_dko),
-              sprintf("(%s) - (%s)", comp_ko, comp_stat5ca),
-              sprintf("(%s) - (%s)", comp_ko, comp_wt)
-              )
-names(contrasts) = c("TregSigInWT_vs_TregSigInFoxp3KO",
-                    "TregSigInWT_vs_TregSigInFoxp3KOFoxp1KO",
-                    "TregSigInWT_vs_TregSigInFoxp3KOSTAT5CA",
-                    "TregSigInFoxp3KO_vs_TregSigInFoxp3KOFoxp1KO",
-                    "TregSigInFoxp3KO_vs_TregSigInFoxp3KOSTAT5CA",
-                    "TregSigInFoxp3KO_vs_TregSigInWT")
-                    
-
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group+confoundings[[1]]"
-
-tt_list_7 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
-
-tmp = tt_list_7
-names(tmp)
-
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano7.pdf", width = 10, height = 10)
-for (i in 1:length(tmp)) {
-  print(i)
-  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
-  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
-  library(ggrepel)
-  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-}
-dev.off()
-
-```
-
-QUESTION 8: Treg in WT vs KO, DKO, STAT5CA
-```{r}
-group = paste(so$ClusterCCA_Revised_Annotation_General_predict, so$sample_name, sep = ".")
-group[so$sample_type %in% c("BMC.DeltaFoxp3", "BMC.WT", "DeltaFoxp3_DeltaFoxp1_IL2", "DeltaFoxp3_IL2", "WT.TC", "WT.TR")] = "notincluded"
-unique(group)
-group = factor(group)
-x = levels(group)
-x = x[x != "notincluded"]
-table(group, so$sample_type)
-#table(group, so$sample_name)
-#groups  = unique(gsub("_rep.*$", "", x))
-cat(x,sep = "\",\"")
-
-grp1 = x[grepl("Treg.WT", x)]
-grp2 = x[grepl("Treg.deltaFoxp3.CD4|Treg.DeltaTreg_PBS", x)]
-grp3 = x[grepl("Treg.DeltaTreg_DeltaFoxp1_PBS", x)]
-grp4 = x[grepl("Treg.DeltaTreg_STAT5BCA", x)]
-
-wt_ko = sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp2, collapse = "+"), length(grp2))
-wt_dko = sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp3, collapse = "+"), length(grp3))
-wt_stat5ca = sprintf("(%s)/%s-(%s)/%s", paste(grp1, collapse = "+"), length(grp1), paste(grp4, collapse = "+"), length(grp4))
-
-contrasts = c(wt_ko,
-              wt_dko,
-              wt_stat5ca,
-              sprintf("(%s) - (%s)", wt_ko, wt_dko),
-              sprintf("(%s) - (%s)", wt_ko, wt_stat5ca)
-)
-names(contrasts) = c("TregInWT_vs_TregInFoxp3KO",
-                     "TregInWT_vs_TregInFoxp3KOFoxp1KO",
-                     "TregInWT_vs_TregInFoxp3KOSTAT5CA",
-                     "TregWTvFoxp3KO_vs_TregWTvFoxp3KOFoxp1KO",
-                     "TregWTvFoxp3KO_vs_TregWTvFoxp3KOSTAT5CA")
-                    
-gene_symbol = rownames(so[["RNA"]])
-confoundings = list(so$batch)
-formula.mod.matrix = "~0+group+confoundings[[1]]"
-
-tt_list_8 = run_limmatrend_contrasts_counfoundings(tmm, group, confoundings, formula.mod.matrix, contrasts, gene_symbol)
-
-tmp = tt_list_8
-names(tmp)
-
-pdf("scanvi_20230429_Detailed_DiffExpression_volcano8.pdf", width = 10, height = 10)
-for (i in 1:length(tmp)) {
-  print(i)
-  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
-  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
-  library(ggrepel)
-  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-}
-dev.off()
 
 ```
 
 
 Merge and save tt_list
 ```{r}
-tt_list = readRDS("scanvi_20230429_Detailed_ttlist_20240421.Rds")
-tt_list = c(tt_list, tt_list_5, tt_list_6, tt_list_7, tt_list_8)
-saveRDS(tt_list, file = "scanvi_20230429_Detailed_ttlist1to8_20240430.Rds")
+tt_list = readRDS("ttlist_20240603.Rds")
+tt_list = c(tt_list_1, tt_list_2)
+saveRDS(tt_list, file = "ttlist_20240603.Rds")
 ```
 
 Collapse tt_list
 ```{r}
-tt_list = readRDS("scanvi_20230429_Detailed_ttlist1to8_20240430.Rds")
+tt_list = readRDS("ttlist_20240603.Rds")
 tt = CollapseDiff_limmatrend(tt_list)
 #rownames(tt) = do.call(rbind,strsplit(rownames(tt), split = "_"))[,2]
 tt$SYMBOL = rownames(tt)#fData(cds2)$SYMBOL[match(rownames(tt), rownames(cds2))]
@@ -1044,6 +910,10 @@ for (i in 1:6) {
 }
 
 ttl$log2FC["Foxp3",ttl$adj.P.Val["Foxp3",] < 0.05]
+ttl$log2FC["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
+ttl$adj.P.Val["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
+ttl$log2FC["Tbx21",ttl$adj.P.Val["Tbx21",] < 0.05]
+ttl$adj.P.Val["Tbx21",ttl$adj.P.Val["Tbx21",] < 0.05]
 
 th = 0.5
 

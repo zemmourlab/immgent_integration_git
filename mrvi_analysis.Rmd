@@ -18,12 +18,12 @@ cd $LABHOME
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-module load cuda/12.2
+#module load cuda/12.2
 
 #sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
 
 #source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-source activate /project/zemmour/david/envs/scvi113_20240525 #works but error saving the model, pickle error
+#source activate /project/zemmour/david/envs/scvi113_20240525 #works but error saving the model, pickle error
 source activate /project/zemmour/david/envs/mrvi_test5 #torch worjks but scvi not, jax error
 module load openblas/0.3.13 #load again or error
 
@@ -68,7 +68,7 @@ scvi.settings.seed = 0  # optional: ensures reproducibility
 ```{python}
 os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
 prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT"
-prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT_test2"
+prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT_test3"
 ```
 
 
@@ -145,8 +145,7 @@ sample_key = "sample_id"  # target covariate
 batch_key="IGT" # nuisance variable identifier
 MRVI.setup_anndata(adata, sample_key=sample_key, batch_key = batch_key)
 model = MRVI(adata)
-model.train(max_epochs=10)
-prefix="mrvi_igt1_56_Treg_20240525_sampleiddavid_IGT_test2"
+model.train(max_epochs=2)
 model.save(prefix, save_anndata=True)
 
 plt.plot(model.history["elbo_validation"].iloc[5:])

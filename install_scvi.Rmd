@@ -71,10 +71,49 @@ pip install hotspot
 
 ```
 
+**Install COMETSC**
+
+```{bash}
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #
+
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/cometsc python=3.6
+
+
+source activate /project/zemmour/david/envs/cometsc
+pip install COMETSC
+
+
+```
+
+
 
 **Install mrVI**
 
 Create a new environment in Midway3 for mrVI
+
+```{bash}
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
+source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+conda env export > formrvitest5.yml
+#modify yml to change the name to /project/zemmour/david/envs/mrvi_test5
+#exit and log in again
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/mrvi_test5 -f formrvitest5.yml
+#if issues with "strict repo priority", delete the line in .condarc
+source activate /project/zemmour/david/envs/mrvi_test5
+pip uninstall scvi-tools
+
+pip install "jax[cuda12_pip]==0.4.14" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+pip install git+https://github.com/scverse/scvi-tools.git --no-deps
+
+```
+
 
 ```{bash}
 module load python/anaconda-2022.05 
