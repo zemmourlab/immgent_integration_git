@@ -7,8 +7,6 @@ date: "2024-05-29"
 
 Most uptodate
 ```{r}
-
-
 so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 ```
 
@@ -136,5 +134,169 @@ Save
 ```{r}
 saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 ```
+
+**For python**
+
+```{python}
+mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
+```
+
+
+Adjust cell names
+```{python}
+message("check colnames to be IGT.BARCODE")
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, colnames(so))
+all(matches)
+#and adjust colnames if needed:
+unique(so$IGT[which(matches == F)])
+#Adjust colnames(so) 
+#pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = colnames(so)
+sample(colnames(so), 100)
+pattern = "(\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
+sample(so$colnames, 100)
+unique(so$IGT[!grepl("^IGT", so$colnames)])
+so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
+sample(so$colnames, 10)
+any(duplicated(so$colnames))
+#recheck
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#so@meta.data[which(matches == F),]
+if(all(matches)) {colnames(so) = so$colnames}
+all(grepl(pattern, colnames(so)))
+```
+
+Update cell names
+```{python}
+import re
+import pandas as pd
+import numpy as np
+
+# Assuming `mdata` is your MuData object and `so` is the relevant part of the MuData object
+
+# Check column names pattern
+pattern = r"^IGT\d{1,2}\.[A-Z]{16}$"
+obs_names = pd.Series(mdata.mod['RNA'].obs_names, index=mdata.mod['RNA'].obs.index)  # Ensure alignment
+matches = obs_names.str.match(pattern)
+print("All columns match the pattern:", matches.all())
+
+# Adjust column names if needed
+non_matching_IGTs = mdata.mod['RNA'].obs.loc[matches.values == False, 'IGT'].unique()
+print("Unique IGT values for non-matching columns:", non_matching_IGTs)
+
+# Save original column names
+mdata.obs['colnames'] = obs_names
+
+# Sample 100 column names
+print("Sample 100 column names before adjustment:", np.random.choice(obs_names, 100))
+
+# Remove trailing numbers after underscore
+pattern = r"(\S*)_(\d+)"
+adjusted_colnames = obs_names.str.replace(pattern, r"\1", regex=True)
+mdata.obs['colnames'] = adjusted_colnames
+
+# Sample 100 column names after adjustment
+print("Sample 100 column names after adjustment:", np.random.choice(adjusted_colnames, 100))
+
+# Add IGT prefix to columns that don't start with IGT
+non_IGT_mask = ~mdata.obs['colnames'].str.startswith("IGT")
+mdata.obs.loc[non_IGT_mask, 'colnames'] = (
+    mdata.mod['RNA'].obs.loc[non_IGT_mask, 'IGT'].astype(str) + '.' + mdata.obs.loc[non_IGT_mask, 'colnames']
+)
+
+# Sample 10 column names after prefix adjustment
+print("Sample 10 column names after prefix adjustment:", np.random.choice(mdata.obs['colnames'], 100))
+
+# Check for duplicates
+duplicates_exist = mdata.obs['colnames'].duplicated().any()
+print("Any duplicated column names:", duplicates_exist)
+
+# Recheck the pattern match after adjustments
+pattern = r"^IGT\d{1,2}\.[A-Z]{16}$"
+matches = mdata.obs['colnames'].str.match(pattern)
+print("All columns match the pattern after adjustment:", matches.all())
+
+# Set adjusted colnames as column names if all match
+if matches.all():
+    mdata.mod['RNA'].obs_names = mdata.obs['colnames'].values
+    mdata.mod['protein'].obs_names = mdata.obs['colnames'].values
+    
+# Final check
+all_match_final = pd.Series(mdata.mod['RNA'].obs_names).str.match(pattern).all()
+print("All final column names match the pattern:", all_match_final)
+
+```
+
+
+
+```{python}
+
+m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv')
+m.columns
+m['sample_id'] = m['sample_id_david']
+m = m.drop(columns=['sample_id_david'])
+#m
+mdata.mod['RNA'].obs['sample_id'] = mdata.mod['RNA'].obs['IGT'].astype(str) + '.' + mdata.mod['RNA'].obs['hashtag_number'].astype(str)
+meta = mdata.mod['RNA'].obs
+
+cols_to_keep = ['sample_id'] + list(set(meta.columns) - set(m.columns) - set(['encapsulation_date', 'exp_id', 'IGT','sample_name.1','encapsulated_cell_number','is_spleen_standard'])) 
+meta = meta[cols_to_keep]
+m2 = pd.merge(meta, m, on='sample_id', how='left')
+m2.shape
+m2[m2['exp_number'].isna()].shape
+#print(m2[m2['exp_number'].isna()]['sample_id']) 
+#print(m2[m2['exp_number'].isna()]['is_spleen_standard']) 
+# m2[m2['exp_number'].isna()]['organ'] = 'spleen'
+# m2[m2['exp_number'].isna()]['condition_broad'] = 'healthy'
+
+(m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+#set(m2['colnames']) == set(mdata.mod['RNA'].obs.index)
+# m2.index = m2['colnames']
+# m2 = m2.reindex(mdata.mod['RNA'].obs.index, axis=0)
+# (m2['colnames'].values == mdata.mod['RNA'].obs.index.to_list()).all()
+
+m2['IGT'] = m2['immgent_IGT_10xlane_id']
+m2 = m2.drop(columns=['immgent_IGT_10xlane_id'])
+
+m2.index = meta.index
+
+mdata.mod['RNA'].obs = m2
+
+#simplify the organ columns
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod['RNA'].obs['organ']
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('object')
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('lymph node|LN', na=False, case=False), 'organ_simplified'] = 'lymph node'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('skin', na=False, case=False), 'organ_simplified'] = 'skin'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('colon', na=False, case=False), 'organ_simplified'] = 'colon'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ'].str.contains('duoden|ileal|ileum|jejun|small intestine', na=False, case=False), 'organ_simplified'] = 'small intestine'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'organ_simplified'] = 'spleen'
+mdata.mod['RNA'].obs.loc[mdata.mod['RNA'].obs['organ_simplified'].isna(), 'condition_broad'] = 'healthy'
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].str.replace('[^0-9a-zA-Z]', '.', regex=True)
+list(mdata.mod["RNA"].obs["organ_simplified"].unique())
+mdata.mod["RNA"].obs["organ_simplified"] = mdata.mod["RNA"].obs["organ_simplified"].astype('category')
+
+for mod_key in mdata.mod.keys():
+    # Convert all columns in .obs to string type to avoid error in writing
+    mdata.mod[mod_key].obs = mdata.mod[mod_key].obs.astype(str)
+    
+# sample_id_equal = mdata.mod['RNA'].obs["sample_id"].values == mdata.mod['RNA'].obs["sample_id"].values
+# false_indices = np.where(sample_id_equal == False)[0]
+# different_rows = mdata.mod['RNA'].obs.iloc[false_indices]
+# print(different_rows[['sample_id', 'sample_id']])
+# del mdata.mod['RNA'].obs["sample_id_david"]
+
+```
+
+```{python}
+mdata.write_h5mu("mdata_Sample_metadata_david_20240520_v5.h5mu")
+```
+
+
 
 

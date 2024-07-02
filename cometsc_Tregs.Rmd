@@ -83,7 +83,7 @@ tmp2 = tmp2[,-1]
 #pdf(sprintf("%s/dataprep_ADT_pre_post.pdf", prefix), 10,15)
 pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Sum ADT per IGT")
 
-#remove IGT
+#remove IGT1 (CITEseq V1) and remove IGT7,8,9,44,45,46 (no ADT)
 so = so_orig[,!so$IGT %in% c("IGT1","IGT7","IGT8","IGT9","IGT44","IGT45","IGT46")]
 names(which(colSums(so[["ADT"]]$counts)==0))
 

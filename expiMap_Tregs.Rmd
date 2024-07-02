@@ -1,0 +1,290 @@
+---
+title: "Expimap_Tregs"
+output: html_document
+date: "2024-06-24"
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=16:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=96GB
+sinteractive --time=16:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+#module load hdf5/1.12.0 #for BPCells but also others
+#module load openblas/0.3.13
+#module load cuda/11.7
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+source activate /project/zemmour/david/envs/scarches_test9
+
+
+cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+```
+
+```{python}
+import warnings
+warnings.simplefilter(action='ignore')
+import scanpy as sc
+import torch
+import scarches as sca
+import numpy as np
+import gdown
+import mudata as mu
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+
+torch.cuda.is_available()
+
+```
+
+```{python}
+os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+prefix="expimap_20240701"
+os.makedirs(prefix)
+#prefix2='20240701'
+```
+
+
+Load data
+```{python}
+mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
+
+```
+
+from mudata to adata
+```{python}
+adata = mdata.mod['RNA']
+adata.obs['sample_id']
+adata.X = adata.layers["counts"].copy()
+
+```
+
+Check that var and obs names are strings and unique
+```{python}
+adata.var_names = adata.var_names.astype(str)
+adata.obs_names = adata.obs_names.astype(str)
+assert adata.var_names.is_unique, "Variable names are not unique!"
+assert adata.obs_names.is_unique, "Observation names are not unique!"
+#adata._inplace_subset_var(adata.varm['I'].sum(1)>0)
+```
+
+
+Filter genes
+```{python}
+adata_orig = adata.copy()
+
+# Calculate genes to keep based on column sums
+genes_to_keep = np.sum(adata.X, axis=0) > 0
+genes_to_keep.sum()
+
+# Define patterns for genes to be removed
+tcr_pattern = "Trbv|Trbd|Trbj|Trav|Traj|Trdv|Trdj|Trgv|Trgd|Trgj"
+gm_rik_pattern = "^Gm|Rik$"
+ribo_pattern = "^Rpl|^Rps|^Mrpl|^Mrps|^Rsl"
+mt_pattern = "^mt-"
+
+# Find genes matching the patterns
+tcr_genes = adata.var_names[adata.var_names.str.contains(tcr_pattern, regex=True)]
+gm_rik_genes = adata.var_names[adata.var_names.str.contains(gm_rik_pattern, regex=True)]
+ribo_genes = adata.var_names[adata.var_names.str.contains(ribo_pattern, regex=True)]
+mt_genes = adata.var_names[adata.var_names.str.contains(mt_pattern, regex=True)]
+
+# Combine all genes to be removed
+genes_to_remove = pd.Index(tcr_genes.tolist() + gm_rik_genes.tolist() + ribo_genes.tolist() + mt_genes.tolist())
+
+# Calculate genes to keep
+genes_to_keep = (genes_to_keep & ~adata.var_names.isin(genes_to_remove))
+num_genes_to_keep = genes_to_keep.sum()
+print(f"Number of genes to keep: {num_genes_to_keep}")
+
+adata = adata[:, genes_to_keep].copy()
+
+```
+
+Save filtered adata
+```{python}
+
+adata.write('adata_forexpimap.h5ad')
+```
+
+
+
+Read the Reactome annotations, make a binary matrix where rows represent gene symbols and columns represent the terms, and add the annotations matrix to the reference dataset. The binary matrix of annotations is stored in adata.varm['I']. Note that only terms with minimum of 12 genes in the reference dataset are retained.
+```{python}
+sca.utils.add_annotations(adata, prefix+'/m2.cp.reactome.v2023.2.Mm.symbols.gmt', min_genes=12, clean=True)
+mask = adata.varm['I'].sum(axis=1) > 0
+print(f"Number of genes to kept from annotation: {np.where(mask)[0].shape[0]}")
+
+```
+
+For a better model performance it is necessary to select HVGs. 
+```{python}
+sc.pp.normalize_total(adata)
+sc.pp.log1p(adata)
+
+#sc.pp.highly_variable_genes(adata, n_top_genes=500, batch_key = 'IGT', subset=True)
+
+# adata.var['highly_variable'][adata.var['highly_variable'] == True]
+# adata.var['highly_variable_intersection'][adata.var['highly_variable_intersection'] == True]
+
+```
+Filter out all annotations (terms) with less than 12 genes.
+```{python}
+select_terms = adata.varm['I'].sum(0)>12
+adata.uns['terms'] = np.array(adata.uns['terms'])[select_terms].tolist()
+adata.varm['I'] = adata.varm['I'][:, select_terms]
+```
+
+Filter out genes not present in any of the terms after selection of HVGs.
+```{python}
+adata._inplace_subset_var(adata.varm['I'].sum(1)>0)
+adata.var
+```
+Put the counts data back to adata.X.
+```{python}
+adata.X = adata.layers["counts"].copy()
+```
+
+Create expiMap model and train it on reference dataset
+See also https://docs.scarches.org/en/latest/training_tips.html for the recommendation on hyperparameter choice.
+The main hyperparameter that affects the quality of integration for the reference training is alpha_kl, the value of which is multiplied by the kl divergence term in the total loss.If the visualized latent space looks like a single blob after the reference training, we recommend to decrease the value of alpha_kl. If the visualized latent space shows bad integration quality, we recommend to increase the value of alpha_kl. The good default value in most cases is alpha_kl=0.5.
+
+The required strength of group lasso regularization (alpha) depends on the number of used GPs and the size of the dataset. For 300–500 GPs, we recommend to use alpha=0.7 and increase for larger numbers of GPs.
+
+If soft mask in the reference training is used (soft_ext_mask=True in the model initialization), it is better to start with alpha_l1=0.5 (higher value means more constraints on how many genes are added to the gene sets) and use print_stats=True in the training for monitoring to check the reported “Share of deactivated inactive genes: ​__” is around 95% (0.95) at the end and stays so at the final 10 epochs of training. If it is much smaller, alpha_l1 should be increased by a small value (around 0.05), and if it is 100% (1.) then alpha_l1 should be decreased.
+
+Using new terms (n_ext) in the reference training is not recommended.
+```{python}
+intr_cvae = sca.models.EXPIMAP(
+    adata=adata,
+    condition_key='IGT',
+    hidden_layer_sizes=[256, 256, 256],
+    recon_loss='nb'
+)
+
+ALPHA = 0.7
+early_stopping_kwargs = {
+    "early_stopping_metric": "val_unweighted_loss", # val_unweighted_loss
+    "threshold": 0,
+    "patience": 50,
+    "reduce_lr": True,
+    "lr_patience": 13,
+    "lr_factor": 0.1,
+}
+intr_cvae.train(
+    n_epochs=400,
+    alpha_epoch_anneal=100,
+    alpha=ALPHA,
+    alpha_kl=0.5,
+    weight_decay=0.,
+    early_stopping_kwargs=early_stopping_kwargs,
+    use_early_stopping=True,
+    monitor_only_val=False,
+    seed=2020,
+)
+
+intr_cvae.save(prefix)
+
+```
+
+Plot the latent space of the reference.
+```{python}
+MEAN = False
+
+latent_representation = intr_cvae.get_latent(mean=MEAN, only_active=True)
+adata.obsm['X_cvae'] = latent_representation
+latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
+
+print("Save latent data in csv file")
+latent_df.to_csv(prefix+"/latent.csv", index=True)
+
+sc.pp.neighbors(adata, use_rep='X_cvae')
+sc.tl.umap(adata)
+
+adata.write(prefix+'/intr_cvae/adata.h5ad')
+
+sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = )
+
+fig = plt.gcf()  # Get current figure
+ax = plt.gca()   # Get current axis
+
+# Adjust the legend properties
+legend = ax.get_legend()
+if legend:
+    legend.set_title_fontsize(12)  # Example: set title font size
+    legend.set_fontsize(1)        # Example: set legend font size
+
+# Show or save the modified plot
+plt.show()
+
+
+#####
+latent_representation = model.get_latent_representation()
+mdata.mod['RNA'].obsm[totalvi_latent_key] = latent_representation
+latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
+
+print("Save latent data in csv file")
+latent_df.to_csv(prefix +'/'+  prefix + '_' + totalvi_latent_key + ".csv", index=True)
+```
+
+```{python}
+
+adata = mu.read(prefix+'/intr_cvae/adata.h5ad') #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+intr_cvae = sca.load
+intr_cvae = sca.models.EXPIMAP.load(prefix+'/intr_cvae')
+
+adata.obsm['X_cvae'].shape
+adata.varm['I'].shape
+
+intr_cvae.latent_directions(adata = adata)
+
+adata.uns['directions']
+
+#Do gene set enrichment test for condition in reference + query using Bayes Factors.
+
+intr_cvae.latent_enrich(groups='organ_simplified', comparison='rest', use_directions=True, adata = adata)
+fig = sca.plotting.plot_abs_bfs(adata, yt_step=0.8, scale_y=2.5, fontsize=7)
+fig.set_size_inches(20,20)
+fig.savefig(prefix+'/intr_cvae/reactome_enrichement_organsimplified_vs_rest.pdf')
+
+
+
+
+```
+Plot the latent variables for query + reference corresponding to the annotations
+```{python}
+terms = adata.uns['terms']
+terms.shape
+select_terms = ['CELL_CYCLE', 'ADAPTIVE_IMMUNE_SYSTEM']
+idx = [terms.index(term) for term in select_terms]
+idx = [np.where(terms == term)[0][0] for term in select_terms]
+
+latents = (intr_cvae.get_latent() * adata.uns['directions'])[:, idx]
+latents.shape
+
+adata.obs['CELL_CYCLE'] = latents[:, 0]
+adata.obs['ADAPTIVE_IMMUNE_SYSTEM'] = latents[:, 1]
+plt.figure(figsize=(10, 10))
+sc.pl.scatter(adata, x='CELL_CYCLE', y='ADAPTIVE_IMMUNE_SYSTEM', color='organ_simplified', size=10, show = False)
+plt.savefig(prefix+'/intr_cvae/latent_CELL_CYCLE_ADAPTIVE_IMMUNE_SYSTEM.pdf', format='pdf')
+```
+
+```{python}
+intr_cvae.term_genes('CELL_CYCLE', terms=adata.uns['terms'])
+
+[intr_cvae.term_genes(term, terms=adata.uns['terms']) for term in adata.uns['terms']]
+intr_cvae.term_genes(['CELL_CYCLE', 'ADAPTIVE_IMMUNE_SYSTEM'], terms=adata.uns['terms'])
+```
+
+
+
