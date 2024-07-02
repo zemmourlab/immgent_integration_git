@@ -113,7 +113,6 @@ adata = adata[:, genes_to_keep].copy()
 
 Save filtered adata
 ```{python}
-
 adata.write('adata_forexpimap.h5ad')
 ```
 

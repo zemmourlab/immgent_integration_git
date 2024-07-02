@@ -77,6 +77,7 @@ print("Global configurations")
 #     print("Using device:", torch.cuda.get_device_name())
 #     torch.set_float32_matmul_precision("high")
 
+os.makedirs(prefix)
 os.chdir(working_dir)
 
 print("Reading MuData")
@@ -112,6 +113,94 @@ adata.varm['I'] = adata.varm['I'][:, select_terms]
 print('Filter out genes not present in any of the terms after selection of HVGs.')
 adata._inplace_subset_var(adata.varm['I'].sum(1)>0)
 adata.var
+adata.X = adata.layers["counts"].copy()
+
+print('Create expiMap model')
+intr_cvae = sca.models.EXPIMAP(
+    adata=adata,
+    condition_key='IGT',
+    hidden_layer_sizes=[256, 256, 256],
+    recon_loss='nb'
+)
+
+ALPHA = 0.7
+early_stopping_kwargs = {
+    "early_stopping_metric": "val_unweighted_loss", # val_unweighted_loss
+    "threshold": 0,
+    "patience": 50,
+    "reduce_lr": True,
+    "lr_patience": 13,
+    "lr_factor": 0.1,
+}
+intr_cvae.train(
+    n_epochs=400,
+    alpha_epoch_anneal=100,
+    alpha=ALPHA,
+    alpha_kl=0.5,
+    weight_decay=0.,
+    early_stopping_kwargs=early_stopping_kwargs,
+    use_early_stopping=True,
+    monitor_only_val=False,
+    seed=2020,
+)
+
+intr_cvae.save(prefix)
+
+print('Plot the latent space of the reference.')
+
+MEAN = False
+
+adata.obsm['X_cvae'] = intr_cvae.get_latent(mean=MEAN, only_active=True)
+
+sc.pp.neighbors(adata, use_rep='X_cvae')
+sc.tl.umap(adata)
+
+
+######
+print('Plot the latent space of the reference.')
+adata.write(prefix+'/intr_cvae/adata.h5ad')
+
+sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = )
+
+fig = plt.gcf()  # Get current figure
+ax = plt.gca()   # Get current axis
+
+# Adjust the legend properties
+legend = ax.get_legend()
+if legend:
+    legend.set_title_fontsize(12)  # Example: set title font size
+    legend.set_fontsize(1)        # Example: set legend font size
+
+# Show or save the modified plot
+plt.show()
+
+```
+
+```{python}
+
+adata = mu.read(prefix+'/intr_cvae/adata.h5ad') #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+intr_cvae = sca.load
+intr_cvae = sca.models.EXPIMAP.load(prefix+'/intr_cvae')
+
+adata.obsm['X_cvae'].shape
+adata.varm['I'].shape
+
+intr_cvae.latent_directions(adata = adata)
+
+adata.uns['directions']
+
+#Do gene set enrichment test for condition in reference + query using Bayes Factors.
+
+intr_cvae.latent_enrich(groups='organ_simplified', comparison='rest', use_directions=True, adata = adata)
+fig = sca.plotting.plot_abs_bfs(adata, yt_step=0.8, scale_y=2.5, fontsize=7)
+fig.set_size_inches(20,20)
+fig.savefig(prefix+'/intr_cvae/reactome_enrichement_organsimplified_vs_rest.pdf')
+
+
+
+
+```
+
 
 
 
