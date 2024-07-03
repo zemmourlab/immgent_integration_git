@@ -134,7 +134,7 @@ intr_cvae.train(
     seed=2020,
 )
 
-intr_cvae.save(prefix)
+intr_cvae.save(prefix+'/model)
 
 print("Save latent data and umap in csv file")
 MEAN = False

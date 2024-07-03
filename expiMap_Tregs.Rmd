@@ -54,7 +54,6 @@ os.makedirs(prefix)
 #prefix2='20240701'
 ```
 
-
 Load data
 ```{python}
 #mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
@@ -78,7 +77,6 @@ assert adata.var_names.is_unique, "Variable names are not unique!"
 assert adata.obs_names.is_unique, "Observation names are not unique!"
 #adata._inplace_subset_var(adata.varm['I'].sum(1)>0)
 ```
-
 
 Filter genes
 ```{python}
@@ -119,8 +117,25 @@ adata.write('adata_forexpimap.h5ad')
 adata = sc.read('adata_forexpimap.h5ad')
 ```
 
+Wrapper: 
+top 500 HVG
+m2.cp.reactome.v2023.2.Mm.symbols.gmt
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703.sh
+
+#on 500
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+#working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#path_to_anndata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad
+#prefix=expimap/20240703
+#batchkey=IGT
+#path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
+
+```
 
 
+(in run_expimap.py)
 Read the Reactome annotations, make a binary matrix where rows represent gene symbols and columns represent the terms, and add the annotations matrix to the reference dataset. The binary matrix of annotations is stored in adata.varm['I']. Note that only terms with minimum of 12 genes in the reference dataset are retained.
 ```{python}
 sca.utils.add_annotations(adata, prefix+'/m2.cp.reactome.v2023.2.Mm.symbols.gmt', min_genes=12, clean=True)
@@ -129,7 +144,7 @@ print(f"Number of genes to kept from annotation: {np.where(mask)[0].shape[0]}")
 
 ```
 
-For a better model performance it is necessary to select HVGs. 
+(in run_expimap.py) For a better model performance it is necessary to select HVGs. 
 ```{python}
 sc.pp.normalize_total(adata)
 sc.pp.log1p(adata)
@@ -140,19 +155,19 @@ sc.pp.log1p(adata)
 # adata.var['highly_variable_intersection'][adata.var['highly_variable_intersection'] == True]
 
 ```
-Filter out all annotations (terms) with less than 12 genes.
+(in run_expimap.py) Filter out all annotations (terms) with less than 12 genes.
 ```{python}
 select_terms = adata.varm['I'].sum(0)>12
 adata.uns['terms'] = np.array(adata.uns['terms'])[select_terms].tolist()
 adata.varm['I'] = adata.varm['I'][:, select_terms]
 ```
 
-Filter out genes not present in any of the terms after selection of HVGs.
+(in run_expimap.py) Filter out genes not present in any of the terms after selection of HVGs.
 ```{python}
 adata._inplace_subset_var(adata.varm['I'].sum(1)>0)
 adata.var
 ```
-Put the counts data back to adata.X.
+(in run_expimap.py) Put the counts data back to adata.X.
 ```{python}
 adata.X = adata.layers["counts"].copy()
 ```
@@ -165,7 +180,7 @@ The required strength of group lasso regularization (alpha) depends on the numbe
 
 If soft mask in the reference training is used (soft_ext_mask=True in the model initialization), it is better to start with alpha_l1=0.5 (higher value means more constraints on how many genes are added to the gene sets) and use print_stats=True in the training for monitoring to check the reported “Share of deactivated inactive genes: ​__” is around 95% (0.95) at the end and stays so at the final 10 epochs of training. If it is much smaller, alpha_l1 should be increased by a small value (around 0.05), and if it is 100% (1.) then alpha_l1 should be decreased.
 
-Using new terms (n_ext) in the reference training is not recommended.
+(in run_expimap.py) Using new terms (n_ext) in the reference training is not recommended.
 ```{python}
 intr_cvae = sca.models.EXPIMAP(
     adata=adata,
@@ -201,7 +216,7 @@ intr_cvae = sca.models.EXPIMAP.load('expimap/intr_cvae')
 
 ```
 
-Save the latent space of the reference.
+(in run_expimap.py) Save the latent space of the reference.
 ```{python}
 MEAN = False
 
@@ -222,7 +237,7 @@ umap_df.to_csv(prefix+"/umap.csv", index=True)
 
 ```
 
-Plot UMAP
+(in run_expimap.py) Plot UMAP
 ```{python}
 #adata.write(prefix+'/intr_cvae/adata.h5ad')
 #plt.figure(figsize=(30, 10))
@@ -231,14 +246,7 @@ plt.savefig(prefix+'/umap.pdf')
 
 ```
 
-
-```{bash}
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sbatch $SCRIPT_DIR/run_expimap_wrapper_20240701.sh
-```
-
-
-
+Plot specific latent spaces
 ```{python}
 
 adata = mu.read(prefix+'/intr_cvae/adata.h5ad') #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
@@ -257,9 +265,6 @@ intr_cvae.latent_enrich(groups='organ_simplified', comparison='rest', use_direct
 fig = sca.plotting.plot_abs_bfs(adata, yt_step=0.8, scale_y=2.5, fontsize=7)
 fig.set_size_inches(20,20)
 fig.savefig(prefix+'/intr_cvae/reactome_enrichement_organsimplified_vs_rest.pdf')
-
-
-
 
 ```
 Plot the latent variables for query + reference corresponding to the annotations
