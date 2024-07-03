@@ -5,7 +5,7 @@
 #SBATCH --mem=128GB #184GB
 #SBATCH -J expimap              
 #SBATCH -o expimap_20240703_2.log
-#SBATCH -t 72:00:00              ##SBATCH --mem=8G
+#SBATCH -t 48:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
