@@ -23,6 +23,7 @@ path_to_anndata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration
 prefix=expimap/20240703_2
 batchkey=IGT
 path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
+#hvg=500
 
 cd $working_dir
 
