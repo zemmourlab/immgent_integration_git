@@ -17,7 +17,7 @@ parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
 print("Arguments")
 args = parser.parse_args()
 working_dir = args.working_dir
-path_to_anndata = args.path_to_mudata
+path_to_anndata = args.path_to_anndata
 path_to_signatures = args.path_to_signatures
 prefix = args.prefix
 batchkey = args.batchkey
