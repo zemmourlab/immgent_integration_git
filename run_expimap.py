@@ -60,8 +60,14 @@ print("Global configurations")
 #     print("Using device:", torch.cuda.get_device_name())
 #     torch.set_float32_matmul_precision("high")
 
-os.makedirs(prefix)
 os.chdir(working_dir)
+
+print('Create output directory: {prefix}')
+if not os.path.exists(prefix):
+    os.makedirs(prefix)
+    print(f"Created directory: {prefix}")
+else:
+    print(f"Directory already exists: {prefix}")
 
 print("Reading AnnData")
 #mdata = mu.read(path_to_anndata)
