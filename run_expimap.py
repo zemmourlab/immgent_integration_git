@@ -64,7 +64,7 @@ print("Global configurations")
 
 os.chdir(working_dir)
 
-print('Create output directory: {prefix}')
+print(f'Create output directory: {prefix}')
 if not os.path.exists(prefix):
     os.makedirs(prefix)
     print(f"Created directory: {prefix}")
