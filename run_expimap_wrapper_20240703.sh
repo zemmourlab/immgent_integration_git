@@ -26,4 +26,4 @@ path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integrat
 
 cd $working_dir
 
-python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures
+python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures
