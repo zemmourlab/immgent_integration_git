@@ -65,7 +65,7 @@ os.chdir(working_dir)
 
 print("Reading AnnData")
 #mdata = mu.read(path_to_anndata)
-adata = sc.read(path_to_anndata')
+adata = sc.read(path_to_anndata)
 
 print("Converting to AnnData")
 #adata = mdata.mod['RNA']
