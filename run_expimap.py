@@ -96,7 +96,7 @@ sc.pp.normalize_total(adata)
 sc.pp.log1p(adata)
 
 if hvg:
-    print('Top {hvg} genes')
+    print(f'Calculating top {hvg} genes')
     sc.pp.highly_variable_genes(adata, n_top_genes=hvg, batch_key = 'IGT', subset=True)
 
 print('Filter out all annotations (terms) with less than 12 genes.')
