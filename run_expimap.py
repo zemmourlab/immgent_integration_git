@@ -13,7 +13,7 @@ parser.add_argument('--path_to_signatures', help='Path to GMT signature file')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
-parser.add_argument('--hvg', default=None, help='number of top HVG genes')
+parser.add_argument('--hvg', default=None, type=int, help='Number of highly variable genes')
 
 print("Arguments")
 args = parser.parse_args()
@@ -36,6 +36,7 @@ print(f"Path to AnnData: {path_to_anndata}")
 print(f"Path to Signture gmt file: {path_to_signatures}")
 print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
+print(f"Top HVG: {hvg}")
 
 print("Importing libraries")
 import warnings
