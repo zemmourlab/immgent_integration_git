@@ -12,6 +12,7 @@
 #run as: sbatch run_totalvi_wrapper_20231030.sh
 
 module load python/anaconda-2022.05 
+
 source activate /project/zemmour/david/envs/scarches_test9
 
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
