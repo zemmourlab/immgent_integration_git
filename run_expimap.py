@@ -14,7 +14,7 @@ parser.add_argument('--prefix', default='myprefix',
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
 parser.add_argument('--hvg', default=None, type=int, help='Number of highly variable genes')
-parser.add_argument('--alpha_kl', default=0.5, type=int, help='alpha_kl decrease if big blob, increase if bad integration')
+parser.add_argument('--alpha_kl', default=0.5, type=float, help='alpha_kl decrease if big blob, increase if bad integration')
 
 
 print("Arguments")
