@@ -14,6 +14,8 @@ parser.add_argument('--prefix', default='myprefix',
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
 parser.add_argument('--hvg', default=None, type=int, help='Number of highly variable genes')
+parser.add_argument('--alpha_kl', default=0.5, type=int, help='alpha_kl decrease if big blob, increase if bad integration')
+
 
 print("Arguments")
 args = parser.parse_args()
@@ -23,6 +25,7 @@ path_to_signatures = args.path_to_signatures
 prefix = args.prefix
 batchkey = args.batchkey
 hvg = args.hvg
+alpha_kl = args.alpha_kl
 
 # working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg'
 # path_to_anndata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad'
@@ -37,6 +40,7 @@ print(f"Path to Signture gmt file: {path_to_signatures}")
 print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
 print(f"Top HVG: {hvg}")
+print(f"alpha_kl: {alpha_kl}")
 
 print("Importing libraries")
 import warnings
@@ -130,7 +134,7 @@ intr_cvae.train(
     n_epochs=400,
     alpha_epoch_anneal=100,
     alpha=ALPHA,
-    alpha_kl=0.5,
+    alpha_kl=alpha_kl,
     weight_decay=0.,
     early_stopping_kwargs=early_stopping_kwargs,
     use_early_stopping=True,

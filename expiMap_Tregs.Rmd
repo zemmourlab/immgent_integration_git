@@ -150,6 +150,7 @@ sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703.sh
 #batchkey=IGT
 #path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
 #hvg=500
+#alpha_kl=0.5
 #cd $working_dir
 #python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures --hvg=$hvg
 
@@ -157,6 +158,27 @@ sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703.sh
 
 *run_expimap_wrapper_20240703_2.sh*
 all genes (filtered, 16K)
+m2.cp.reactome.v2023.2.Mm.symbols.gmt
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703_2.sh
+
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+#working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+#path_to_anndata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad
+#prefix=expimap/20240703
+#batchkey=IGT
+#path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
+#no hvg
+
+#python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures --hvg=$hvg
+
+
+```
+
+*run_expimap_wrapper_20240703_3.sh*
+top 500 HVG
+alpha_kl=0.1
 m2.cp.reactome.v2023.2.Mm.symbols.gmt
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -168,12 +190,14 @@ sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703.sh
 #prefix=expimap/20240703
 #batchkey=IGT
 #path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
-no hvg
+#hvg=500
+#alpha_kl=0.1
 
-#python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures --hvg=$hvg
-
+#cd $working_dir
+#python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures --hvg=$hvg --alpha_kl=$alpha_kl
 
 ```
+
 
 
 
