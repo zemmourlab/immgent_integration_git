@@ -20,7 +20,7 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 path_to_anndata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad
-prefix=expimap/20240703_2
+prefix=expimap/20240703_3
 batchkey=IGT
 path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt
 hvg=500
