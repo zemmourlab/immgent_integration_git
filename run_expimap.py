@@ -13,6 +13,7 @@ parser.add_argument('--path_to_signatures', help='Path to GMT signature file')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
+parser.add_argument('--hvg', default=None, help='number of top HVG genes')
 
 print("Arguments")
 args = parser.parse_args()
@@ -21,7 +22,7 @@ path_to_anndata = args.path_to_anndata
 path_to_signatures = args.path_to_signatures
 prefix = args.prefix
 batchkey = args.batchkey
-
+hvg = args.hvg
 
 # working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg'
 # path_to_anndata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad'
@@ -93,7 +94,9 @@ print('Normalization, log1p')
 sc.pp.normalize_total(adata)
 sc.pp.log1p(adata)
 
-sc.pp.highly_variable_genes(adata, n_top_genes=500, batch_key = 'IGT', subset=True) #skipping for now
+if hvg:
+    print('Top {hvg} genes')
+    sc.pp.highly_variable_genes(adata, n_top_genes=hvg, batch_key = 'IGT', subset=True)
 
 print('Filter out all annotations (terms) with less than 12 genes.')
 select_terms = adata.varm['I'].sum(0)>12
