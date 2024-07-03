@@ -1,57 +1,40 @@
-#!/project/zemmour/david/envs/scvi_20240315/bin/python
-"""This script run TOTALVI from a Mudata object specifying batch_key and categorical_covariate_keys if needed, """
+#!/project/zemmour/david/envs/scarches_test9/bin/python
+"""This script run EXPIMAP from a AnnData object"""
 #author: David Zemmour
-#date: 05/27/2024
-#run_expimap.py [cwd] [path to mudata .h5mu] [prefix] [batchkey] [] [corrected_counts] [denoised_data]
+#date: 07/01/2024
+#run_expimap.py 
 
 import warnings; warnings.simplefilter('ignore')
 import argparse
-parser = argparse.ArgumentParser(description="run ExpiMap from a MuData object specifying ")
+parser = argparse.ArgumentParser(description="run ExpiMap from a AnnData object ")
 parser.add_argument('--working_dir', help='Working directory')
-parser.add_argument('--path_to_mudata', help='Path to MuData object')
+parser.add_argument('--path_to_anndata', help='Path to AnnData object')
 parser.add_argument('--path_to_signatures', help='Path to GMT signature file')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
-parser.add_argument('--categorical_covariate_keys', default=None, help='categorical_covariate_keys variables (default: None)')
-parser.add_argument('--corrected_counts', default=False, help='Returns corrected counts, aka posterior_predictive_sample() (default: False)')
-parser.add_argument('--denoised_data', default=False, help='Returns denoised data, aka get_normalized_expression()  (default: False)')
-#parser.add_argument('--latent_key', help='Key for latent space')
 
 print("Arguments")
 args = parser.parse_args()
 working_dir = args.working_dir
-path_to_mudata = args.path_to_mudata
+path_to_anndata = args.path_to_mudata
 path_to_signatures = args.path_to_signatures
 prefix = args.prefix
 batchkey = args.batchkey
-#confoundings = args.confoundings
-if args.categorical_covariate_keys:
-        # Split the string into a list by commas
-        categorical_covariate_keys = args.categorical_covariate_keys.split(',')
-        #print(categorical_covariate_keys)
-else:
-    categorical_covariate_keys = None
-corrected_counts = args.corrected_counts
-denoised_data = args.denoised_data
-#latent_key = args.latent_key
+
 
 # working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg'
-# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu'
-# prefix = 'expimap_20240628'
+# path_to_anndata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad'
+# prefix = 'expimap_20240701'
 # batchkey = 'IGT'
-# path_to_signatures = /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt'
+# path_to_signatures = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/m2.cp.reactome.v2023.2.Mm.symbols.gmt'
 
 
 print(f"Working Directory: {working_dir}")
-print(f"Path to AnnData: {path_to_mudata}")
+print(f"Path to AnnData: {path_to_anndata}")
 print(f"Path to Signture gmt file: {path_to_signatures}")
 print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
-print(f"categorical_covariate_keys: {categorical_covariate_keys}")
-print(f"corrected_counts: {corrected_counts}")
-print(f"denoised_data: {denoised_data}")
-#print(f"Latent Key: {latent_key}")
 
 print("Importing libraries")
 import warnings
@@ -80,12 +63,13 @@ print("Global configurations")
 os.makedirs(prefix)
 os.chdir(working_dir)
 
-print("Reading MuData")
-mdata = mu.read(path_to_mudata)
+print("Reading AnnData")
+#mdata = mu.read(path_to_anndata)
+adata = sc.read(path_to_anndata')
 
 print("Converting to AnnData")
-adata = mdata.mod['RNA']
-adata.obs['sample_id']
+#adata = mdata.mod['RNA']
+#adata.obs['sample_id']
 
 adata.var_names = adata.var_names.astype(str)
 adata.obs_names = adata.obs_names.astype(str)
@@ -103,7 +87,7 @@ print('Normalization, log1p')
 sc.pp.normalize_total(adata)
 sc.pp.log1p(adata)
 
-#sc.pp.highly_variable_genes(adata, n_top_genes=500, batch_key = 'IGT', subset=True) skipping for now
+sc.pp.highly_variable_genes(adata, n_top_genes=500, batch_key = 'IGT', subset=True) #skipping for now
 
 print('Filter out all annotations (terms) with less than 12 genes.')
 select_terms = adata.varm['I'].sum(0)>12
@@ -146,62 +130,25 @@ intr_cvae.train(
 
 intr_cvae.save(prefix)
 
-print('Plot the latent space of the reference.')
-
+print("Save latent data and umap in csv file")
 MEAN = False
+latent_representation = intr_cvae.get_latent(mean=MEAN, only_active=True)
+adata.obsm['X_expimap'] = latent_representation
+latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
+latent_df.to_csv(prefix+"/latent.csv", index=True)
 
-adata.obsm['X_cvae'] = intr_cvae.get_latent(mean=MEAN, only_active=True)
+sc.pp.neighbors(adata, use_rep='X_expimap')
+sc.tl.umap(adata, n_components = 2)
+#adata.obsm['X_umap_expimap'] = adata.obsm['X_umap']
+#del adata.obsm['X_umap']
+umap_df = pd.DataFrame(adata.obsm['X_umap'], index = adata.obs.index, columns = ['umap_1', 'umap_2'])
+umap_df.to_csv(prefix+"/umap.csv", index=True)
 
-sc.pp.neighbors(adata, use_rep='X_cvae')
-sc.tl.umap(adata)
+print('Plot the UMAP')
+sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = 5, show = False)
+plt.savefig(prefix+'/umap.pdf')
 
-
-######
-print('Plot the latent space of the reference.')
-adata.write(prefix+'/intr_cvae/adata.h5ad')
-
-sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = )
-
-fig = plt.gcf()  # Get current figure
-ax = plt.gca()   # Get current axis
-
-# Adjust the legend properties
-legend = ax.get_legend()
-if legend:
-    legend.set_title_fontsize(12)  # Example: set title font size
-    legend.set_fontsize(1)        # Example: set legend font size
-
-# Show or save the modified plot
-plt.show()
-
-```
-
-```{python}
-
-adata = mu.read(prefix+'/intr_cvae/adata.h5ad') #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-intr_cvae = sca.load
-intr_cvae = sca.models.EXPIMAP.load(prefix+'/intr_cvae')
-
-adata.obsm['X_cvae'].shape
-adata.varm['I'].shape
-
-intr_cvae.latent_directions(adata = adata)
-
-adata.uns['directions']
-
-#Do gene set enrichment test for condition in reference + query using Bayes Factors.
-
-intr_cvae.latent_enrich(groups='organ_simplified', comparison='rest', use_directions=True, adata = adata)
-fig = sca.plotting.plot_abs_bfs(adata, yt_step=0.8, scale_y=2.5, fontsize=7)
-fig.set_size_inches(20,20)
-fig.savefig(prefix+'/intr_cvae/reactome_enrichement_organsimplified_vs_rest.pdf')
-
-
-
-
-```
-
-
+print('Done')
 
 
 

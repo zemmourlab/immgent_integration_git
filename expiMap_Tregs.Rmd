@@ -57,6 +57,7 @@ os.makedirs(prefix)
 
 Load data
 ```{python}
+#mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
 mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
 
 ```
@@ -114,6 +115,8 @@ adata = adata[:, genes_to_keep].copy()
 Save filtered adata
 ```{python}
 adata.write('adata_forexpimap.h5ad')
+
+adata = sc.read('adata_forexpimap.h5ad')
 ```
 
 
@@ -194,52 +197,51 @@ intr_cvae.train(
 
 intr_cvae.save(prefix)
 
+intr_cvae = sca.models.EXPIMAP.load('expimap/intr_cvae')
+
 ```
 
-Plot the latent space of the reference.
+Save the latent space of the reference.
 ```{python}
 MEAN = False
 
 latent_representation = intr_cvae.get_latent(mean=MEAN, only_active=True)
-adata.obsm['X_cvae'] = latent_representation
+adata.obsm['X_expimap'] = latent_representation
 latent_df = pd.DataFrame(latent_representation, index = adata.obs.index)
 
 print("Save latent data in csv file")
 latent_df.to_csv(prefix+"/latent.csv", index=True)
 
-sc.pp.neighbors(adata, use_rep='X_cvae')
-sc.tl.umap(adata)
-
-adata.write(prefix+'/intr_cvae/adata.h5ad')
-
-sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = )
-
-fig = plt.gcf()  # Get current figure
-ax = plt.gca()   # Get current axis
-
-# Adjust the legend properties
-legend = ax.get_legend()
-if legend:
-    legend.set_title_fontsize(12)  # Example: set title font size
-    legend.set_fontsize(1)        # Example: set legend font size
-
-# Show or save the modified plot
-plt.show()
+sc.pp.neighbors(adata, use_rep='X_expimap')
+sc.tl.umap(adata, n_components = 2)
+#adata.obsm['X_umap_expimap'] = adata.obsm['X_umap']
+#del adata.obsm['X_umap']
+umap_df = pd.DataFrame(adata.obsm['X_umap'], index = adata.obs.index, columns = ['umap_1', 'umap_2'])
+umap_df.to_csv(prefix+"/umap.csv", index=True)
 
 
-#####
-latent_representation = model.get_latent_representation()
-mdata.mod['RNA'].obsm[totalvi_latent_key] = latent_representation
-latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
-
-print("Save latent data in csv file")
-latent_df.to_csv(prefix +'/'+  prefix + '_' + totalvi_latent_key + ".csv", index=True)
 ```
+
+Plot UMAP
+```{python}
+#adata.write(prefix+'/intr_cvae/adata.h5ad')
+#plt.figure(figsize=(30, 10))
+sc.pl.umap(adata, color=['IGT', 'organ_simplified',], frameon=False, legend_fontsize = 5, show = False)
+plt.savefig(prefix+'/umap.pdf')
+
+```
+
+
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_expimap_wrapper_20240701.sh
+```
+
+
 
 ```{python}
 
 adata = mu.read(prefix+'/intr_cvae/adata.h5ad') #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-intr_cvae = sca.load
 intr_cvae = sca.models.EXPIMAP.load(prefix+'/intr_cvae')
 
 adata.obsm['X_cvae'].shape
