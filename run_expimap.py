@@ -15,6 +15,7 @@ parser.add_argument('--prefix', default='myprefix',
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
 parser.add_argument('--hvg', default=None, type=int, help='Number of highly variable genes')
 parser.add_argument('--alpha_kl', default=0.5, type=float, help='alpha_kl decrease if big blob, increase if bad integration')
+parser.add_argument('--alpha', default=0.7, type=float, help='alpha increase if many signatures')
 
 
 print("Arguments")
@@ -26,6 +27,7 @@ prefix = args.prefix
 batchkey = args.batchkey
 hvg = args.hvg
 alpha_kl = args.alpha_kl
+alpha = args.alpha
 
 # working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg'
 # path_to_anndata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad'
@@ -41,6 +43,7 @@ print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
 print(f"Top HVG: {hvg}")
 print(f"alpha_kl: {alpha_kl}")
+print(f"alpha: {alpha}")
 
 print("Importing libraries")
 import warnings
@@ -121,7 +124,6 @@ intr_cvae = sca.models.EXPIMAP(
     recon_loss='nb'
 )
 
-ALPHA = 0.7
 early_stopping_kwargs = {
     "early_stopping_metric": "val_unweighted_loss", # val_unweighted_loss
     "threshold": 0,
