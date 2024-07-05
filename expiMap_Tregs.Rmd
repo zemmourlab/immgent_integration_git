@@ -198,7 +198,7 @@ sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703_3.sh
 
 ```
 
-*run_expimap_wrapper_20240703_3.sh*
+*run_expimap_wrapper_20240703_4.sh*
 top 500 HVG
 alpha_kl=0.1
 alpha=0.1

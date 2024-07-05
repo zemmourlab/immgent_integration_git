@@ -135,7 +135,7 @@ early_stopping_kwargs = {
 intr_cvae.train(
     n_epochs=400,
     alpha_epoch_anneal=100,
-    alpha=ALPHA,
+    alpha=alpha,
     alpha_kl=alpha_kl,
     weight_decay=0.,
     early_stopping_kwargs=early_stopping_kwargs,
