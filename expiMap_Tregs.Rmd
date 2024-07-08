@@ -231,7 +231,7 @@ alpha=0.1
 signaturelist20171024.gmt
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sbatch $SCRIPT_DIR/run_expimap_wrapper_20240703_4.sh
+sbatch $SCRIPT_DIR/run_expimap_wrapper_20240708.sh
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
@@ -249,6 +249,30 @@ python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$
 
 ```
 
+*run_expimap_wrapper_20240708_2.sh*
+top 2000 HVG
+alpha_kl=0.1
+alpha=0.1
+signaturelist20171024.gmt
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_expimap_wrapper_20240708_2.sh
+
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
+path_to_anndata=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/adata_forexpimap.h5ad
+prefix=expimap/20240708_2
+batchkey=IGT
+path_to_signatures=/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/signaturelist20171024.gmt
+hvg=2000
+alpha_kl=0.1
+alpha=0.1
+
+cd $working_dir
+
+python $SCRIPT_DIR/run_expimap.py --working_dir=$working_dir --path_to_anndata=$path_to_anndata --prefix=$prefix --batchkey=$batchkey --path_to_signatures=$path_to_signatures --hvg=$hvg --alpha_kl=$alpha_kl --alpha=$alpha
+
+```
 
 
 
