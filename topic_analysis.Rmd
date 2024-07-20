@@ -27,6 +27,8 @@ module load openblas/0.3.13 #load again or error
 cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 #cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
 
+#srun --pty --jobid 21908677 -w midway3-0291 /bin/bash
+
 #R
 #options(max.print=1000)
 #options(Seurat.object.assay.version = 'v5')
@@ -35,185 +37,47 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 **Initialize in R: load libraries and custom functions**
 
 ```{r}
-# setwd("~/google_drive/ImmgenT/jamboree2/")
-# setwd("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56")
+options(max.print=1000)
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fastTopics", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+libs = c("fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
-options(Seurat.object.assay.version = 'v5')
 
+#Gradients
+library(RColorBrewer)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
 ColorRamp = rev(rainbow(10, end = 4/6))
-ColorRamp = viridis(100)
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
 
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
 
+#Large Color palette
+library("pals")
 n = 70
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
 mypal1 = mypal1[-4]
-
-library("pals")
-parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
-
-length(glasbey())
-length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
-#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+#pal.bands(mypal, main="Colormap suggestions")
 
-#pdf("mypal.pdf", 10, 10)
-#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
-#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
-#dev.off()
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
-MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
-
-    so = seurat_object
-    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
-    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
-    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
-    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
-    
-    alpha = 0.5
-    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
-    #names(sample_name_colors) = levels(so$sample_name)
-    #sample_name_colors2 = sample_name_colors
-    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
-    
-    message("Plot 1: UMAP")
-    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
-        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
-        theme_bw() + scale_color_manual(values = mypal)
-    print(plot1)
-    
-    message("Plot 2: UMAP split")
-    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
-    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-    
-    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
-    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
-    
-    if (is.null(split_by2)) {
-        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
-    } else {
-        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
-        }
-    print(plot2)
-    
-    message("Plot 3: UMAP genes")
-    
-    for (g in genes) {
-        print(g)
-        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
-        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-        
-        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
-        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
-        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
-    
-        
-        if (is.null(split_by2)) {
-        plot3 = p + p2  + 
-            scale_color_manual(values = c("black", "red")) + 
-            scale_alpha_manual(values = c(0.5,1))  + 
-            theme_bw()  + 
-            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
-            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
-    } else {
-         plot3 = p + p2  + 
-             scale_color_manual(values = c("black", "red")) + 
-             scale_alpha_manual(values = c(0.5,1))  + 
-             theme_bw() + 
-             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
-             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
-        }
-        print(plot3)
-        
-    }
-
-}
-
-ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
-    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
-    so.v3 = CreateSeuratObject(so.v3)
-    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
-    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
-    #all(colnames(so.v3) == colnames(so))
-    so.v3@meta.data = so@meta.data
-    return(so.v3)
-}
-
-Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
-  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
-  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
-  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
-  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
-  annotation_logticks(sides = "b") +
-  xlab(xlab) +
-  theme_bw() +
-  ylab("p value") +
-  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
-  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
-    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
-    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
-    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
-    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
-  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
-    annotation_logticks(sides = "bl") +
-    xlab(xlab) +
-    ylab(ylab) +
-    ggtitle(main) +
-    theme_bw() +
-    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-  return(p)
-}
-
-SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
-  newpal = c()
-  for (c in 1:length(splitvector)){
-    #print(c)
-    n = splitvector[c]
-    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
-    newcol[4,] = seq(50, 255, length.out = n)
-    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+ensure_directory <- function(path) {
+  if (!dir.exists(path)) {
+    dir.create(path, recursive = TRUE)
+    message(paste("Directory created:", path))
+  } else {
+    message(paste("Directory already exists:", path))
   }
-  return(newpal)
 }
-sp = SplitColors
-#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
-
-library(org.Hs.eg.db)
-hs = org.Hs.eg.db
-go2eg = as.list(org.Hs.egGO2ALLEGS)
-symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
-secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
-
-library(org.Mm.eg.db)
-mm = org.Mm.eg.db
-go2eg = as.list(org.Mm.egGO2ALLEGS)
-symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
-effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
-
 ```
 
 **Documentation**
@@ -662,5 +526,389 @@ https://stephenslab.github.io/fastTopics/articles/single_cell_rnaseq_basic.html#
 fasttopics robust? concensus?
 calculate spatial autocorrelation of topics?
 Flashier to use not count data? ie corrected counts from scvi?
+
+**Flashier**
+https://willwerscheid.github.io/flashier/articles/flashier_intro.html
+
+```{r}
+prefix = "flashier"
+ensure_directory(prefix)
+```
+
+log1p with scale factor as the average rowSums(counts)
+```{r}
+so = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
+norm_fac = mean(so$nCount_RNA)
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = norm_fac)
+
+counts = so[['RNA']]$counts
+shifted_log_counts = so[['RNA']]$data
+```
+
+Filter genes
+```{r}
+genes_to_keep = rowSums(counts) >0
+#if want to remove TCR, mt, ribo, Gm and Rik genes: use this
+tcr_genes = rownames(counts)[grepl(x = rownames(counts), pattern = "Trbv|Trbd|Trbj|Trav|Traj|Trgv|Trgd|Trgj|Trdv|Trdj")]
+gm_rik_genes = rownames(counts)[grepl(x = rownames(counts), pattern = "Gm|Rik$")]
+ribo_genes = rownames(counts)[grepl(x = rownames(counts), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
+mt_genes = rownames(counts)[grepl(x = rownames(counts), pattern = "^mt-")]
+genes_to_keep = rowSums(counts) >0 & !(rownames(counts) %in% c(tcr_genes, gm_rik_genes, ribo_genes, mt_genes))
+length(which(genes_to_keep))
+
+counts = t(counts)
+counts = counts[,genes_to_keep]
+
+shifted_log_counts = t(shifted_log_counts)
+shifted_log_counts = shifted_log_counts[,genes_to_keep]
+dim(shifted_log_counts)
+
+```
+Spleen healthy 
+```{r}
+
+so$is_spleen_healthy = F
+so$is_spleen_healthy[so$organ == "spleen" & so$condition_broad == "healthy"] = T
+so$is_spleen_healthy_igt = so$is_spleen_healthy
+so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_spleen_healthy == T])
+
+spl_cells = names(which(so$is_spleen_healthy))
+
+```
+
+
+Variance regularization:
+Before we fit the model, one issue we need to confront is that flashier may automatically estimate the variances to be too small, which can especially be an issue for genes with low expression. We can avoid this issue by setting a sensible lower bound on the variance estimates.
+We use the following rule of thumb: estimate the standard deviation of the transformed data for a Poisson random variable with rate 𝜇=1/, where 𝑛is the number of samples. This standard deviation corresponds to a gene for which we would expect to observe a single count across all 𝑛cells, so it can serve as a reasonable lower bound to prevent variance estimates from getting too small.
+```{r}
+
+n = nrow(counts)
+x = rpois(1e7, 1/n)
+s1 = sd(log(x + 1))
+
+```
+
+Fit a flashier model:
+One alternative to NMF that could potentially reveal other interesting substructures is a semi-non-negative matrix factorization (semi-NMF). This is achieved by assigning different priors to 𝐋 and 𝐅: a prior with non-negative support (such as the point-exponential prior) for 𝐋; and a prior with support for all real numbers for  (such as the point-Laplace prior). The call to the “flash” function looks the same as above except for the “ebnm_fn” argument:
+
+Specifying the number of factors 𝐾is not needed because flashier automatically
+
+backfit = TRUE. This is generally recommended because it improves the quality of the fit. that it may make the model fitting too slow for very large data sets
+
+ebnm_normal: truncated SVD. Poor interpretability
+sparse factorization: more interpretatbility
+ebnm_point_exponential: non negative (and sparse)
+ebnm_point_laplace: all real numbers (and sparse)
+
+F_pm for posterior mean
+
+20240718_k6_pe_pl
+```{r}
+prefix2 = "20240718_k6_pe_pl"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+
+fit = flash(shifted_log_counts, 
+             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace), #
+             var_type = 2, 
+             greedy_Kmax = 6, 
+             S = s1,
+             backfit = FALSE)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+```
+
+20240718_knolim_pe_pl
+```{r}
+prefix2 = "20240718_knolim_pe_pl"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+
+fit = flash(shifted_log_counts, 
+             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace), #
+             var_type = 2, 
+             S = s1,
+             backfit = TRUE)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+```
+
+20240719_knolim_ebnm_normal
+```{r}
+prefix2 = "20240719_knolim_ebnm_normal"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+
+fit = flash(shifted_log_counts, 
+             ebnm_fn = ebnm_normal, #
+             var_type = 2, 
+             S = s1,
+             backfit = TRUE)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+```
+
+
+*Plots for flashier*
+```{r}
+prefix = "flashier"
+prefix2 = "20240718_knolim_pe_pl"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+#round(fit$L_pm[1:10, ], digits = 3)
+```
+
+scree_plot.pdf
+```{r}
+pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+plot(fit, include_scree = T, include_pm = F, plot_type = "scree")
+dev.off()
+```
+
+histogram_loadings_plot.pdf
+```{r}
+pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 20, 20, useDingbats = F)
+plot(fit, 
+     include_scree = F,
+     include_pm = T,
+     plot_type = "histogram",
+     pm_which = "loadings", 
+     pm_groups = so$organ_simplified,
+     bins = 20,
+     pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
+#dev.off()
+
+plot(fit, 
+     include_scree = F,
+     include_pm = T,
+     plot_type = "histogram",
+     pm_which = "loadings", 
+     pm_subset = spl_cells,
+     pm_groups = so$IGT[so$is_spleen_healthy],
+     bins = 20,
+     pm_colors = mypal[1:length(unique(so$IGT[so$is_spleen_healthy]))]) +
+    ggtitle("Spleen standard only")#+ NoLegend()
+
+dev.off()
+
+
+
+#Struture plot not working
+# plot(fit, 
+#      include_scree = F,
+#      include_pm = T,
+#      plot_type = "structure",
+#      pm_which = "loadings", 
+#      pm_groups = so$organ_simplified,
+#      bins = 20, 
+#      pm_colors = mypal[1:length(unique(so$organ_simplified))]) + NoLegend()
+
+```
+
+factors_volcano.pdf
+factors_heatmap.pdf
+de_genes_factors.txt
+```{r}
+message("factors_volcano.pdf")
+res = ldf(fit, type = "i")
+F1 = with(res, F %*% diag(D)) #same as res$F %*% diag(res$D)
+rownames(F1) = colnames(shifted_log_counts)
+head(sort(F1[,6], decreasing = TRUE), n = 16)
+F1 %>% write.table(sprintf("%s/%s/de_genes_factors.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+genes = apply(F1, 2, order, decreasing = TRUE)[1:10, 2:fit$n_factors]
+top_genes = rownames(F1)[genes]
+top_genes_m  = matrix(rownames(F1)[genes], nrow = nrow(genes), byrow = TRUE)
+
+pdf(sprintf("%s/%s/factors_volcano.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+for (i in 1:fit$n_factors) {
+    print(i)
+    p = plot(fit,
+             include_scree = F,
+             plot_type = "scatter",
+             pm_which = "factors",
+             kset = i,
+             labels = TRUE,
+             n_labels = 50,
+             label_size = 2.5) +
+        labs(x = "increase in shifted log expression",
+             y = "mean shifted log expression") +
+        ggtitle(sprintf("k = %s",i))
+    print(p)
+}
+dev.off()
+
+message("factors_heatmap.pdf")
+pdf(sprintf("%s/%s/factors_heatmap.pdf", prefix, prefix2), 10,60, useDingbats = F)
+tmp3 = F1[top_genes,]
+tmp3[tmp3>3] = 3
+tmp3[tmp3 < -3] = -3
+ColorRamp = viridis(100)
+colnames(tmp3) = sprintf("topic%s", 1:ncol(F1))
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "FC in top 20 genes in topics")
+dev.off()
+
+
+```
+
+structure_plot.pdf
+ebmfUMAP.pdf: new UMAP from fit$L (row normalized in module_scores_percentile2 for less batch effect)
+ebmfUMAP_topics.pdf
+
+```{r}
+topic_colors = mypal[1:ncol(fit$L_pm)]#c("skyblue","forestgreen","darkmagenta","dodgerblue","gold","darkorange")
+
+message("calculate topic_scores_percentile = row normalized L matrix")
+#calculate module_scores_percentile for structure plot
+percentiles = function(vector = c(1) ) {return(ecdf(vector)(vector) * 100) }
+module_scores_percentile = apply(fit$L_pm, 2, percentiles)
+rownames(module_scores_percentile) = rownames(fit$L_pm)
+module_scores_percentile2 = module_scores_percentile / rowSums(module_scores_percentile) *100
+colnames(module_scores_percentile2) = sprintf("topic%s", 1:ncol(fit$L_pm))
+
+message("structure_plot.pdf")
+pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20,8, useDingbats = F)
+structure_plot(module_scores_percentile2/100,colors = topic_colors,topics = 1:ncol(module_scores_percentile2),gap = 25,grouping = so$organ_simplified)
+structure_plot(module_scores_percentile2/100,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy)
+#structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy_igt)
+#fit_spleenctrl = SubsetFit(fit, names(which(so$is_spleen_healthy == T)))
+structure_plot(module_scores_percentile2[names(which(so$is_spleen_healthy)),]/100,colors = topic_colors,topics = 1:ncol(module_scores_percentile2),gap = 25, grouping = so$IGT[so$is_spleen_healthy == T])
+dev.off()
+
+message("UMAP_topics.pdf")
+pdf(sprintf("%s/%s/UMAP_topics.pdf", prefix, prefix2), 9,8, useDingbats = F)
+for (k in 1:ncol(module_scores_percentile2) ) {
+    print(k)
+    #genes = module_genes %>% filter(Module == module) %>% pull(Gene)
+    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),1], dim2 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),2], size = module_scores_percentile2[,k]) #fit$L_pm[,k]
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+message("ebmfUMAP.csv") #New UMAP from fit$L (module_scores_percentile)
+prefix_topic = sprintf("%s_%s",prefix,prefix2)
+so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = module_scores_percentile2 , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
+so = RunUMAP(so, dims = 1:ncol(module_scores_percentile2), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
+write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s/%s/ebmfUMAP.csv",prefix, prefix2), quote = F, row.names = TRUE, col.names = TRUE)
+# tmp = read.csv(sprintf("%s/%s/ebmfUMAP.csv",prefix, prefix2), header = T, row.names = 1)
+# so[[sprintf("umap_%s",prefix_topic)]] = CreateDimReducObject(embeddings = as.matrix(tmp), key = sprintf("%s_",prefix_topic), assay = "RNA")
+
+# ldfl = ldf(fit,type = "i")$L
+# so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = ldfl , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
+# so = RunUMAP(so, dims = 1:ncol(ldfl), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
+
+message("ebmfUMAP.pdf")
+umap_to_plot = sprintf("umap_%s",prefix_topic)
+pdf(sprintf("%s/%s/ebmfUMAP_ldfl.pdf",prefix, prefix2), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "is_spleen_healthy",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "organ_simplified",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+dev.off()
+
+message("ebmfUMAP_topics.pdf")
+pdf(sprintf("%s/%s/ebmfUMAP_topics.pdf",prefix, prefix2), 9,8, useDingbats = F)
+for (k in 1:ncol(module_scores_percentile2) ) {
+    print(k)
+    tmp = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),1], dim2 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),2], size = module_scores_percentile2[,k]) #fit$L_pm[,k] 
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+
+
+# ##########If needed: structure_plot equivalent
+# percentiles = function(vector = c(1) ) {return(ecdf(vector)(vector) * 100) }
+# module_scores_percentile = apply(fit$L_pm, 2, percentiles)
+# rownames(module_scores_percentile) = rownames(fit$L_pm)
+# module_scores_percentile2 = module_scores_percentile / rowSums(module_scores_percentile) *100
+# colnames(module_scores_percentile2) = sprintf("topic%s", 1:ncol(fit$L_pm))
+# 
+# #single cell UMAP_1D order
+# so = RunUMAP(so, dims = 1:30, reduction = "totalvi", n.components = 1, reduction.name = "totalvi_1d")
+# all(rownames(so[["totalvi_1d"]]) == rownames(fit$L_pm))
+# ord_cells = order(so[["totalvi_1d"]]@cell.embeddings[,1])
+# 
+# #order the modules
+# hc = hclust(dist(t(module_scores_percentile2)))
+# ord_modules = hc$order 
+# ord_modules = colnames(module_scores_percentile2)[hc$order]
+# 
+# #pca = prcomp(module_scores_percentile2, scale. = TRUE)
+# #pca_1 = pca$x[, 1]
+# #ordered_df = as.data.frame(module_scores_percentile2[order(pca_1),])
+# ordered_df = as.data.frame(module_scores_percentile2[ord_cells,ord_modules])
+# ordered_df$cell_id = factor(rownames(ordered_df), ordered = T)
+# melted_df = melt(ordered_df)
+# melted_df$variable = factor(melted_df$variable, levels = ord_modules, ordered = T)
+# melted_df = melted_df %>% arrange(cell_id)
+# 
+# pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20,10, useDingbats = F)
+# p = ggplot(melted_df, aes(x = cell_id, y = value, fill = variable)) +
+#     geom_bar(stat = "identity") +
+#     scale_fill_manual(values = mypal)+
+#     labs(x = "Cells", y = "Score", fill = "Module") +
+#     theme_minimal() +
+#     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+#           panel.grid.major = element_blank(), 
+#           panel.grid.minor = element_blank(),
+#           panel.background = element_blank()
+#     )
+# print(p)
+# dev.off()
+
+
+```
+
+Which metadata is significantly enriched in a topic?
+https://willwerscheid.github.io/flashier/articles/flashier_closer_look.html#sampling-from-the-posterior
+One of the list elements in the object returned by flash is a function that can sample from posterior distributions on loadings and factors. Take the backfit above as an example. To better understand which tissues are bound up with whole blood effects, we might like confidence intervals for the third factor. We construct 95% confidence intervals using 200 samples and then finding 2.5% and 97.5% quantiles as follows:
+```{r}
+# Set seed for reproducibility.
+set.seed(1)
+# Use returned sampler to sample from posterior.
+samp = fit$sampler(nsamp = 200)
+# Only keep factor 3.
+factor3_samp <- lapply(samp, function(x) x[[2]][, 3])
+# Normalize the loadings.
+factor3_samp <- sapply(factor3_samp, function(x) x / max(abs(x)))
+# Get 95% confidence intervals.
+factor3_ci <- apply(factor3_samp, 1, quantile, c(0.025, 0.975))
+
+plot(fit, 
+     include_scree = F,
+     include_pm = T,
+     kset = 3,
+     #plot_type = "histogram",
+     pm_which = "loadings", 
+     pm_groups = so$organ_simplified,
+     bins = 20,
+     pm_colors = mypal[1:length(unique(so$organ_simplified))]) + geom_errorbar(aes(ymin = factor3_ci[1, ], ymax = factor3_ci[2, ]))
+
+plot(fit, kset = 3, pm_colors = gtex_colors, include_scree = FALSE) + geom_errorbar(aes(ymin = factor3_ci[1, ], ymax = factor3_ci[2, ]))
+```
+
+
+
+
+
 
 

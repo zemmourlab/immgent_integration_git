@@ -89,7 +89,7 @@ pip install COMETSC
 
 **Install scArches**
 
-Trial 9 WORKED?
+Trial 9 WORKED!
 ```{bash}
 cd /project/zemmour/david/envs/
 module load python/anaconda-2022.05 

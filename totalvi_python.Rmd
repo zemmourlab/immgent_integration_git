@@ -349,6 +349,13 @@ cells.to_csv(prefix+"/cells.csv", index = False,header=False )
 
 ```
 
+**totalvi**
+
+Get foreground probability
+
+```{python}
+
+```
 
 
 

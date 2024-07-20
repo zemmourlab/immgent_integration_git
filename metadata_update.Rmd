@@ -141,35 +141,6 @@ saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240525_igtsampleregressedout/mdata.h5mu")
 ```
 
-
-Adjust cell names
-```{python}
-message("check colnames to be IGT.BARCODE")
-pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
-matches = grepl(pattern, colnames(so))
-all(matches)
-#and adjust colnames if needed:
-unique(so$IGT[which(matches == F)])
-#Adjust colnames(so) 
-#pattern = "(IGT\\S*)_(\\d+)"
-so$colnames = colnames(so)
-sample(colnames(so), 100)
-pattern = "(\\S*)_(\\d+)"
-so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
-sample(so$colnames, 100)
-unique(so$IGT[!grepl("^IGT", so$colnames)])
-so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
-sample(so$colnames, 10)
-any(duplicated(so$colnames))
-#recheck
-pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
-matches = grepl(pattern, so$colnames)
-all(matches)
-#so@meta.data[which(matches == F),]
-if(all(matches)) {colnames(so) = so$colnames}
-all(grepl(pattern, colnames(so)))
-```
-
 Update cell names
 ```{python}
 import re
@@ -231,8 +202,7 @@ print("All final column names match the pattern:", all_match_final)
 
 ```
 
-
-
+add metadata
 ```{python}
 
 m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv')
