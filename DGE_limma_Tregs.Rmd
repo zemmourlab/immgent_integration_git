@@ -465,7 +465,7 @@ Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1
 tmm = readRDS(sprintf("%s/totalvi_igt1_56_allgenes_Treg_20240529_tmm.Rds",prefix))
 # genes_to_keep = colSums(counts) >0
 # #if want to remove TCR, mt, ribo, Gm and Rik genes: use this
-# tcr_genes = rownames(so)[grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trbv|Trbd|Trbj|Trbc|Trdv|Trdj|Trdc")]
+# tcr_genes = rownames(so)[grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")]
 # gm_rik_genes = rownames(so)[grepl(x = rownames(so), pattern = "Gm|Rik$")]
 # ribo_genes = rownames(so)[grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
 # mt_genes = rownames(so)[grepl(x = rownames(so), pattern = "^mt-")]

@@ -29,7 +29,7 @@ cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg
 
 #srun --pty --jobid 21908677 -w midway3-0291 /bin/bash
 
-#R
+R
 #options(max.print=1000)
 #options(Seurat.object.assay.version = 'v5')
 ```
@@ -41,7 +41,7 @@ options(max.print=1000)
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -540,6 +540,7 @@ log1p with scale factor as the average rowSums(counts)
 so = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 norm_fac = mean(so$nCount_RNA)
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = norm_fac)
+so_orig = so
 
 counts = so[['RNA']]$counts
 shifted_log_counts = so[['RNA']]$data
@@ -602,6 +603,8 @@ ebnm_point_laplace: all real numbers (and sparse)
 
 F_pm for posterior mean
 
+need to use LD or FD, not just L and F (need D scaling factor) use ldf function for more info
+
 20240718_k6_pe_pl
 ```{r}
 prefix2 = "20240718_k6_pe_pl"
@@ -645,8 +648,54 @@ fit = flash(shifted_log_counts,
 saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
 ```
 
+20240721_pe_pl_spleen
+20240721_pe_pl_BatchCorr
+```{r}
+prefix2 = "20240721_pe_pl_spleen"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+so_orig = so
+so = so[,spl_cells]
 
-*Plots for flashier*
+fit = flash(shifted_log_counts[spl_cells,], 
+             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
+             var_type = 2, 
+             S = s1,
+             backfit = F)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+#Which topics are batch? Check the plots: K2
+
+#1. Add the "baseline" factor and set other parameters.
+fit2 = flash(shifted_log_counts, 
+             greedy_Kmax = 1,
+             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
+             var_type = 2, 
+             S = s1,
+             backfit = FALSE)
+
+#2. Add batch factors
+fit2 = flash_factors_init(fit2,
+                           list(matrix(0,nrow(shifted_log_counts),1),as.matrix(fit$F_pm[,c(2)])),
+                           ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace))
+
+#3. Find other factors
+fit2 = flash_greedy(fit2,Kmax = 50,ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace))
+
+#4. Fix batch effect topics
+fit2 = flash_factors_fix(fit2,2,"factors") #fix the batch effect topics
+
+#5. Fit the free (non-fixed) parameters. (flash_backfit)
+fit2 = flash_backfit(fit2,extrapolate = FALSE, maxiter = 200)
+
+prefix2 = "20240721_pe_pl_BatchCorr"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+saveRDS(fit2, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+
+```
+
+*Plots for flashier object*
 ```{r}
 prefix = "flashier"
 prefix2 = "20240718_knolim_pe_pl"
@@ -687,17 +736,24 @@ plot(fit,
 
 dev.off()
 
+pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20, 8, useDingbats = F)
+plot(fit, 
+     include_scree = F,
+     plot_type = "structure",
+     pm_which = "loadings", 
+     pm_groups = so$organ_simplified,
+     pm_colors = mypal,
+     gap = 25) #+ NoLegend()
 
+plot(fit, 
+     plot_type = "structure",
+     pm_which = "loadings", 
+     pm_subset = spl_cells,
+     pm_groups = so$IGT[so$is_spleen_healthy],
+     pm_colors = mypal,
+     gap = 25)
+dev.off()
 
-#Struture plot not working
-# plot(fit, 
-#      include_scree = F,
-#      include_pm = T,
-#      plot_type = "structure",
-#      pm_which = "loadings", 
-#      pm_groups = so$organ_simplified,
-#      bins = 20, 
-#      pm_colors = mypal[1:length(unique(so$organ_simplified))]) + NoLegend()
 
 ```
 
@@ -739,7 +795,7 @@ tmp3 = F1[top_genes,]
 tmp3[tmp3>3] = 3
 tmp3[tmp3 < -3] = -3
 ColorRamp = viridis(100)
-colnames(tmp3) = sprintf("topic%s", 1:ncol(F1))
+colnames(tmp3) = sprintf("factor%s", 1:ncol(F1))
 pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "FC in top 20 genes in topics")
 dev.off()
 
@@ -755,27 +811,33 @@ topic_colors = mypal[1:ncol(fit$L_pm)]#c("skyblue","forestgreen","darkmagenta","
 
 message("calculate topic_scores_percentile = row normalized L matrix")
 #calculate module_scores_percentile for structure plot
+res = ldf(fit, type = "i")
+loadings = with(res, L %*% diag(D)  ) #same as res$L %*% diag(res$D)
+#factors = with(res, F %*% diag(D)  ) #same as res$L %*% diag(res$D)
+#ldf = with(res, L %*% diag(D) %*% t(F) )
+colnames(loadings) = sprintf("factor%s", 1:ncol(fit$L_pm))
+#remove_topic = "factor2"
+loadings = loadings[,!colnames(loadings) %in% remove_topic]
 percentiles = function(vector = c(1) ) {return(ecdf(vector)(vector) * 100) }
-module_scores_percentile = apply(fit$L_pm, 2, percentiles)
-rownames(module_scores_percentile) = rownames(fit$L_pm)
+module_scores_percentile = apply(loadings, 2, percentiles)
+rownames(module_scores_percentile) = rownames(loadings)
 module_scores_percentile2 = module_scores_percentile / rowSums(module_scores_percentile) *100
-colnames(module_scores_percentile2) = sprintf("topic%s", 1:ncol(fit$L_pm))
+#colnames(module_scores_percentile2) = sprintf("topic%s", 1:ncol(fit$L_pm))
 
-message("structure_plot.pdf")
-pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20,8, useDingbats = F)
+
+pdf(sprintf("%s/%s/structure_plot_module_scores_percentile.pdf", prefix, prefix2), 20,8, useDingbats = F)
 structure_plot(module_scores_percentile2/100,colors = topic_colors,topics = 1:ncol(module_scores_percentile2),gap = 25,grouping = so$organ_simplified)
-structure_plot(module_scores_percentile2/100,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy)
+#structure_plot(module_scores_percentile2/100,colors = topic_colors,topics = 1:ncol(module_scores_percentile2),gap = 25,grouping = so$is_spleen_healthy)
 #structure_plot(fit,colors = topic_colors,topics = 1:ncol(fit$L),gap = 25,grouping = so$is_spleen_healthy_igt)
 #fit_spleenctrl = SubsetFit(fit, names(which(so$is_spleen_healthy == T)))
 structure_plot(module_scores_percentile2[names(which(so$is_spleen_healthy)),]/100,colors = topic_colors,topics = 1:ncol(module_scores_percentile2),gap = 25, grouping = so$IGT[so$is_spleen_healthy == T])
 dev.off()
 
-message("UMAP_topics.pdf")
-pdf(sprintf("%s/%s/UMAP_topics.pdf", prefix, prefix2), 9,8, useDingbats = F)
+pdf(sprintf("%s/%s/UMAP_module_scores_percentile.pdf", prefix, prefix2), 9,8, useDingbats = F)
 for (k in 1:ncol(module_scores_percentile2) ) {
     print(k)
     #genes = module_genes %>% filter(Module == module) %>% pull(Gene)
-    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),1], dim2 = so[["umap_totalvi"]]@cell.embeddings[match(colnames(so),rownames(so[["umap_totalvi"]])),2], size = module_scores_percentile2[,k]) #fit$L_pm[,k]
+    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], size = module_scores_percentile2[,k]) #fit$L_pm[,k] #match(colnames(so),rownames(so[["umap_totalvi"]]))
     #tmp$size[tmp$size > 1] = 1
     #tmp$size[tmp$size < -1] = -1
     
@@ -785,11 +847,74 @@ for (k in 1:ncol(module_scores_percentile2) ) {
 }
 dev.off()
 
-message("ebmfUMAP.csv") #New UMAP from fit$L (module_scores_percentile)
+pdf(sprintf("%s/%s/UMAP_factors.pdf", prefix, prefix2), 9,8, useDingbats = F)
+for (k in 1:ncol(loadings) ) {
+    print(k)
+    #genes = module_genes %>% filter(Module == module) %>% pull(Gene)
+    tmp = data.frame(so@meta.data, dim1 = so[["umap_totalvi"]]@cell.embeddings[,1], dim2 = so[["umap_totalvi"]]@cell.embeddings[,2], size = loadings[,k]) #fit$L_pm[,k] #match(colnames(so),rownames(so[["umap_totalvi"]]))
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+#message("ebmfUMAP.csv") #New UMAP from fit$L (module_scores_percentile)
 prefix_topic = sprintf("%s_%s",prefix,prefix2)
+#so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = res , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
 so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = module_scores_percentile2 , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
 so = RunUMAP(so, dims = 1:ncol(module_scores_percentile2), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
-write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s/%s/ebmfUMAP.csv",prefix, prefix2), quote = F, row.names = TRUE, col.names = TRUE)
+write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s/%s/ebmfUMAP_frommodule_scores_percentile.csv",prefix, prefix2), quote = F, row.names = TRUE, col.names = TRUE)
+
+# tmp = read.csv(sprintf("%s/%s/ebmfUMAP.csv",prefix, prefix2), header = T, row.names = 1)
+# so[[sprintf("umap_%s",prefix_topic)]] = CreateDimReducObject(embeddings = as.matrix(tmp), key = sprintf("%s_",prefix_topic), assay = "RNA")
+
+# ldfl = ldf(fit,type = "i")$L
+# so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = ldfl , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
+# so = RunUMAP(so, dims = 1:ncol(ldfl), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
+
+umap_to_plot = sprintf("umap_%s",prefix_topic)
+pdf(sprintf("%s/%s/ebmfUMAP_frommodule_scores_percentile.pdf",prefix, prefix2), 20, 20, useDingbats = F)
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "IGT", 
+        split_by1 = "is_spleen_healthy",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+
+MyPlots(seurat_object = so, 
+        dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
+        dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
+        color_by = "organ_simplified", 
+        split_by1 = "organ_simplified",
+        split_by2 =  NULL, 
+        genes = NULL, 
+        cluster_key = NULL, mypal = mypal) #glasbey()
+dev.off()
+
+pdf(sprintf("%s/%s/ebmfUMAP_frommodule_scores_percentile_withmodules.pdf",prefix, prefix2), 9,8, useDingbats = F)
+for (k in 1:ncol(module_scores_percentile2) ) {
+    print(k)
+    tmp = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),1], dim2 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),2], size = module_scores_percentile2[,k]) #fit$L_pm[,k] 
+    #tmp$size[tmp$size > 1] = 1
+    #tmp$size[tmp$size < -1] = -1
+    
+    p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
+        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+    print(p)
+}
+dev.off()
+
+
+prefix_topic = sprintf("%s_%s",prefix,prefix2)
+so[[sprintf("%s",prefix_topic)]] = CreateDimReducObject(embeddings = loadings , key = sprintf("%s_",prefix_topic), assay = "RNA") #fit$L_pm
+so = RunUMAP(so, dims = 1:ncol(loadings), reduction = sprintf("%s",prefix_topic), n.components = 2, reduction.name = sprintf("umap_%s",prefix_topic))
+write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf("%s/%s/ebmfUMAP_fomLD.csv",prefix, prefix2), quote = F, row.names = TRUE, col.names = TRUE)
+
 # tmp = read.csv(sprintf("%s/%s/ebmfUMAP.csv",prefix, prefix2), header = T, row.names = 1)
 # so[[sprintf("umap_%s",prefix_topic)]] = CreateDimReducObject(embeddings = as.matrix(tmp), key = sprintf("%s_",prefix_topic), assay = "RNA")
 
@@ -799,7 +924,7 @@ write.csv(so[[sprintf("umap_%s",prefix_topic)]]@cell.embeddings, file = sprintf(
 
 message("ebmfUMAP.pdf")
 umap_to_plot = sprintf("umap_%s",prefix_topic)
-pdf(sprintf("%s/%s/ebmfUMAP_ldfl.pdf",prefix, prefix2), 20, 20, useDingbats = F)
+pdf(sprintf("%s/%s/ebmfUMAP_fromLD.pdf",prefix, prefix2), 20, 20, useDingbats = F)
 MyPlots(seurat_object = so, 
         dim1 = so[[umap_to_plot]]@cell.embeddings[,1], 
         dim2 = so[[umap_to_plot]]@cell.embeddings[,2], 
@@ -820,15 +945,15 @@ MyPlots(seurat_object = so,
 dev.off()
 
 message("ebmfUMAP_topics.pdf")
-pdf(sprintf("%s/%s/ebmfUMAP_topics.pdf",prefix, prefix2), 9,8, useDingbats = F)
-for (k in 1:ncol(module_scores_percentile2) ) {
+pdf(sprintf("%s/%s/ebmfUMAP_fromLD_withfactors.pdf",prefix, prefix2), 9,8, useDingbats = F)
+for (k in 1:ncol(loadings) ) {
     print(k)
-    tmp = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),1], dim2 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),2], size = module_scores_percentile2[,k]) #fit$L_pm[,k] 
+    tmp = data.frame(so@meta.data, dim1 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),1], dim2 = so[[umap_to_plot]]@cell.embeddings[match(colnames(so),rownames(so[[umap_to_plot]])),2], size = loadings[,k]) #fit$L_pm[,k] 
     #tmp$size[tmp$size > 1] = 1
     #tmp$size[tmp$size < -1] = -1
     
     p = ggplot(tmp) + geom_point(aes(dim1, dim2, color = size), size = 2) + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_gradientn(colours = ColorRamp)+ theme(axis.text.x  = element_text(size=15), axis.text.y  = element_text(size=15), legend.text=element_text(size=15), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank()) + #alpha = 0.5
-        ggtitle(label = sprintf("Topic %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
+        ggtitle(label = sprintf("Factor %s",k)) #ggtitle(label = sprintf("%s:%s...",module, paste(genes[1:10], collapse=",")))
     print(p)
 }
 dev.off()
@@ -878,7 +1003,290 @@ dev.off()
 
 ```
 
-Which metadata is significantly enriched in a topic?
+*GSEA analysis on Treg sig**
+--> GSEA_signatures.Rda
+```{r}
+prefix = "flashier"
+prefix2 = "20240718_knolim_pe_pl"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+message("Calculating Factor matrix")
+res = ldf(fit, type = "i")
+factors = with(res, F %*% diag(D)  ) #same as res$L %*% diag(res$D)
+mean_shifted_log_counts = rowMeans(t(shifted_log_counts))
+all(names(mean_shifted_log_counts) == rownames(factors))
+colnames(factors) = sprintf("david.factor.%s", 1:ncol(factors))
+
+message("Loading signatures")
+load("/project/zemmour/david/signatures/mouse/signaturelist20171024.Rda")
+signaturelist1 = signaturelist
+
+load("/project/zemmour/david/signatures/mouse/signaturelistGSEA.Rda")
+signaturelist2 = signaturelist
+
+signaturelist = c(signaturelist1, signaturelist2)
+names(signaturelist)
+
+signaturelist = signaturelist[grepl("Treg|treg|TREG|TCELL", names(signaturelist))]
+#names(signaturelist)[grepl("Treg|treg|Foxp3", names(signaturelist))]
+#names(signaturelist)[grepl("IPEX", names(signaturelist))]
+
+message("Calculating GSEA enrichement of Kait topic genes in each of David's factors")
+pvalsig = list()
+pvalcol = list()
+fgseaRes_list = list()
+for (f in 1:ncol(factors)) {
+    print(f)
+    vplot = data.frame(SYMBOL = names(mean_shifted_log_counts), fc = factors[,f], pval = exp(mean_shifted_log_counts))
+    ranks = vplot$fc
+    names(ranks) = vplot$SYMBOL
+    fgseaRes = fgseaMultilevel(signaturelist, ranks, scoreType = "pos", minSize = 5)
+    fgseaRes_list[[as.character(f)]] = fgseaRes
+    pvalsig[[as.character(f)]] = fgseaRes$pval
+    pvalcol[[as.character(f)]] = fgseaRes$NES
+    #head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+    #plotEnrichment(signaturelist[["kait_topic_14"]], ranks)
+}
+#saveRDS(fgseaRes_list,file = sprintf("%s/%s/GSEA_signatures.Rda",prefix, prefix2))
+fgseaRes_list = readRDS(sprintf("%s/%s/GSEA_signatures.Rda",prefix, prefix2))
+names(fgseaRes_list) = colnames(factors)
+fgseaRes_melt = fgseaRes_list
+for (i in names(fgseaRes_melt)) {
+    fgseaRes_melt[[i]][,"factor"] = i
+}
+fgseaRes_melt = do.call(rbind, fgseaRes_melt)
+
+pdf(sprintf("%s/%s/GSEA_volcano_by_factor.pdf",prefix, prefix2), 10,10, useDingbats = F)
+for (i in 1:ncol(factors)) {
+    print(i)
+    vplot = data.frame(SYMBOL = unlist(fgseaRes_list[[i]][,"pathway"]), fc = unlist(fgseaRes_list[[i]][,"NES"]), pval = unlist(fgseaRes_list[[i]][,"padj"]))
+    p = Vplot(vplot = vplot, xlab = "", xlimits = c(1,2), ylimits = NULL) + ggtitle(names(fgseaRes_list)[i])
+    #sub = vplot$pval < 0.05
+    sub = vplot %>% filter(pval < 0.05) %>% arrange(desc(abs(log2(fc)))) %>% slice_head(n = 10) %>% rownames() #select(SYMBOL) %>% as.vector()
+    #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:10]
+    q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL, size = 1))
+    print(q)
+}
+dev.off()
+
+
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, padj, NES, size, factor) %>% slice_head(n = 2)
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, factor, padj) %>% slice_head(n = 2) %>% as.data.frame()
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, factor, padj) %>% as.data.frame()
+pvalcol_df = do.call(rbind, pvalcol)
+pvalsig_df = do.call(rbind, pvalsig)
+colnames(pvalsig_df) = names(signaturelist)
+rownames(pvalsig_df) = colnames(factors)
+tmp = log10(pvalsig_df)
+tmp[tmp > log10(0.05)] = log10(1)
+tmp[!pvalcol_df] = log10(1)
+pdf(sprintf("%s/%s/KaitTopic_DavidFactorsEnrichement_heatmap_GSEA.pdf",prefix, prefix2), 10,10, useDingbats = F)
+pheatmap(t(tmp), color = magma(100), main = "GSEA enrichement of Kait topic genes in each of David's factors")
+dev.off()
+
+
+```
+
+*LD correlation with T cell activation?*
+
+```{r}
+prefix = "flashier"
+prefix2 = "20240718_knolim_pe_pl"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+message("Calculating Factor matrix")
+res = ldf(fit, type = "i")
+factors = with(res, F %*% diag(D)  ) #same as res$L %*% diag(res$D)
+mean_shifted_log_counts = rowMeans(t(shifted_log_counts))
+all(names(mean_shifted_log_counts) == rownames(factors))
+colnames(factors) = sprintf("david.factor.%s", 1:ncol(factors))
+
+loadings = with(res, L %*% diag(D)  ) #same as res$L %*% diag(res$D)
+mean_shifted_log_counts = rowMeans(t(shifted_log_counts))
+all(names(mean_shifted_log_counts) == rownames(factors))
+colnames(loadings) = sprintf("david.factor.%s", 1:ncol(loadings))
+rownames(loadings) == colnames(so)
+
+Assay()
+
+plot(so[["ADT"]]@counts["CD62L",], rowSums(loadings))
+spl_cells
+lm(so[["ADT"]]@counts["CD62L",] ~ rowSums(loadings))
+
+rmcells = names(which(so[["ADT"]]@counts["CD44",] == 0))
+so2 = so[,!colnames(so) %in% rmcells]
+load_sum = rowSums(loadings)[!colnames(so) %in% rmcells]
+
+DefaultAssay(so2) = "ADT"
+#so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+so2 = NormalizeData(so2, assay = "ADT", normalization.method = "LogNormalize")
+plot(so2[["ADT"]]@data["CD62L",], so2[["ADT"]]@data["CD44",])
+pdf(sprintf("%s/%s/sumLxCD44_CD62L.pdf", prefix, prefix2), 10,10, useDingbats = F)
+cr = cor.test(so2[["ADT"]]@data["CD44",], load_sum)
+plot(so2[["ADT"]]@data["CD44",], load_sum, pch = 16, main = sprintf("cor = %s, p = %s", cr$estimate, cr$p.value))
+cr = cor.test(so2[["ADT"]]@data["CD62L",], load_sum)
+plot(so2[["ADT"]]@data["CD62L",], load_sum, pch = 16, main = sprintf("cor = %s, p = %s", cr$estimate, cr$p.value))
+dev.off()
+
+cor.test(so2[["ADT"]]@data["CD44",], load_sum)
+plot(so2[["ADT"]]@data["CD44",], load_sum)
+cor.test(so2[["ADT"]]@data["CD44",], load_sum)
+plot(so[["ADT"]]@data["CD44",], rowSums(loadings))
+plot(so[["ADT"]]@data["CD62L",spl_cells], rowSums(loadings)[spl_cells])
+plot(so[["ADT"]]@data["CD44",spl_cells], rowSums(loadings)[spl_cells])
+
+plot(so[["ADT"]]@data["CD62L",], 1.5^(rowSums(loadings)))
+plot(so[["ADT"]]@data["CD62L",], 1.5^(rowSums(loadings)[]))
+plot(so[["ADT"]]@data["CD62L",!colnames(so) %in% spl_cells], 1.5^(rowSums(loadings)[!colnames(so) %in% spl_cells]))
+
+
+
+
+```
+
+
+**Compare topics with Kait's**
+GSEA analysis works much better
+
+```{r}
+prefix = "flashier"
+prefix2 = "20240718_knolim_pe_pl"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+kait_topics = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/topic_scrna_gene.csv", header = T, sep = ",")
+kait_topics = kait_topics[kait_topics$gene %in% colnames(shifted_log_counts),]
+kait_topics_list = kait_topics %>% group_by(topic) %>% group_split() %>% as.list() %>% lapply(.,as.data.frame)
+names(kait_topics_list) = lapply(kait_topics_list, function(x) x[1,2]) %>% unlist() %>% gsub(.,pattern = "Topic_",replacement = "kait_topic_")
+kait_topics_list = lapply(kait_topics_list, function(x) as.character(x[,1]))
+signaturelist = kait_topics_list
+
+message("Calculating Factor matrix")
+res = ldf(fit, type = "i")
+factors = with(res, F %*% diag(D)  ) #same as res$L %*% diag(res$D)
+mean_shifted_log_counts = rowMeans(t(shifted_log_counts))
+all(names(mean_shifted_log_counts) == rownames(factors))
+colnames(factors) = sprintf("david.factor.%s", 1:ncol(factors))
+
+message("Plot gene erichemtn  genechiSq enrichement of Kait topic genes in each of David's factors")
+pdf(sprintf("%s/%s/KaitTopicGenes_inDavidFactors_heatmaps_FDR10p.pdf",prefix, prefix2), 10,10, useDingbats = F)
+for (i in 1:length(kait_topics_list)) {
+    print(i)
+    factors_sub = factors[kait_topics_list[[i]],]
+    
+    # meta_col =  data.frame(pv = pvalsig_df[,names(kait_topics_list)[i]] < 0.05, stringsAsFactors = F)
+    # meta_col$pv = factor(ifelse(meta_col$pv, yes = "signif", no = "notsignif"))
+    # rownames(meta_col) = colnames(tmp)
+    
+    meta_col =  data.frame(pv = tmp[,names(kait_topics_list)[i]] < 0, stringsAsFactors = F) #pvalsig_df[,names(kait_topics_list)[i]] < 0.05 & pvalcol_df[,names(kait_topics_list)[i]]
+    meta_col$pv = factor(ifelse(meta_col$pv, yes = "signif", no = "notsignif"))
+    rownames(meta_col) = colnames(factors_sub)
+    
+    annotation_colors = list()
+    annotation_colors[["pv"]] = c(signif = "red", notsignif = "grey")
+    
+    pheatmap(factors[kait_topics_list[[i]],], color = magma(10), cluster_cols = T, cluster_rows = T, annotation_col = meta_col, annotation_colors = annotation_colors, main = sprintf("%s genes in david's factors, value = increase in log1p by the factor", names(kait_topics_list)[i]))
+}
+dev.off()
+
+
+message("Calculating GSEA enrichement of Kait topic genes in each of David's factors")
+pvalsig = list()
+pvalcol = list()
+for (f in 1:ncol(factors)) {
+    print(f)
+    vplot = data.frame(SYMBOL = names(mean_shifted_log_counts), fc = factors[,f], pval = exp(mean_shifted_log_counts))
+    ranks = vplot$fc
+    names(ranks) = vplot$SYMBOL
+    fgseaRes = fgseaMultilevel(signaturelist, ranks, scoreType = "pos")
+    pvalsig[[as.character(f)]] = fgseaRes$pval
+    pvalcol[[as.character(f)]] = fgseaRes$NES
+    #head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+    #plotEnrichment(signaturelist[["kait_topic_14"]], ranks)
+}
+pvalcol_df = do.call(rbind, pvalcol)
+pvalsig_df = do.call(rbind, pvalsig)
+colnames(pvalsig_df) = names(signaturelist)
+rownames(pvalsig_df) = colnames(factors)
+tmp = log10(pvalsig_df)
+tmp[tmp > log10(0.05)] = log10(1)
+tmp[!pvalcol_df] = log10(1)
+pdf(sprintf("%s/%s/KaitTopic_DavidFactorsEnrichement_heatmap_GSEA.pdf",prefix, prefix2), 10,10, useDingbats = F)
+pheatmap(t(tmp), color = magma(100), main = "GSEA enrichement of Kait topic genes in each of David's factors")
+dev.off()
+
+message("Plot gene erichemtn  genechiSq enrichement of Kait topic genes in each of David's factors")
+pdf(sprintf("%s/%s/KaitTopicGenes_inDavidFactors_heatmaps_GSEA.pdf",prefix, prefix2), 10,10, useDingbats = F)
+for (i in 1:length(kait_topics_list)) {
+    print(i)
+    factors_sub = factors[kait_topics_list[[i]],]
+    
+    # meta_col =  data.frame(pv = pvalsig_df[,names(kait_topics_list)[i]] < 0.05, stringsAsFactors = F)
+    # meta_col$pv = factor(ifelse(meta_col$pv, yes = "signif", no = "notsignif"))
+    # rownames(meta_col) = colnames(tmp)
+    
+    meta_col =  data.frame(pv = tmp[,names(kait_topics_list)[i]] < 0, stringsAsFactors = F) #pvalsig_df[,names(kait_topics_list)[i]] < 0.05 & pvalcol_df[,names(kait_topics_list)[i]]
+    meta_col$pv = factor(ifelse(meta_col$pv, yes = "signif", no = "notsignif"))
+    rownames(meta_col) = colnames(factors_sub)
+    
+    annotation_colors = list()
+    annotation_colors[["pv"]] = c(signif = "red", notsignif = "grey")
+    
+    pheatmap(factors[kait_topics_list[[i]],], color = magma(100), cluster_cols = T, cluster_rows = T, annotation_col = meta_col, annotation_colors = annotation_colors, main = sprintf("%s genes in david's factors, value = increase in log1p by the factor", names(kait_topics_list)[i]))
+}
+dev.off()
+
+#Not as good but works:
+message("Calculating chiSq enrichement of Kait topic genes in each of David's factors")
+# pvalsig = matrix(nrow = ncol(factors), ncol = length(signaturelist) )
+# pvalcol = matrix(nrow = ncol(factors), ncol = length(signaturelist) )
+pvalsig = list()
+pvalcol = list()
+for (f in 1:ncol(factors)) {
+    vplot = data.frame(SYMBOL = names(mean_shifted_log_counts), fc = exp(factors[,f]), pval = exp(mean_shifted_log_counts))
+    #p = Vplot(vplot = vplot, xlab = i, xlimits = NULL, ylimits = NULL)
+    
+    #Calculate p and q for signatures for factor f
+    pvalsig[[as.character(f)]] = c()
+    pvalcol[[as.character(f)]] = c()
+    for (i in 1: length(signaturelist)) {
+        if ((i %% 100) == 0) {print(i)}
+        tryCatch({
+            sig = names(signaturelist)[i]
+            vplot[,sig] = vplot$SYMBOL %in% signaturelist[[i]]
+            a = length(which(vplot$fc < 1))
+            b = length(which(vplot$fc > 1))
+            c = length(which(vplot$fc[vplot[,sig]] < 1))
+            d = length(which(vplot$fc[vplot[,sig]] > 1))
+            cont_table = rbind(total = c(round(a/(a+b)*(c+d)), round(b/(a+b)*(c+d))), geneset = c(c, d))
+            colnames(cont_table) = c("FC<1", "FC>1")
+            c = chisq.test(cont_table)
+            #pvalsig[[as.character(f)]][sig] = data.frame(pval = c$p.value, is_up = cont_table[2,2] > cont_table[1,2]  )
+            pvalsig[[as.character(f)]][sig] = c$p.value
+            pvalcol[[as.character(f)]][sig] = cont_table[2,2] > cont_table[1,2]  
+        }, error=function(e){})
+    }
+    
+}
+pvalcol_df = do.call(rbind, pvalcol)
+pvalsig_df = do.call(rbind, pvalsig)
+tmp = log10(pvalsig_df)
+qs =  p.adjust(as.vector(pvalsig_df), method = "fdr")
+qs = matrix(qs, nrow = nrow(pvalsig_df), ncol = ncol(pvalsig_df), byrow = F)
+rownames(qs) = rownames(pvalsig_df)
+colnames(qs) = colnames(pvalsig_df)
+tmp = log10(qs)
+tmp[tmp > log10(0.1)] = log10(1)
+tmp[!pvalcol_df] = log10(1)
+pdf(sprintf("%s/%s/KaitTopic_DavidFactorsEnrichement_heatmap_FDR10p.pdf",prefix, prefix2), 10,10, useDingbats = F)
+pheatmap(t(tmp), color = magma(7), main = "ChiSq enrichement of Kait topic genes in each of David's factors")
+dev.off()
+
+
+
+```
+
+
+(Which metadata is significantly enriched in a topic?)
 https://willwerscheid.github.io/flashier/articles/flashier_closer_look.html#sampling-from-the-posterior
 One of the list elements in the object returned by flash is a function that can sample from posterior distributions on loadings and factors. Take the backfit above as an example. To better understand which tissues are bound up with whole blood effects, we might like confidence intervals for the third factor. We construct 95% confidence intervals using 200 samples and then finding 2.5% and 97.5% quantiles as follows:
 ```{r}
@@ -887,24 +1295,192 @@ set.seed(1)
 # Use returned sampler to sample from posterior.
 samp = fit$sampler(nsamp = 200)
 # Only keep factor 3.
-factor3_samp <- lapply(samp, function(x) x[[2]][, 3])
+factor_samp <- lapply(samp, function(x) x[[2]][, 10])
+factor_samp[[1]]
 # Normalize the loadings.
-factor3_samp <- sapply(factor3_samp, function(x) x / max(abs(x)))
+factor_samp <- sapply(factor_samp, function(x) x / max(abs(x)))
+factor_samp[[1]]
 # Get 95% confidence intervals.
-factor3_ci <- apply(factor3_samp, 1, quantile, c(0.025, 0.975))
+factor_ci <- apply(factor_samp, 1, quantile, c(0.025, 0.975))
+
+# Only keep factor 3.
+factor_samp <- lapply(samp, function(x) x[[2]][, 10])
+factor_samp[[1]]
+# Normalize the loadings.
+factor_samp <- sapply(factor_samp, function(x) x / max(abs(x)))
+factor_samp[[1]]
+# Get 95% confidence intervals.
+factor_ci <- apply(factor_samp, 1, function(x) quantile(x, c(0.025, 0.975)))
 
 plot(fit, 
      include_scree = F,
      include_pm = T,
-     kset = 3,
-     #plot_type = "histogram",
+     kset = 10,
+     plot_type = "histogram",
      pm_which = "loadings", 
      pm_groups = so$organ_simplified,
-     bins = 20,
-     pm_colors = mypal[1:length(unique(so$organ_simplified))]) + geom_errorbar(aes(ymin = factor3_ci[1, ], ymax = factor3_ci[2, ]))
+     #bins = 20,
+     pm_colors = mypal[1:length(unique(so$organ_simplified))]) +NoLegend() + geom_errorbar(aes(ymin = factor_ci[1, ], ymax = factor_ci[2, ]))
 
-plot(fit, kset = 3, pm_colors = gtex_colors, include_scree = FALSE) + geom_errorbar(aes(ymin = factor3_ci[1, ], ymax = factor3_ci[2, ]))
+plot(fit, kset = 10, include_scree = FALSE) + geom_errorbar(aes(ymin = factor_ci[1, ], ymax = factor_ci[2, ]))
 ```
+
+**Flasier second approach**
+from Peter: The "second approach" we discussed is a two-stage approach: (1) use the subset of "spike-in" cells to first identify the batch effects, then (2) include these as factors in a flashier analysis of the full data. (To be safe, it may be better not to includ the spike-in cells in Step 2.) This second approach is a slightly more advanced usage of flashier and I'll put together a short script that illustrates how to do this.
+
+example code
+```{r}
+library(flashier)
+set.seed(1)
+n <- 2000 #cells
+m <- 4000 #genes
+k <- 8
+
+# Simulate the gene expression patterns: (i) baseline expression, (ii)
+# three "batch effects", (iii) four "cell types". The first cell type
+# will be used to estimate the two batch effects.
+F <- matrix(0,m,k)
+rownames(F) <- paste0("gene",1:m)
+colnames(F) <- c("baseline","batch1","batch2","batch3",
+                 "celltype1","celltype2","celltype3","celltype4")
+F[,"baseline"] <- abs(rt(m,df = 4))
+F[,"batch1"] <- rexp(m)
+F[,"batch2"] <- rexp(m)
+F[,"batch3"] <- rexp(m)
+for (i in 1:4) {
+  j <- which(runif(m) < 0.2)
+  l <- paste0("celltype",i)
+  F[j,l] <- rexp(length(j))
+}
+
+# Simulate the batch and cell-type memberships.
+L <- matrix(0,n,k)
+rownames(L) <- paste0("barcode",1:n)
+colnames(L) <- c("baseline","batch1","batch2","batch3",
+                 "celltype1","celltype2","celltype3","celltype4")
+L[,"baseline"] <- runif(n)
+batch <- factor(sample(3,n,replace = TRUE))
+L[batch == 1,"batch1"] <- 1
+L[batch == 2,"batch2"] <- 1
+L[batch == 3,"batch3"] <- 1
+celltype <- factor(sample(4,n,replace = TRUE))
+for (i in 1:4)
+  L[celltype == i,paste0("celltype",i)] <- 1
+
+# Simulate the data matrix.
+X <- tcrossprod(L,F) + rexp(n*m)
+rownames(X) <- rownames(L)
+colnames(X) <- rownames(F)
+
+# Split the data into cell type 1 and the remaining cell types (cell
+# types 2-4).
+X1 <- X[celltype == 1,]
+X2 <- X[celltype != 1,]
+
+# Fit a flashier model to "spike-in" data (cell type 1). Note that in
+# the flash_greedy call, it might be better to use ebnm_point_normal
+# instead of ebnm_point_exponential.
+fit1 <- flash(X1,ebnm_fn = ebnm_point_exponential,var_type = 0,S = 1/n, greedy_Kmax = 1)
+fit1 <- flash_greedy(fit1, Kmax = 3, ebnm_point_exponential)
+fit1 <- flash_backfit(fit1,extrapolate = FALSE,maxiter = 100)
+posthoc_labels1 <- c("baseline","batch3","batch1","batch2")
+colnames(fit1$F_pm) <- posthoc_labels1
+colnames(fit1$L_pm) <- posthoc_labels1
+
+# Some sanity checks.
+print(round(cor(F,fit1$F_pm),digits = 3))
+ks <- c("baseline","batch1","batch2","batch3")
+print(round(cor(L[celltype == 1,ks],fit1$L_pm[,ks]),digits = 3))
+
+# Fit a flashier model to the remaining data (cell types 2-4) in which
+# the batch effects estimated from the "spike-in" data are
+# incorporated into the model. This is a bit more complicated and
+# involves several steps:
+#
+#   1. Add the "baseline" factor and set other parameters.
+#      (flash)
+#
+#   2. Add factors for the 3 previously estimated batch effects.
+#      (flash_factors_init)
+#
+#   3. Initialize 3 more factors to capture the cell types.
+#      (flash_greedy)
+#
+#   4. Fix the batch effects. (flash_factors_fix)
+#
+#   5. Fit the free (non-fixed) parameters. (flash_backfit)
+#
+n    <- nrow(X2)
+fit2 <- flash(X2,ebnm_point_exponential,var_type = 0,S = 1/n,greedy_Kmax = 1)
+fit2 <- flash_factors_init(fit2,
+                           list(matrix(0,n,3),fit1$F_pm[,-1]),
+                           ebnm_point_exponential)
+fit2 <- flash_greedy(fit2,Kmax = 3,ebnm_point_exponential)
+fit2 <- flash_factors_fix(fit2,2:4,"factors")
+fit2 <- flash_backfit(fit2,extrapolate = FALSE,maxiter = 200)
+posthoc_labels2 <- c("baseline",
+                     "batch3","batch1","batch2",
+                     "celltype2","celltype4","celltype3")
+colnames(fit2$F_pm) <- posthoc_labels2
+colnames(fit2$L_pm) <- posthoc_labels2
+
+# Some sanity checks.
+print(round(cor(fit1$F_pm[,c("batch1","batch2","batch3")],
+                fit2$F_pm[,c("batch1","batch2","batch3")]),
+            digits = 3))
+print(round(cor(F,fit2$F_pm),digits = 3))
+ks <- c("baseline",
+        "batch1","batch2","batch3",
+        "celltype2","celltype3","celltype4")
+print(round(cor(L[celltype != 1,ks],fit2$L_pm[,ks]),digits = 3))
+pheatmap(round(cor(L[celltype != 1,ks],fit2$L_pm[,ks]),digits = 3))
+```
+
+```{r}
+prefix = "flashier"
+prefix2 = "20240718_knolim_pe_pl_BatchRemoved"
+ensure_directory(sprintf("%s/%s",prefix,prefix2))
+
+fit = readRDS("flashier/20240718_knolim_pe_pl/fit.Rds") #50 topics, 2 batch topics (topic 2 and 3)
+
+#calculate LDF on spleen only
+
+
+#1. Add the "baseline" factor and set other parameters.
+fit2 = flash(shifted_log_counts, 
+             greedy_Kmax = 1,
+             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
+             var_type = 2, 
+             S = s1,
+             backfit = FALSE)
+
+#2. Add batch factors
+fit2 = flash_factors_init(fit2,
+                           list(matrix(0,nrow(shifted_log_counts),2),fit$F_pm[,c(2,3)]),
+                           ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace))
+
+#3. Find other factors
+fit2 = flash_greedy(fit2,Kmax = 48,ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace))
+
+#4. Fix batch effect topics
+fit2 = flash_factors_fix(fit2,2:3,"factors") #fix the batch effect topics
+
+#5. Fit the free (non-fixed) parameters. (flash_backfit)
+fit2 = flash_backfit(fit2,extrapolate = FALSE, maxiter = 200)
+
+saveRDS(fit2, file = sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
