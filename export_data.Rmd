@@ -86,6 +86,7 @@ options(Seurat.object.assay.version = 'v5')
 
 ```{r}
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
 
 libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
@@ -97,6 +98,10 @@ Original seurat object to export
 ```{r}
 prefix = "totalvi_igt1_56_20231030_allgenes"
 so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_sketched_20231106.Rds", prefix, prefix))
+
+prefix = "totalvi_igt1_96_20241006"
+so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/immgent_igt1_56_20241006.Rds")
+so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006_inmemory_diet_seurat.Rds")
 
 DefaultAssay(so) = "RNA"
 
@@ -140,7 +145,15 @@ if(all(matches)) {colnames(so) = so$colnames}
 all(grepl(pattern, colnames(so)))
 
 #add sample_id: IGT.HT
-so$sample_id_david = paste(so$IGT, so$hashtag_number, sep = ".")
+#so$sample_id_david = paste(so$IGT, so$hashtag_number, sep = ".") #in IGT1-56
+table(so$IGT)
+any(is.na(so$IGT))
+table(so$hashtag_number)
+any(is.na(so$hashtag_number))
+IGT.HT = paste(so$IGT, so$hashtag_number, sep = ".")
+IGT.HT = gsub(x = IGT.HT, pattern = "IGT", replacement = "I")
+IGT.HT = gsub(x = IGT.HT, pattern = "HT", replacement = "H")
+so$IGT.HT = IGT.HT
 
 #order IGT
 unique(so$IGT)
@@ -172,12 +185,16 @@ so_bp = so
 so_bp[["RNA"]]$counts = counts.mat
 
 message("Saving Seurat BPCells object")
+# saveRDS( object = so_bp,
+#          file = sprintf("%s_BPCells_seurat.Rds", prefix),
+#          destdir = file_dir
+# )
+
 saveRDS( object = so_bp,
-         file = sprintf("%s_BPCells_seurat.Rds", prefix),
-         destdir = file_dir
+         file = sprintf("%s/%s_BPCells_seurat.Rds", file_dir, prefix),
 )
 
-#so_bp = readRDS(sprintf("export_data/bpcells/%s_BPCells_seurat.Rds", prefix))
+#so_bp = readRDS(sprintf("%s/%s_BPCells_seurat.Rds", file_dir, prefix))
 
 ```
 
@@ -247,7 +264,7 @@ scvi = import("scvi", convert = FALSE)
 sys = import ("sys", convert = FALSE)
 np = import("numpy", convert=FALSE)
 
-sce = Seurat::as.SingleCellExperiment(sod)
+sce = Seurat::as.SingleCellExperiment(so)
 
 message("Converting to AnnData")
 adata = convertFormat(sce, from = "sce", to= "anndata", main_layer = "counts", drop_single_values=FALSE)
@@ -331,6 +348,46 @@ as(bpcells_mat, "dgCMatrix")
 
 so@meta.data = m2
 ```
+
+**For python**
+source activate /project/zemmour/david/envs/scvi_20240315
+
+Make h5ad files
+```{python}
+import pandas as pd
+from scipy.io import mmread
+import anndata as ad
+
+os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/")
+
+# Step 1: Load the data
+matrix_rna = mmread('individual_files/matrix_rna.mtx').tocsr()  # Load the RNA expression matrix and convert to CSR format
+matrix_protein = mmread('individual_files/matrix_protein.mtx').tocsr()  # Load the protein expression matrix
+
+genes = pd.read_csv('individual_files/genes.tsv', header=None, sep='\t')  # Gene names
+proteins = pd.read_csv('individual_files/proteins.tsv', header=None, sep='\t')  # Protein names
+cells = pd.read_csv('individual_files/cells.tsv', header=None, sep='\t')  # Cell names
+
+# Assuming cell_metadata.tsv has a header with metadata columns
+cell_metadata = pd.read_csv('individual_files/cell_metadata.tsv', sep='\t', index_col=0)  # Load cell metadata
+
+# Step 2: Create AnnData objects
+adata_rna = ad.AnnData(X=matrix_rna, obs=cell_metadata, var=pd.DataFrame(index=genes[0]))
+adata_protein = ad.AnnData(X=matrix_protein, obs=cell_metadata, var=pd.DataFrame(index=proteins[0]))
+
+# Set the cell names if they are provided
+adata_rna.obs_names = cells[0]
+adata_protein.obs_names = cells[0]
+
+# Step 3: Merge RNA and Protein data into one object
+# Assume the same cells in the same order for both matrices
+adata_rna.obsm['protein_expression'] = adata_protein.X
+
+# Step 4: Save the AnnData object
+adata_rna.write('combined_rna_protein.h5ad')
+
+```
+
 
 Export MuData file
 Don't forget to activate the scvi python environment before launching R

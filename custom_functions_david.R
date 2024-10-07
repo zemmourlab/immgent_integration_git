@@ -2,8 +2,6 @@
 #David Zemmour
 #source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-
-
 #UMAP plots for seurat
 MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
     
@@ -81,6 +79,70 @@ MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.em
     
 }
 
+#Functions for integration_midway3.Rmd
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
+    
+    so = seurat_object
+    so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    
+    alpha = 0.5
+    sample_name_colors = mypal[1:length(unique(so@meta.data[,split_by]))]
+    names(sample_name_colors) = levels(so$sample_name)
+    sample_name_colors2 = sample_name_colors
+    sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    p1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = split_by), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal)
+    print(p1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point(data = tmp, aes(dim1, dim2, color = split_by), size = 1,  alpha = alpha) 
+    
+    q = p + p2 + scale_color_manual(values = sample_name_colors)  + theme_bw() + facet_wrap(~ split_by)
+    print(q)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+        
+        p3 = p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_wrap(~split_by) + ggtitle(g)
+        print(p3)
+    }
+    
+    
+    message("Plot 4: UMAP Clusters") 
+    for (i in colnames(so@meta.data)[grepl("cluster_key", colnames(so@meta.data))]) {
+        print(i)
+        p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+            geom_point_rast(aes(dim1, dim2), color = so@meta.data[,i], alpha = I(alpha), raster.dpi = 100) + scale_color_manual(values = mypal) + ggtitle(i) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+        print(p + facet_wrap(~split_by))
+    }
+    
+}
+
+
 ###For milo
 MyplotDAbeeswarm = function (da.res, group.by = NULL, alpha = 0.1, subset.nhoods = NULL) 
 {
@@ -122,7 +184,7 @@ MyplotDAbeeswarm = function (da.res, group.by = NULL, alpha = 0.1, subset.nhoods
         theme_bw(base_size = 22) + theme(strip.text.y = element_text(angle = 0))
 }
 
-### TO run limma-trend DGE, VPlot and FCFCplot
+### To run limma-trend DGE, VPlot and FCFCplot
 
 run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, confoundings = confoundings, formula.mod.matrix = formula.mod.matrix, contrasts =contrasts, gene_symbol= gene_symbol) { #count = count, dge = dge, 
     suppressPackageStartupMessages(library(limma))
@@ -276,3 +338,7 @@ removeDuplicateColumns <- function(df) {
     print(colnames(df)[!uniqueCols])
     return(dfUnique)
 }
+
+
+
+

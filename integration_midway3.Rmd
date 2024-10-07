@@ -28,10 +28,12 @@ module load openblas/0.3.13
 source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 #cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 
 R
 options(max.print=1000)
 options(Seurat.object.assay.version = 'v5')
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
 setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration")
 setwd("/scratch/midway3/zemmour/")
 
@@ -40,101 +42,39 @@ setwd("/scratch/midway3/zemmour/")
 **Initialize: load libraries and custom functions**
 
 ```{r}
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales") 
+options(max.print=1000)
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
+
+#Gradients
+library(RColorBrewer)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
 ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
 
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
 
+#Large Color palette
+library("pals")
 n = 70
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
 mypal1 = mypal1[-4]
-
-library("pals")
-parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
-
-length(glasbey())
-length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
-#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+#pal.bands(mypal, main="Colormap suggestions")
 
-#pdf("mypal.pdf", 10, 10)
-#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
-#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
-#dev.off()
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
-MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
-
-    so = seurat_object
-    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
-    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
-    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
-    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
-    
-    alpha = 0.5
-    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
-    #names(sample_name_colors) = levels(so$sample_name)
-    #sample_name_colors2 = sample_name_colors
-    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
-    
-    message("Plot 1: UMAP")
-    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
-        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
-        theme_bw() + scale_color_manual(values = mypal)
-    print(plot1)
-    
-    message("Plot 2: UMAP split")
-    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
-    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-    
-    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
-    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
-    
-    if (is.null(split_by2)) {
-        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
-    } else {
-        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
-        }
-    print(plot2)
-    
-    message("Plot 3: UMAP genes")
-    
-    for (g in genes) {
-        print(g)
-        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
-        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
-        
-        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
-        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
-        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
-    
-        
-        if (is.null(split_by2)) {
-        plot3 = p + p2  + 
-            scale_color_manual(values = c("black", "red")) + 
-            scale_alpha_manual(values = c(0.5,1))  + 
-            theme_bw()  + 
-            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
-            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
-    } else {
-         plot3 = p + p2  + 
-             scale_color_manual(values = c("black", "red")) + 
-             scale_alpha_manual(values = c(0.5,1))  + 
-             theme_bw() + 
-             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
-             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
-        }
-        print(plot3)
-        
-    }
-
-}
 
 ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
     so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
@@ -147,7 +87,7 @@ ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
 }
 
 PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
-
+    
     so = seurat_object
     so@meta.data[,"split_by"] = so@meta.data[,split_by]
     
@@ -186,7 +126,7 @@ PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@
         print(p3)
     }
     
-
+    
     message("Plot 4: UMAP Clusters") 
     for (i in colnames(so@meta.data)[grepl("cluster_key", colnames(so@meta.data))]) {
         print(i)
@@ -196,6 +136,7 @@ PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@
     }
     
 }
+
 
 library(org.Hs.eg.db)
 hs = org.Hs.eg.db
@@ -2082,7 +2023,6 @@ sbatch run_totalvi_plot_wrapper_20231030.sh #Rscript run_totalvi.R /scratch/midw
 sbatch run_totalvi_plot_wrapper.sh #Rscript run_totalvi_plot.R /scratch/midway3/zemmour/integration totalvi_igt1_56_20231030_allgenes
 ```
 
-
 **TOTAL-VI INTEGRATION for shanelle IGT 22 and 56, all genes**
 
 *Isolate IGHT22 and 56*
@@ -2809,6 +2749,458 @@ MyPlots(seurat_object = so,
         cluster_key = NULL, mypal = mypal) #glasbey()
 dev.off()
 #saveRDS(so, file = "totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
+```
+
+
+
+**TOTAL-VI INTEGRATION IGT 1-96 all cells, all genes**
+
+Copy all dataset_clean.Rds in a separate folder to upload to Midway3
+```{bash}
+cd ~/google_drive/ImmgenT/exp_id
+ll *exp_id*/IGT*/dataset_clean.Rds
+
+find . -path "*IGT*/dataset_clean.Rds" ! -path "*/[Oo]ld/*"  ! -path "*/old run/*" ! -path "*/odl/*" ! -path "*/no spleen/*" > sample_data/file_paths.txt
+
+
+while read -r line; do
+    # Extract the IGT folder name from the path
+    folder=$(echo "$line" | grep -o "IGT[0-9]*")
+    echo "$line" sample_data/$folder/
+  
+  # Create the destination folder if it doesn't exist
+  mkdir -p sample_data/$folder
+  
+  # Copy the dataset_clean.Rds file to the corresponding IGT folder in the destination
+  cp "$line" sample_data/$folder/
+done < sample_data/file_paths.txt
+
+```
+
+*Merge all samples in one seurat object*
+IGT19: remove spleen_standard.Rds (contains all samples by mistake). Done
+IGT23: remove spleen_standard.Rds (contains 1 cell). Done
+
+IGT1: FALSE is expected (can't rerun the pipeline)
+IGT3: spleen names lack IGT3. FALSE is then expected (can't rerun the pipeline)
+(IGT38: no QC, no dataset_clean.Rds. Mistake before, colnames say IGT39. Corrected
+IGT47: no dataset_clean.Rds. took the old one for now. Corrected)
+
+expects: 80 dataset_clean.Rds, 55 spleen.Rds (so check with the merged seurat object )
+
+--> immgent_igt1_56_20241006.Rds
+
+```{bash}
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+
+find /project/zemmour/david/ImmgenT/exp_id/data_spleenstandard -path "*/spleen.Rds" ! -path "*/[Oo]ld/*" | wc -l
+find /project/zemmour/david/ImmgenT/exp_id/data_samples -path "*/dataset_clean.Rds" ! -path "*/[Oo]ld/*" | wc -l
+
+```
+
+Remove ADT data from IGT 44,45,46 -- Done, renamed dataset_clean.Rds dataset_clean_withADT.Rds to keep original object
+ADT object to be a sparse matrix for IGT7,IGT8,IGT9,85,91,92
+IGT73: ADT object to be a sparse matrix -- Done
+IGT7,IGT8,IGT9,85,91,92: no ADT, so created an empty sparse matrix -- Done
+
+```{r}
+
+nrow = nrow(samples[["ADT"]]$counts)
+row_names = rownames(samples[["ADT"]]$counts)
+    
+
+ADTDataToZero = function(so = so) {
+    DefaultAssay(so) = "RNA"
+    nrow = nrow(so[["ADT"]]$counts)
+    row_names = rownames(so[["ADT"]]$counts)
+    col_names = colnames(so)
+    ncol = ncol(so[["ADT"]]$counts)
+    
+    newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+    rownames(newmat) = row_names
+    colnames(newmat) = col_names
+    
+    so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+    so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+    print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+    
+    return(so2)
+}
+
+IGT = "IGT44"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+so2 = ADTDataToZero(so)
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT45"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+so[["ADT"]]$counts
+so2 = ADTDataToZero(so)
+so2[["ADT"]]$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+so[["ADT"]]$counts
+so2 = ADTDataToZero(so)
+so2[["ADT"]]$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+IGT = "IGT46"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+so[["ADT"]]$counts
+so2 = ADTDataToZero(so)
+so2[["ADT"]]$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+so[["ADT"]]$counts
+so2 = ADTDataToZero(so)
+so2[["ADT"]]$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+
+#### different here, need to recreate the sparse matrix
+IGT = "IGT7"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT8"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT9"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT85"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT73"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT91"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+IGT = "IGT92"
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+so = readRDS(path_data)
+col_names = colnames(so)
+ncol = ncol(so[["RNA"]]$counts)
+newmat = Matrix(0, nrow = nrow, ncol = ncol, sparse = TRUE)
+rownames(newmat) = row_names
+colnames(newmat) = col_names
+so2 = CreateSeuratObject(counts = so@assays$RNA$counts, meta.data = so@meta.data, assay = "RNA")
+so2[["ADT"]] = CreateAssayObject(counts = newmat) #so@assays$ADT$counts
+print(all(colnames(so2@assays$RNA$counts) == colnames(so2@assays$ADT$counts)))
+saveRDS(so2, file = path_data2)
+
+path_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen_withADT.Rds", IGT)
+path_data2 = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+system(sprintf("mv %s %s", path_data2, path_data))
+
+
+```
+
+
+Merge all samples
+```{r}
+
+ImportIGTData = function(path_sample_data, path_spleen_data, IGT) {
+    
+    spleen_test = file.exists(path_spleen_data)
+    sample_test = file.exists(path_sample_data)
+    
+    if (!sample_test) {
+        stop("no data")
+    }
+    
+    if (spleen_test) {
+        message("Loading spleen standard")
+        tmp = readRDS(path_spleen_data)
+        tmp2 = CreateSeuratObject(counts = tmp@assays$RNA$counts, meta.data = tmp@meta.data, assay = "RNA")
+        tmp2[["ADT"]] = CreateAssayObject(counts = tmp@assays$ADT$counts)
+        print(all(colnames(tmp2@assays$RNA$counts) == colnames(tmp2@assays$ADT$counts)))
+        tmp2$IGT = IGT
+        tmp2$is_spleen_standard = T
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(tmp2), split = "\\."))[,1])
+        message("IGT in spleen standard match IGT")
+        print(all(igt_incolnames %in% IGT))
+    }    
+    
+    if (sample_test) {
+        message("Loading samples")
+        samples = readRDS(path_sample_data)
+        DefaultAssay(samples) = "RNA"
+        samples2 = CreateSeuratObject(counts = samples@assays$RNA$counts, meta.data = samples@meta.data, assay = "RNA")
+        samples2[["ADT"]] = CreateAssayObject(counts = samples@assays$ADT$counts) #samples@assays$ADT$counts
+        print(all(colnames(samples2@assays$RNA$counts) == colnames(samples2@assays$ADT$counts)))
+        samples2$IGT = IGT
+        samples2$is_spleen_standard = F
+        igt_incolnames = unique(do.call(rbind, strsplit(colnames(samples2), split = "\\."))[,1])
+        message("IGT in sample match IGT")
+        print(all(igt_incolnames %in% IGT))
+        all(samples2$IGT %in% IGT)
+    }
+    
+    if (spleen_test) {
+        message("Spleen standard present to merge")
+        int = intersect(colnames(samples2), colnames(tmp2))
+        #print(length(int))
+        if (length(int) != 0) {
+            message(sprintf("removing %s spleen standard cells from the samples", length(int)))
+            samples2 = samples2[,!colnames(samples2) %in% int]
+        }
+    
+        #table(samples2[,int]@meta.data$HTO_classification.simplified)
+        #table(tmp2[,int]@meta.data$HTO_classification.simplified)
+    
+        m = merge(tmp2, samples2)
+        m = JoinLayers(m)
+    } else {
+        message("No spleen standard to merge")
+        m = samples2
+    }
+    
+    meta = m@meta.data
+    meta$hashtag_number = meta$HTO_classification.simplified
+    meta$hashtag.classification.global = meta$HTO_classification.global
+    meta$Rosetta_RNA_clusters = meta$RNA_snn_res.1
+    meta$Rosetta_Protein_clusters = meta$RNA_snn_res.1
+    meta = meta[,!grepl("HTO|hash.ID|outliers|singler|lowCountADT|orig.ident|sample_name|RNA_snn_res|ADT_snn_res|Tcell|RNA_clusters|Protein_clusters|Distribution|autofluo|seurat_clusters", colnames(meta))]
+    
+    colnames(meta)[colnames(meta) == "cell_type"] = "QC_celltype"
+    # colnames(meta) = gsub("First.Of.|Avg.Of.","", colnames(meta))
+    
+    m@meta.data = meta
+    
+    return(m)
+}
+
+
+#files = list.files(path = "S*", pattern = "t_cell_filtering_so_postfiltering.Rds", recursive = T)
+#files = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(2,3,5,13,14,19,20,21,24))
+#dirs = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/data/IGT%s", c(1:48))
+#dirs = sprintf("/scratch/midway3/zemmour/exp_id/*/IGT%s", c(1:56))
+
+paths = list.files(path = "/project/zemmour/david/ImmgenT/exp_id/data_samples/", pattern = "dataset_clean.Rds", recursive = T, include.dirs=T)
+paths = do.call(rbind, strsplit(paths, split = "\\/"))[,c(1,2)] %>% as.data.frame() %>% distinct()
+# paths[,1] %>% write.table(file = "igt_exp.txt", col.names = F, row.names = F, quote = F, sep = "\t")
+
+so_list = list()
+for (s in 1:nrow(paths)) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    #print(IGT)
+    IGT = paths[s,1]
+    print(IGT)
+    #dir = "/project/zemmour/david/ImmgenT/exp_id/"
+    path_sample_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_samples/%s/dataset_clean.Rds", IGT)
+    path_spleen_data = sprintf("/project/zemmour/david/ImmgenT/exp_id/data_spleenstandard/%s/spleen.Rds", IGT)
+    so_list[[IGT]]  = tryCatch(ImportIGTData(path_sample_data, path_spleen_data, IGT), error = function(e) {message("no data")})
+}
+
+#Check but shouldn't be needed since all individual IGT without ADT or the ones for which we removed it have now been corrected in the original data
+for (i in 1:length(so_list)) {
+    #IGT = gsub(dir, pattern = "/scratch/midway3/zemmour/exp_id/\\*/", replacement = "")
+    #IGT = gsub(dir, pattern = "/project/jfkfloor2/zemmourlab/david/immgent/data/", replacement = "")
+    print(names(so_list)[i])
+    print(range(so_list[[i]][["ADT"]]$counts))
+    if (max(so_list[[i]][["ADT"]]$counts) < 100 | is.na(max(so_list[[i]][["ADT"]]$counts) )) {
+        print("changing ADT data to 0, check:")
+        m = Matrix(data = 0, nrow=nrow(so_list[[i]][["ADT"]]$counts), ncol=ncol(so_list[[i]][["ADT"]]$counts), sparse = TRUE)
+        rownames(m) = rownames(so_list[[i]][["ADT"]]$counts)
+        colnames(m) = colnames(so_list[[i]][["ADT"]]$counts)
+        so_list[[i]][["ADT"]]$counts = m
+        print(range(so_list[[i]][["ADT"]]$counts))
+    }
+}
+
+
+so = merge(so_list[[1]], c(so_list[2:length(so_list)]), project = "immgent_igt1_56")
+so = JoinLayers(so)
+saveRDS(so, file = "immgent_igt1_56_20241006.Rds")
+
+```
+
+Adjust colnames(so) to have IGTXX.barcode
+```{r}
+table(so$IGT)
+any(is.na(so$IGT))
+table(so$hashtag_number)
+any(is.na(so$hashtag_number))
+IGT.HT = paste(so$IGT, so$hashtag_number, sep = ".")
+IGT.HT = gsub(x = IGT.HT, pattern = "IGT", replacement = "I")
+IGT.HT = gsub(x = IGT.HT, pattern = "HT", replacement = "H")
+so$IGT.HT = IGT.HT
+
+message("check colnames to be IGT.BARCODE")
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, colnames(so))
+all(matches)
+#and adjust colnames if needed:
+unique(so$IGT[which(matches == F)])
+#Adjust colnames(so) 
+#pattern = "(IGT\\S*)_(\\d+)"
+so$colnames = colnames(so)
+sample(colnames(so), 100)
+pattern = "(\\S*)_(\\d+)"
+so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
+sample(so$colnames, 100)
+unique(so$IGT[!grepl("^IGT", so$colnames)])
+so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
+sample(so$colnames, 100)
+any(duplicated(so$colnames))
+#recheck
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, so$colnames)
+all(matches)
+#so@meta.data[which(matches == F),]
+if(all(matches)) {colnames(so) = so$colnames}
+all(grepl(pattern, colnames(so)))
+
+saveRDS(so, file = "immgent_igt1_56_20241006.Rds")
+
+```
+
+Export data --> export_data.Rmd
+
+
+
+Run totalvi
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
+##run the following scripts: 
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+#working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+#path_to_mudata='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+#prefix='totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+#batchkey='IGT'
+#categorical_covariate_keys=''
+#corrected_counts='False'
+#denoised_data='False'
+#python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
+
+
 ```
 
 
