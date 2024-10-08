@@ -78,7 +78,7 @@ import torch
 print("Global configurations")
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
-sc.set_figure_params(figsize=(6, 6), frameon=False)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
 scvi.settings.seed = 0  # optional: ensures reproducibility
 #sns.set_theme()
 if torch.cuda.is_available():
