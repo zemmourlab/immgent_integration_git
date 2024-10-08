@@ -127,7 +127,7 @@ scvi.model.TOTALVI.setup_mudata(
     },
 )
     
-model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb",extra_decoder_kwargs={'activation_function_bg': 'exp'})
+model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb") #extra_decoder_kwargs={'activation_function_bg': 'exp'}
 
 print("Train model")
 model.train()
