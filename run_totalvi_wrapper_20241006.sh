@@ -19,7 +19,7 @@ source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006
 path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu
 prefix=totalvi_igt1_96_20241006
 batchkey=IGT

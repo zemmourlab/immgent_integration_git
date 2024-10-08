@@ -87,14 +87,15 @@ print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
 print("Batch key list: any NA?")
 print((mdata.mod["RNA"].obs[batchkey].isna()).any())
 
-print("categorical_covariate_keys")
-for c in categorical_covariate_keys:
-    print(c)
-    print(mdata.mod["RNA"].obs[c].unique().tolist())
-    print("any NA?")
-    print((mdata.mod["RNA"].obs[c].isna()).any())
 
-#Setup mu_data
+print("categorical_covariate_keys")
+if categorical_covariate_keys is not None:
+    for c in categorical_covariate_keys:
+        print(c)
+        print(mdata.mod["RNA"].obs[c].unique().tolist())
+        print("any NA?")
+        print((mdata.mod["RNA"].obs[c].isna()).any())
+    
 print("Setup mu_data")
 scvi.model.TOTALVI.setup_mudata(
     mdata,
@@ -109,7 +110,7 @@ scvi.model.TOTALVI.setup_mudata(
         "categorical_covariate_keys":"RNA"
     },
 )
-
+    
 model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb")
 
 print("Train model")
