@@ -252,6 +252,7 @@ write.table(reductions, file = sprintf("%s/reductions.tsv", file_dir), sep = "\t
 
 Export Anndata h5ad file
 Don't forget to activate the scvi python environment before launching R
+doesn't work anymore (library issue), just see pytjon code below, instead
 ```{r}
 file_dir = "export_data"
 library(SingleCellExperiment)
@@ -353,43 +354,60 @@ so@meta.data = m2
 source activate /project/zemmour/david/envs/scvi_20240315
 
 Make h5ad files
+weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
+Use h5mu file!
 ```{python}
 import pandas as pd
 from scipy.io import mmread
 import anndata as ad
 
 os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/")
+prefix = "totalvi_igt1_96_20241006"
 
 # Step 1: Load the data
 matrix_rna = mmread('individual_files/matrix_rna.mtx').tocsr()  # Load the RNA expression matrix and convert to CSR format
-matrix_protein = mmread('individual_files/matrix_protein.mtx').tocsr()  # Load the protein expression matrix
+matrix_protein = mmread('individual_files/matrix_protein.mtx').tocsr() # Load the protein expression matrix
+transposed_matrix_rna = matrix_rna.transpose()
+transposed_matrix_protein = matrix_protein.transpose()
 
 genes = pd.read_csv('individual_files/genes.tsv', header=None, sep='\t')  # Gene names
 proteins = pd.read_csv('individual_files/proteins.tsv', header=None, sep='\t')  # Protein names
 cells = pd.read_csv('individual_files/cells.tsv', header=None, sep='\t')  # Cell names
-
-# Assuming cell_metadata.tsv has a header with metadata columns
 cell_metadata = pd.read_csv('individual_files/cell_metadata.tsv', sep='\t', index_col=0)  # Load cell metadata
 
 # Step 2: Create AnnData objects
-adata_rna = ad.AnnData(X=matrix_rna, obs=cell_metadata, var=pd.DataFrame(index=genes[0]))
-adata_protein = ad.AnnData(X=matrix_protein, obs=cell_metadata, var=pd.DataFrame(index=proteins[0]))
+adata_rna = ad.AnnData(X=transposed_matrix_rna, obs=cell_metadata) #var=pd.DataFrame(index=genes[0])
+adata_protein = ad.AnnData(X=transposed_matrix_protein) #var=pd.DataFrame(index=proteins[0])
 
-# Set the cell names if they are provided
+
 adata_rna.obs_names = cells[0]
+adata_rna.var_names = genes[0]
 adata_protein.obs_names = cells[0]
+adata_protein.var_names = proteins[0]
 
 # Step 3: Merge RNA and Protein data into one object
 # Assume the same cells in the same order for both matrices
-adata_rna.obsm['protein_expression'] = adata_protein.X
+adata_rna.obsm['protein'] = adata_protein.X
+adata_rna.obsm['protein'].varm = adata_protein.var_names
 
 # Step 4: Save the AnnData object
-adata_rna.write('combined_rna_protein.h5ad')
+adata_rna.write(prefix+'.h5ad')
+
+
+#NB: couldn't write h5ad with protein as panda dataframe
+#transposed_matrix_protein = transposed_matrix_protein.toarray()
+#protein_df = pd.DataFrame(transposed_matrix_protein)
+# protein_df.index = cells[0]
+# protein_df.index = protein_df.index.astype(str)
+# protein_df.columns = proteins[0]
+# protein_df.columns = protein_df.columns.astype(str)
+# protein_df = protein_df.astype(str)
+# data_protein = ad.AnnData(X=protein_df) #var=pd.DataFrame(index=proteins[0])
+# adata_rna.obsm['protein'] = protein_df
 
 ```
 
-
-Export MuData file
+Make h5mu file
 Don't forget to activate the scvi python environment before launching R
 source activate /project/zemmour/david/envs/scvi_20240315
 ```{python}
@@ -408,27 +426,42 @@ import pandas as pd
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
-os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/"+file_dir)
-prefix = "totalvi_igt1_56_20231030_allgenes"
+# os.chdir("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/"+file_dir)
+# prefix = "totalvi_igt1_56_20231030_allgenes"
 
-#mdata = mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu")
+os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/")
+prefix = "totalvi_igt1_96_20241006"
 
-adata = sc.read_h5ad("totalvi_igt1_56_20231030_allgenes_adata.h5ad")
+adata = sc.read_h5ad(prefix+".h5ad")
 
 #model = scvi.model.TOTALVI.load("totalvi_igt1_56_allgenes_Treg_20240306/")
 mdata = mu.MuData({"RNA": adata})
-mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+#mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy() #doubles the size of the written object at the end, so remove, not necessary
+mdata.mod['RNA'].var_names
+mdata.mod['RNA'].obs_names
+
 protein_data = adata.obsm['protein']
-non_zero_columns = np.sum(protein_data, axis=0) > 0
-protein_data = protein_data.loc[:,non_zero_columns]
+#non_zero_columns = np.sum(protein_data, axis=0) > 0
+#protein_data = protein_data.loc[:,non_zero_columns]
+#protein_data = protein_data[:,non_zero_columns]
 protein_adata = sc.AnnData(X=protein_data)
 mdata.mod['protein'] = protein_adata
-TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy() ##doubles the size of the written object at the end, so remove, not necessary
+mdata.mod['protein'].var_names = adata_protein.var_names
+mdata.mod['protein'].obs_names = adata.obs_names
+
+
+#TOTALVI_LATENT_KEY = "X_totalVI"
 #mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
 del mdata.mod["RNA"].obsm["protein"]
-#mdata.write(prefix+"_mdata.h5mu")
-#mdata = mu.read(file_path)
+mdata.write(prefix+".h5mu")
+#mdata2 = mu.read(prefix+".h5mu")
 
+```
+
+EXTRA
+not useful anymore, already cleaned up upstream
+```{python}
 #import metadata
 m = pd.read_csv('/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv')
 #m
