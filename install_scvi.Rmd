@@ -564,26 +564,156 @@ pip install git+https://github.com/scverse/scvi-tools.git #updates to 1.1.3
 just in case it messes up my SCVI environment
 scvi-tools 1.2.0
 
-```{bash}
-module load python/anaconda-2022.05 
-module load hdf5/1.12.0 #for BPCells but also others
-module load openblas/0.3.13 #need this one to avoid cblas_ somthing error when loading packages
 
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-conda env export > scvi.yml
-#modifyyml to change the name to /project/zemmour/david/envs/scvi_20240315
-#exit and log in again
-source activate mamba-env  
-mamba env create -p /project/zemmour/david/envs/scvi_20240315 -f scvi.yml
-#if issues with "strict repo priority", delete the line in .condarc
+```{python}
+module load python
 
-module load python/anaconda-2022.05
-source activate /project/zemmour/david/envs/scvi_20240315
+conda create -p /project/zemmour/david/envs/scvi120_20241008 python=3.10
 
-mamba update scvi-tools #to 1.1.2
-pip install hotspot
+source activate /project/zemmour/david/envs/scvi120_20241008
+
+conda install cuda -c nvidia/label/cuda-12.4.0
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+
+conda install jax jaxlib scvi-tools -c conda-forge
+
+##
+sinteractive --time=0:10:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=8GB
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008
+#on midway3-0283 GPU
+import torch
+torch.cuda.is_available()
+import scvi
+
+
 
 ```
+
+
+worked!
+```{bash}
+
+module load python
+
+conda create -p /project/zemmour/david/envs/scvi120_test4 python=3.10
+
+source activate /project/zemmour/david/envs/scvi120_test4
+
+conda install cuda -c nvidia/label/cuda-12.4.0
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+
+pip install -U "jax[cuda12]"
+conda install jax jaxlib -c conda-forge
+
+conda install scvi-tools -c conda-forge
+
+sinteractive --time=0:10:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=8GB
+module load python
+source activate /project/zemmour/david/envs/scvi120_test4
+#on midway3-0283 GPU
+import torch
+torch.cuda.is_available()
+import scvi
+
+conda remove scvi-tools
+conda install jax jaxlib scvi-tools -c conda-forge
+
+pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html ?
+python -c "import jax; print(f'Jax backend: {jax.default_backend()}')"
+
+pip install -U jax
+conda install jax jaxlib scvi-tools -c conda-forge
+conda install jaxlib==cuda jax cuda-nvcc -c conda-forge -c nvidia
+
+```
+
+test3: fails, scvi ok but not torch
+```{bash}
+
+module load python
+
+conda create -p /project/zemmour/david/envs/scvi120_test3 python=3.10
+
+source activate /project/zemmour/david/envs/scvi120_test3
+
+conda install cuda -c nvidia/label/cuda-12.4.0
+
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+pip install -U "jax[cuda12]"
+
+conda install scvi-tools -c conda-forge
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_test3
+
+```
+
+failed
+```{bash}
+module load python/anaconda-2022.05 
+conda create -p /project/zemmour/david/envs/scvi120_test2 python=3.10
+source activate /project/zemmour/david/envs/scvi120_test2
+module load cuda/11.8
+
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+pip install jaxlib==0.3.25+cuda11.cudnn82 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+
+conda install scvi-tools -c conda-forge
+
+sinteractive --time=0:10:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=8GB
+module load python/anaconda-2022.05
+module load cuda/11.8
+source activate /project/zemmour/david/envs/scvi120_test2
+#on midway3-0283 GPU
+#import torch
+#torch.cuda.is_available()
+#True
+#torch.cuda.device_count()
+#1
+#torch.cuda.current_device()
+#0
+#torch.cuda.device(0)
+#<torch.cuda.device object at 0x7f4d19f42af0>
+#torch.cuda.get_device_name(0)
+#'Quadro RTX 6000'
+
+```
+
+scvi120_test1: failed: jax error this time
+```{bash}
+module load python/anaconda-2022.05 
+conda create -p /project/zemmour/david/envs/scvi120_test1 python=3.10
+source activate /project/zemmour/david/envs/scvi120_test1
+module load cuda/11.8
+
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+pip install -U jax #didn't work
+
+conda install scvi-tools -c conda-forge
+#conda install jax jaxlib -c conda-forge didn't 
+
+sinteractive --time=0:10:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=8GB
+module load python/anaconda-2022.05
+module load cuda/11.8
+source activate /project/zemmour/david/envs/scvi120_test1
+#on midway3-0283 GPU
+#import torch
+#torch.cuda.is_available()
+#True
+#torch.cuda.device_count()
+#1
+#torch.cuda.current_device()
+#0
+#torch.cuda.device(0)
+#<torch.cuda.device object at 0x7f4d19f42af0>
+#torch.cuda.get_device_name(0)
+#'Quadro RTX 6000'
+
+```
+
 
 failed
 ```{bash}
@@ -595,11 +725,10 @@ source activate mamba-env
 mamba create -p /project/zemmour/david/envs/scvi120 python=3.10
 #log out and log back in to activate the new environment
 source activate /project/zemmour/david/envs/scvi120
+module load cuda/11.8
 
 mamba install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 mamba install jax jaxlib -c conda-forge
-
-mamba install scvi-tools -c conda-forge
 
 #check installation and GPU works:
 sinteractive --time=0:10:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=8GB
@@ -626,7 +755,7 @@ conda remove --prefix /project/zemmour/david/envs/scvi120 --all
 ```
 
 failed
-torch installed by not after installing scvi-tools!
+torch installed but not after installing scvi-tools!
 ```{bash}
 
 module load python/anaconda-2022.05 
