@@ -1,7 +1,7 @@
-#!/project/zemmour/david/envs/scvi_20240315/bin/python
+#!/project/zemmour/david/envs/scvi120_20241008/bin/python
 """This script run TOTALVI from a Mudata object specifying batch_key and categorical_covariate_keys if needed, """
 #author: David Zemmour
-#date: 05/27/2024
+#date: 10/08/2024
 #run_totalvi_v2.py [cwd] [path to mudata .h5mu] [prefix] [batchkey] [categorical_covariate_keys] [corrected_counts] [denoised_data]
 
 import warnings; warnings.simplefilter('ignore')

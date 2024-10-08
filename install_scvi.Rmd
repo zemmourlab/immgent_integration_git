@@ -565,6 +565,7 @@ just in case it messes up my SCVI environment
 scvi-tools 1.2.0
 
 
+Worked!!!
 ```{python}
 module load python
 
@@ -590,8 +591,7 @@ import scvi
 
 ```
 
-
-worked!
+intially troubleshooting that worked. Eventually installing jax jaxlib scvi-tools at the same time ensured compatibility
 ```{bash}
 
 module load python
@@ -604,7 +604,6 @@ conda install cuda -c nvidia/label/cuda-12.4.0
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 
 pip install -U "jax[cuda12]"
-conda install jax jaxlib -c conda-forge
 
 conda install scvi-tools -c conda-forge
 
