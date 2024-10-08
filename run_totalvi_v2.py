@@ -40,6 +40,14 @@ denoised_data = args.denoised_data
 # batchkey = 'IGT'
 # categorical_covariate_keys = ['sample_id']
 
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu'
+prefix='totalvi_igt1_96_20241006'
+batchkey='IGT'
+categorical_covariate_keys=None
+corrected_counts=False
+denoised_data=False
+
 
 print(f"Working Directory: {working_dir}")
 print(f"Path to AnnData: {path_to_mudata}")
@@ -82,9 +90,13 @@ os.chdir(working_dir)
 mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
 print(mdata)
 
-print("Creating layer counts")
+print("Creating RNA layer counts")
 mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
-mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy()
+
+print("Converting  mdata.mod['protein'].X to array")
+mdata.mod['protein'].X = mdata.mod['protein'].X.toarray()
+
+mdata.update()
 
 print("Batch key list")
 print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
