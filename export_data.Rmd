@@ -353,9 +353,8 @@ so@meta.data = m2
 **For python**
 source activate /project/zemmour/david/envs/scvi_20240315
 
-Make h5ad files
-weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
-Use h5mu file!
+Don't make Make h5ad files: weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
+Make h5mu file!
 ```{python}
 import pandas as pd
 from scipy.io import mmread
@@ -449,13 +448,13 @@ mdata.mod['protein'] = protein_adata
 #mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy() ##doubles the size of the written object at the end, so remove, not necessary
 mdata.mod['protein'].var_names = adata_protein.var_names
 mdata.mod['protein'].obs_names = adata.obs_names
-
+mdata.mod['protein'].X = mdata.mod['protein'].X.toarray() #totalvi doesn't want sparse matrix for protein. get index error with scvi.model.TOTALVI
 
 #TOTALVI_LATENT_KEY = "X_totalVI"
 #mdata.mod["RNA"].obsm[TOTALVI_LATENT_KEY] = model.get_latent_representation()
 del mdata.mod["RNA"].obsm["protein"]
 mdata.write(prefix+".h5mu")
-#mdata2 = mu.read(prefix+".h5mu")
+#mdata = mu.read(prefix+".h5mu")
 
 ```
 
