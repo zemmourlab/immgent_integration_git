@@ -93,8 +93,8 @@ print(mdata)
 print("Creating RNA layer counts")
 mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
 
-print("Converting  mdata.mod['protein'].X to array")
-mdata.mod['protein'].X = mdata.mod['protein'].X.toarray()
+#if sparse matrix in protein data: print("Converting  mdata.mod['protein'].X to array")
+#mdata.mod['protein'].X = mdata.mod['protein'].X.toarray()
 
 mdata.update()
 
