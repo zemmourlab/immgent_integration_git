@@ -82,6 +82,10 @@ os.chdir(working_dir)
 mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
 print(mdata)
 
+print("Creating layer counts")
+mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
+mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy()
+
 print("Batch key list")
 print(mdata.mod["RNA"].obs[batchkey].unique().tolist())
 print("Batch key list: any NA?")

@@ -446,7 +446,7 @@ protein_data = adata.obsm['protein']
 #protein_data = protein_data[:,non_zero_columns]
 protein_adata = sc.AnnData(X=protein_data)
 mdata.mod['protein'] = protein_adata
-mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy() ##doubles the size of the written object at the end, so remove, not necessary
+#mdata.mod["protein"].layers["counts"] = mdata.mod["protein"].X.copy() ##doubles the size of the written object at the end, so remove, not necessary
 mdata.mod['protein'].var_names = adata_protein.var_names
 mdata.mod['protein'].obs_names = adata.obs_names
 
