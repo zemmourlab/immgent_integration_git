@@ -113,7 +113,7 @@ if categorical_covariate_keys is not None:
         print("any NA?")
         print((mdata.mod["RNA"].obs[c].isna()).any())
         mdata.mod["RNA"].obs[c].str.replace('.', '', regex=False) #scvi doesn't want dots
-    
+
 print("Setup mu_data")
 scvi.model.TOTALVI.setup_mudata(
     mdata,
