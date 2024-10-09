@@ -44,7 +44,7 @@ denoised_data = args.denoised_data
 # path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu'
 # prefix='totalvi_igt1_96_20241006'
 # batchkey='IGT'
-# categorical_covariate_keys='IGT.HT'
+# categorical_covariate_keys='IGTHT'
 # corrected_counts=False
 # denoised_data=False
 
@@ -112,10 +112,9 @@ if categorical_covariate_keys is not None:
         print(mdata.mod["RNA"].obs[c].unique().tolist())
         print("any NA?")
         print((mdata.mod["RNA"].obs[c].isna()).any())
-        print(mdata.mod["RNA"].obs[c].head(10))
-        mdata.mod["RNA"].obs[c] = mdata.mod["RNA"].obs[c].str.replace('.', '', regex=False) #scvi doesn't want dots
-        print(mdata.mod["RNA"].obs[c].head(10))
-
+        #print(mdata.mod["RNA"].obs[c].head(10))
+        #mdata.mod["RNA"].obs[c] = mdata.mod["RNA"].obs[c].str.replace('.', '', regex=False)
+        #print(mdata.mod["RNA"].obs[c].head(10))
 
 print("Setup mu_data")
 scvi.model.TOTALVI.setup_mudata(

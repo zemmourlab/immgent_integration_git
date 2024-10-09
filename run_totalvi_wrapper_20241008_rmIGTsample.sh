@@ -20,7 +20,7 @@ working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/tot
 path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu
 prefix=totalvi_20241008_rmIGTsample
 batchkey=IGT
-categorical_covariate_keys=IGT.HT
+categorical_covariate_keys=IGTHT
 corrected_counts=False
 denoised_data=False
 

@@ -117,7 +117,7 @@ DefaultAssay(so) = "RNA"
 
 ```
 
-Update the metadata in seurat object
+(Update the metadata in seurat object) skip, now its own script metadata_update.Rmd
 ```{r}
 message("check colnames to be IGT.BARCODE")
 pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
