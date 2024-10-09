@@ -63,16 +63,16 @@ import warnings; warnings.simplefilter('ignore')
 import scvi
 import os
 import sys
-#import scanpy as sc
-#import muon as mu
+import scanpy as sc
+import muon as mu
 import mudata as mu
 
 import numpy as np
-#import mplscience
+import mplscience
 import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
-#import seaborn as sns
+import seaborn as sns
 import torch
 
 print("Global configurations")

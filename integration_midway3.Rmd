@@ -3184,24 +3184,47 @@ saveRDS(so, file = "immgent_igt1_56_20241006.Rds")
 
 Export data --> export_data.Rmd
 
-Run totalvi
+Run totalvi rmIGT
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20240410_rmorgan.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241006.sh
 ##run the following scripts: 
 #SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-#working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
-#path_to_mudata='/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
-#prefix='totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
-#batchkey='IGT'
+#working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006
+#path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu
+#prefix=totalvi_igt1_96_20241006
+#batchkey=IGT
 #categorical_covariate_keys=''
-#corrected_counts='False'
-#denoised_data='False'
+#corrected_counts=False
+#denoised_data=False
+#cd $working_dir
 #python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
 
 
 ```
 
+Run totalvi rmIGTsample
+```{bash}
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241008_rmIGTsample.sh
+##run the following scripts: 
+#SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+#working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample
+#path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu
+#prefix=totalvi_20241008_rmIGTsample
+#batchkey=IGT
+#categorical_covariate_keys='IGT.HT'
+#corrected_counts=False
+#denoised_data=False
+#cd $working_dir
+#python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
+
+
+
+
+
+```
+ 
 
 
 **Integration evaluation: conservation of HVG**

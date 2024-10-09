@@ -127,6 +127,30 @@ setwd(prefix)
 milo.dim = "TOTALVI_20240525_RMIGTSAMPLE"
 ```
 
+Count number of cells for each cluster in each sample
+```{r}
+m = so@meta.data
+
+stat = m %>% group_by(sample_id) %>% mutate(n_sampleid = n()) %>% group_by(sample_id, Cluster_totalvi20240525rmigtsample_Res0.5) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+write.table(stat, file = "Treg_Cluster_totalvi20240525rmigtsample_Res0.5_PropPerSampleID.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+summary_df <- m %>%
+  group_by(sample_id) %>%
+  mutate(total_count = n()) %>%  # Calculate the total count per sample_id
+  group_by(sample_id, Cluster_totalvi20240525rmigtsample_Res0.5) %>%
+  summarize(
+    absolute_count = n(),                            # Calculate the absolute count per cluster
+    fraction = n() / first(total_count)              # Calculate the fraction per sample_id
+  ) %>%
+  ungroup()  # Ungroup after summarizing
+
+
+stat %>% group_by(sample_id) %>% summarize(totalprop = sum(prop))
+
+```
+
+
 
 **Enrichments in condition_detailed ~ tissue in the totalVI IGT_sample space**
 
@@ -1144,8 +1168,6 @@ highlight specific diseases and bugs too
 ```{r}
 
 ```
-
-
 
 **Study disease effect in a specific organ: milo in TOTALVI space in LUNG**
 
