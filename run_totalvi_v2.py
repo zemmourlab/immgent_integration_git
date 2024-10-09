@@ -40,13 +40,13 @@ denoised_data = args.denoised_data
 # batchkey = 'IGT'
 # categorical_covariate_keys = ['sample_id']
 
-working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006'
-path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu'
-prefix='totalvi_igt1_96_20241006'
-batchkey='IGT'
-categorical_covariate_keys='IGT.HT'
-corrected_counts=False
-denoised_data=False
+# working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006'
+# path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu'
+# prefix='totalvi_igt1_96_20241006'
+# batchkey='IGT'
+# categorical_covariate_keys='IGT.HT'
+# corrected_counts=False
+# denoised_data=False
 
 
 print(f"Working Directory: {working_dir}")
