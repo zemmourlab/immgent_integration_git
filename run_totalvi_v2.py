@@ -40,9 +40,9 @@ denoised_data = args.denoised_data
 # batchkey = 'IGT'
 # categorical_covariate_keys = ['sample_id']
 
-# working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006'
-# path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006.h5mu'
-# prefix='totalvi_igt1_96_20241006'
+# working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+# path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+# prefix='totalvi_20241006' #prefix = "totalvi_20241008_rmIGTsample"
 # batchkey='IGT'
 # categorical_covariate_keys='IGTHT'
 # corrected_counts=False
@@ -74,6 +74,7 @@ import pickle
 import pandas as pd
 import seaborn as sns
 import torch
+import pymde #to run MDE
 
 print("Global configurations")
 pd.set_option('display.max_rows', 1000)
@@ -138,23 +139,85 @@ model.train()
 
 print("Save model")
 model.save(prefix, save_anndata=True)
+# model = scvi.model.TOTALVI.load(prefix)
+# mdata = model.adata
 
 fig, ax = plt.subplots(1, 1)
 model.history["elbo_train"].plot(ax=ax, label="train")
 model.history["elbo_validation"].plot(ax=ax, label="validation")
 ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
 ax.legend()
+fig.gcf()
 fig.savefig(prefix+"/training_elbo_plot.pdf")
 
 print("Save latent_representation.csv")
 latent_representation = model.get_latent_representation()
 TOTALVI_LATENT_KEY = "X_totalVI"
-mdata.mod['RNA'].obsm[TOTALVI_LATENT_KEY] = latent_representation
+#mdata.mod['RNA'].obsm[TOTALVI_LATENT_KEY] = latent_representation
+mdata.obsm[TOTALVI_LATENT_KEY] = latent_representation
 latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
 
 latent_df.to_csv(prefix+"/latent.csv", index=True)
+# latent_df = pd.read_csv(prefix+"/latent.csv", index_col = 0)
+# mdata.obsm[TOTALVI_LATENT_KEY] = latent_df
 
-mdata.write(prefix+"/adata.h5mu")
+print("Save umap.csv")
+sc.pp.neighbors(mdata, use_rep=TOTALVI_LATENT_KEY)
+sc.tl.umap(mdata, min_dist=0.4)
+umap_df = pd.DataFrame(mdata.obsm['X_umap'], index = mdata.mod['RNA'].obs.index)
+umap_df.to_csv(prefix+"/umap_python.csv", index=True)
+
+print("Save mde.csv")
+# mdata.obsm["X_mde"] = scvi.model.utils.mde(mdata.obsm[TOTALVI_LATENT_KEY])
+# mde_df = pd.DataFrame(mdata.obsm["X_mde"], index = mdata.mod['RNA'].obs.index) 
+# mde_df.to_csv(prefix+"/mde.csv", index=True)
+
+mde = pymde.preserve_neighbors(
+    mdata.obsm[TOTALVI_LATENT_KEY].values,
+    embedding_dim=2,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda'
+)
+
+import pickle
+model_pkl_file = prefix+"/mde_model.pkl"  
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(mde, file)
+
+# with open(model_pkl_file, 'rb') as file:  
+#     model = pickle.load(file)
+
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = mdata.mod['RNA'].obs.index) 
+mde_df.to_csv(prefix+"/mde2.csv", index=True)
+
+pairs, distorsions = mde.high_distortion_pairs()
+pairs_df = pd.DataFrame(pairs.cpu(), columns=['cell1', 'cell2'])
+pairs_df['cell1'] = mdata.mod['RNA'].obs.index[pairs_df['cell1']]
+pairs_df['cell2'] = mdata.mod['RNA'].obs.index[pairs_df['cell2']]
+distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
+pairs_df['distortion'] = distorsions_df['distortion']
+pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+pairs_df.to_csv(prefix+"/mde_distorsions.csv")
+#most_distorted_pairs = pairs[:500]
+mde.distortions_cdf()
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_distorsion_cdf.png")
+
+umap_mde_aligned = pymde.align(source=embedding.cpu(), target=mdata.obsm['X_umap'])
+umap_mde_aligned_df = pd.DataFrame(umap_mde_aligned, index = mdata.mod['RNA'].obs.index)
+umap_mde_aligned_df.to_csv(prefix+"/umap_mde_aligned.csv", index=True)
+    
+# load model from pickle file
+# with open(model_pkl_file, 'rb') as file:  
+#     mde2 = pickle.load(file)
+
+
+
+#mdata.write(prefix+"/adata.h5mu")
 
 if corrected_counts:
     print("Save corrected counts")

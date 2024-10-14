@@ -587,11 +587,17 @@ import torch
 torch.cuda.is_available()
 import scvi
 
+##
+conda install scanpy muon seaborn -c conda-forge
+pip install mplscience
+
+#test pymde
+conda install -c pytorch -c conda-forge pymde
 
 
 ```
 
-intially troubleshooting that worked. Eventually installing jax jaxlib scvi-tools at the same time ensured compatibility. 
+Intially troubleshooting that worked. Eventually installing jax jaxlib scvi-tools at the same time ensured compatibility. 
 Use this environment to test compatibility of other packages before doing on scvi120_20241008 
 ```{bash}
 
@@ -628,6 +634,9 @@ conda install jaxlib==cuda jax cuda-nvcc -c conda-forge -c nvidia
 
 conda install scanpy muon seaborn -c conda-forge
 pip install mplscience
+
+#test pymde
+conda install -c pytorch -c conda-forge pymde
 
 ```
 
