@@ -1,4 +1,4 @@
-#!/project/zemmour/david/envs/scvi_20240315/bin/python
+#!/project/zemmour/david/envs/scvi_20241008/bin/python
 """This script run TOTALVI from a muon object specifying batch_key and categorical_covariate_keys if needed"""
 #author: David Zemmour
 #date: 04/10/2024
