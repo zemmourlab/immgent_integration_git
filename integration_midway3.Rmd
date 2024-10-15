@@ -3286,7 +3286,7 @@ distorsions_outliers = distorsions[distorsions$distortion > 1,c("cell1", "cell2"
 so$highdistortion = F
 so$highdistortion[colnames(so) %in% distorsions_outliers] = T
 pdf("mde2_totalvi_20241006_topdistortedcells.pdf", 20, 20, useDingbats = F)
-DimPlot(so, reduction = red, group.by = "highdistortion", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
+DimPlot(so, reduction = red, group.by = "highdistortion", order = T, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
 dev.off()
 
 ```
