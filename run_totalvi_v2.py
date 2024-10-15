@@ -173,7 +173,7 @@ print("Save mde.csv")
 # mde_df.to_csv(prefix+"/mde.csv", index=True)
 
 mde = pymde.preserve_neighbors(
-    mdata.obsm[TOTALVI_LATENT_KEY],
+    mdata.obsm[TOTALVI_LATENT_KEY], #mdata.obsm[TOTALVI_LATENT_KEY].values
     embedding_dim=2,
     constraint=pymde.Standardized(),
     repulsive_fraction=0.7,
@@ -200,7 +200,7 @@ pairs_df['cell1'] = mdata.mod['RNA'].obs.index[pairs_df['cell1']]
 pairs_df['cell2'] = mdata.mod['RNA'].obs.index[pairs_df['cell2']]
 distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
 pairs_df['distortion'] = distorsions_df['distortion']
-pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+#pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
 pairs_df.to_csv(prefix+"/mde_distorsions.csv")
 #most_distorted_pairs = pairs[:500]
 mde.distortions_cdf()
