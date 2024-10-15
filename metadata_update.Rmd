@@ -58,16 +58,22 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 }
 
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241006", calculate_umap = T)
-write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
+#write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
 
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241006", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/umap.csv",dir_with_file), prefix = "umap_totalvi_20241006", calculate_umap = F)
-
 so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix = "mde_totalvi_20241006", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde2_totalvi_20241006", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap2_totalvi_20241006", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/umap_mde_aligned.csv",dir_with_file), prefix = "mdeumap_totalvi_20241006", calculate_umap = F)
 
-dir_with_file = "totalvi_20241008_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix = "umap_totalvi_20241008_rmIGTsample", calculate_umap = F)
-write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241008_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde2_totalvi_20241008_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/umap_mde_aligned.csv",dir_with_file), prefix = "mdeumap_totalvi_20241008_rmIGTsample", calculate_umap = F)
+#write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
+
 
 ```
 
@@ -78,6 +84,13 @@ Add Clusters totalvi_20241006/clusters.csv
 
 Add Annotations 
 annotation_level1.csv
+
+```{r}
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level1.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level1 = annotl1[colnames(so),1]
+
+```
+
 
 
 Load metadata csv file

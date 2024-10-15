@@ -3264,6 +3264,34 @@ so$seurat_clusters = NULL
 
 ```
 
+Plot Dims
+```{r}
+
+for (red in names(so@reductions)[grepl("umap|mde", names(so@reductions))]) {
+    print(red)
+    pdf(sprintf("%s.pdf", red), 20, 20, useDingbats = F)
+    print(DimPlot(so, reduction = red, group.by = "organ_simplified", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal))
+    print(DimPlot(so, reduction = red, group.by = "organ_simplified", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal))
+    print(DimPlot(so, reduction = red, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal))
+    print(DimPlot(so, reduction = red, group.by = "Clustertotalvi_20241006_Res0.5", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal))
+    dev.off()
+}
+
+prefix = "totalvi_20241006"
+umap_to_plot = "mde2_totalvi_20241006"
+distorsions = read.table(sprintf("%s/mde_distorsions_sample.csv",prefix), header = T,sep = ",") %>% as.data.frame()
+distorsions = distorsions %>% dplyr::arrange(desc(distortion))
+distorsions_outliers = distorsions[distorsions$distortion > 1,c("cell1", "cell2")] %>% unlist() %>% unique()
+
+so$highdistortion = F
+so$highdistortion[colnames(so) %in% distorsions_outliers] = T
+pdf("mde2_totalvi_20241006_topdistortedcells.pdf", 20, 20, useDingbats = F)
+DimPlot(so, reduction = red, group.by = "highdistortion", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
+dev.off()
+
+```
+
+
 Plot UMAPs, genes and proteins for annotation
 ```{r}
 
