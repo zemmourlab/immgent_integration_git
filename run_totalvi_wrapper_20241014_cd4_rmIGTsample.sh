@@ -2,7 +2,7 @@
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
 #SBATCH --partition=beagle3 
 #SBATCH --gres=gpu:1 
-#SBATCH --mem=64GB #184GB
+#SBATCH --mem=128GB #184GB
 #SBATCH -J cd4totalvi              
 #SBATCH -o totalviv2_20241014_cd4.log
 #SBATCH -t 24:00:00              ##SBATCH --mem=8G
