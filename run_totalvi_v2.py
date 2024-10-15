@@ -173,7 +173,7 @@ print("Save mde.csv")
 # mde_df.to_csv(prefix+"/mde.csv", index=True)
 
 mde = pymde.preserve_neighbors(
-    mdata.obsm[TOTALVI_LATENT_KEY].values,
+    mdata.obsm[TOTALVI_LATENT_KEY],
     embedding_dim=2,
     constraint=pymde.Standardized(),
     repulsive_fraction=0.7,
