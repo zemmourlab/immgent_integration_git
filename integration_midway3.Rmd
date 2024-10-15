@@ -2754,8 +2754,6 @@ dev.off()
 #saveRDS(so, file = "totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
 ```
 
-
-
 **TOTAL-VI INTEGRATION IGT 1-96 all cells, all genes**
 
 Copy all dataset_clean.Rds in a separate folder to upload to Midway3

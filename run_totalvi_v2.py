@@ -117,28 +117,28 @@ if categorical_covariate_keys is not None:
         #mdata.mod["RNA"].obs[c] = mdata.mod["RNA"].obs[c].str.replace('.', '', regex=False)
         #print(mdata.mod["RNA"].obs[c].head(10))
 
-print("Setup mu_data")
-scvi.model.TOTALVI.setup_mudata(
-    mdata,
-    rna_layer="counts",
-    categorical_covariate_keys = categorical_covariate_keys, #make sure this is a list!
-    protein_layer=None,
-    batch_key=batchkey,
-    modalities={
-        "rna_layer": "RNA",
-        "protein_layer": "protein",
-        "batch_key": "RNA",
-        "categorical_covariate_keys":"RNA"
-    },
-)
-    
-model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb") #extra_decoder_kwargs={'activation_function_bg': 'exp'}
-
-print("Train model")
+# print("Setup mu_data")
+# scvi.model.TOTALVI.setup_mudata(
+#     mdata,
+#     rna_layer="counts",
+#     categorical_covariate_keys = categorical_covariate_keys, #make sure this is a list!
+#     protein_layer=None,
+#     batch_key=batchkey,
+#     modalities={
+#         "rna_layer": "RNA",
+#         "protein_layer": "protein",
+#         "batch_key": "RNA",
+#         "categorical_covariate_keys":"RNA"
+#     },
+# )
+#     
+# model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb") #extra_decoder_kwargs={'activation_function_bg': 'exp'}
+# 
+# print("Train model")
 # model.train()
-
-print("Save model")
-model.save(prefix, save_anndata=True)
+# 
+# print("Save model")
+# model.save(prefix, save_anndata=True)
 model = scvi.model.TOTALVI.load(prefix)
 mdata = model.adata
 
