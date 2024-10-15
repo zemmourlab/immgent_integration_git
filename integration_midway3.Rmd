@@ -3600,7 +3600,12 @@ mdata_miniverse.mod['RNA'].obs['annotation_level1'].unique()
 
 ```
 
-```{bash}
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_treg_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd8_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_unconv_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse_rmIGTsample.sh
+
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_treg_rmIGTsample.sh
@@ -3615,8 +3620,6 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_treg_rmIGTsample.sh
 #denoised_data=False
 #cd $working_dir
 #python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
-
-```
 
 ```
 

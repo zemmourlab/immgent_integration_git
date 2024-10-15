@@ -135,19 +135,19 @@ scvi.model.TOTALVI.setup_mudata(
 model = scvi.model.TOTALVI(mdata, n_latent = 30, gene_likelihood = "nb") #extra_decoder_kwargs={'activation_function_bg': 'exp'}
 
 print("Train model")
-model.train()
+# model.train()
 
 print("Save model")
 model.save(prefix, save_anndata=True)
-# model = scvi.model.TOTALVI.load(prefix)
-# mdata = model.adata
+model = scvi.model.TOTALVI.load(prefix)
+mdata = model.adata
 
 fig, ax = plt.subplots(1, 1)
 model.history["elbo_train"].plot(ax=ax, label="train")
 model.history["elbo_validation"].plot(ax=ax, label="validation")
 ax.set(title="Negative ELBO over training epochs", ylim=(1200, 1400))
 ax.legend()
-fig.gcf()
+fig = plt.gcf() 
 fig.savefig(prefix+"/training_elbo_plot.pdf")
 
 print("Save latent_representation.csv")
