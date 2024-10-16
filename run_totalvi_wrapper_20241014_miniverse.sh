@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse_rmIGTsample.sh
+#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse.sh
 
 module load python
 
@@ -18,9 +18,9 @@ source activate /project/zemmour/david/envs/scvi120_20241008
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
 path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_miniverse.h5mu
-prefix=totalvi_20241014_miniverse_rmIGTsample
+prefix=totalvi_20241014_miniverse
 batchkey=IGT
-categorical_covariate_keys=IGTHT
+categorical_covariate_keys=''
 corrected_counts=False
 denoised_data=False
 cd $working_dir

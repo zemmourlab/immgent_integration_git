@@ -18,9 +18,9 @@ source activate /project/zemmour/david/envs/scvi120_20241008
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
 path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_Treg.h5mu
-prefix=totalvi_20241014_Treg_rmIGTsample
+prefix=totalvi_20241014_Treg
 batchkey=IGT
-categorical_covariate_keys=IGTHT
+categorical_covariate_keys=''
 corrected_counts=False
 denoised_data=False
 cd $working_dir
