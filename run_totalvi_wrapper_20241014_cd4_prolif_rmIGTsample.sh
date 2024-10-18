@@ -3,13 +3,13 @@
 #SBATCH --partition=beagle3 
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=128GB #184GB
-#SBATCH -J cd4totalvi              
-#SBATCH -o totalviv2_20241014_cd4.log
-#SBATCH -t 24:00:00              ##SBATCH --mem=8G
+#SBATCH -J cd4prolif              
+#SBATCH -o totalvi_20241014_CD4_prolif_rmIGTsample.log
+#SBATCH -t 12:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_rmIGTsample.sh
+#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_resting_rmIGTsample.sh
 
 module load python
 
@@ -17,8 +17,8 @@ source activate /project/zemmour/david/envs/scvi120_20241008
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
-path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_CD4.h5mu
-prefix=totalvi_20241014_CD4_rmIGTsample
+path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_CD4_prolif.h5mu
+prefix=totalvi_20241014_CD4_prolif_rmIGTsample
 batchkey=IGT
 categorical_covariate_keys=IGTHT
 corrected_counts=False
