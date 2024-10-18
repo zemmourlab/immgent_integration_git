@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_resting_rmIGTsample.sh
+#run as: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_prolif_rmIGTsample.sh
 
 module load python
 
