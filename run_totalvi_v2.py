@@ -160,6 +160,7 @@ latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.ind
 latent_df.to_csv(prefix+"/latent.csv", index=True)
 # latent_df = pd.read_csv(prefix+"/latent.csv", index_col = 0)
 # mdata.obsm[TOTALVI_LATENT_KEY] = latent_df
+# mdata.obsm[TOTALVI_LATENT_KEY] = mdata.obsm[TOTALVI_LATENT_KEY].values
 
 print("Save umap.csv")
 sc.pp.neighbors(mdata, use_rep=TOTALVI_LATENT_KEY)
@@ -219,31 +220,31 @@ umap_mde_aligned_df.to_csv(prefix+"/umap_mde_aligned.csv", index=True)
 
 #mdata.write(prefix+"/adata.h5mu")
 
-if corrected_counts:
-    print("Save corrected counts")
-    import numpy as np
-    from scipy.sparse import csr_matrix
-    from scipy.io import mmwrite
-    newcounts = model.posterior_predictive_sample() #RNA AND Proteins!
-    newcounts = newcounts.astype(int)
-    newcounts_sparse = csr_matrix(newcounts)
-    mmwrite(prefix+"/counts_corrected.mtx", newcounts_sparse)
-    genes_prot = pd.DataFrame(mdata.var_names)
-    genes_prot.to_csv(prefix+"/genes.csv", index = False,header=False )
-    cells = pd.DataFrame(mdata.obs_names)
-    cells.to_csv(prefix+"/cells.csv", index = False,header=False )
-
-if denoised_data:
-    print("Calculate denoised data")
-    denoised = model.get_normalized_expression()
-    mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
-    mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
-    mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
-    print("Save denoised data")
-    mdata.write(prefix+"/adata_withdenoised.h5mu")
-    #export mu data in separate AnnData for R
-    print("Export data rna_data.h5ad and protein_data.h5ad in AnnData for R")
-    mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
-    mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
-    print("Done")
+# if corrected_counts:
+#     print("Save corrected counts")
+#     import numpy as np
+#     from scipy.sparse import csr_matrix
+#     from scipy.io import mmwrite
+#     newcounts = model.posterior_predictive_sample() #RNA AND Proteins!
+#     newcounts = newcounts.astype(int)
+#     newcounts_sparse = csr_matrix(newcounts)
+#     mmwrite(prefix+"/counts_corrected.mtx", newcounts_sparse)
+#     genes_prot = pd.DataFrame(mdata.var_names)
+#     genes_prot.to_csv(prefix+"/genes.csv", index = False,header=False )
+#     cells = pd.DataFrame(mdata.obs_names)
+#     cells.to_csv(prefix+"/cells.csv", index = False,header=False )
+# 
+# if denoised_data:
+#     print("Calculate denoised data")
+#     denoised = model.get_normalized_expression()
+#     mdata.mod['protein'].layers["counts"] = mdata.mod["protein"].X.copy()
+#     mdata.mod['protein'].layers["protein_denoised"] = denoised[1]
+#     mdata.mod['RNA'].layers["rna_denoised"] = denoised[0]
+#     print("Save denoised data")
+#     mdata.write(prefix+"/adata_withdenoised.h5mu")
+#     #export mu data in separate AnnData for R
+#     print("Export data rna_data.h5ad and protein_data.h5ad in AnnData for R")
+#     mdata.mod['RNA'].write_h5ad(prefix+"/rna_data.h5ad")
+#     mdata.mod['protein'].write_h5ad(prefix+"/protein_data.h5ad")
+#     print("Done")
 

@@ -76,6 +76,10 @@ so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefi
 so = AddLatentData(so, latent_file = sprintf("%s/umap_mde_aligned.csv",dir_with_file), prefix = "mdeumap_totalvi_20241008_rmIGTsample", calculate_umap = F)
 #write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
 
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalviv2can"
+so = AddLatentData(so, latent_file = sprintf("%s/umap.csv",dir_with_file), prefix = "umap_totalviv2_can", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix = "mde_totalviv2_can", calculate_umap = F)
+
 
 ```
 
@@ -226,7 +230,7 @@ so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_
 Save
 ```{r}
 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241016.Rds")
 
 #saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 ```

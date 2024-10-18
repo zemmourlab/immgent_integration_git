@@ -14,7 +14,7 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
-sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=152GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=128GB
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
 
 cd $LABHOME
@@ -702,17 +702,99 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241008_rmIGTsample.sh
 
 ```
 
+RunTotalviv2 Can
+
+```{bash}
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+```
+
+```{python}
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+prefix='totalviv2can' #prefix = "totalvi_20241008_rmIGTsample"
+TOTALVI_LATENT_KEY = 'X_totalVI'
+
+mdata = mu.read(path_to_mudata) 
+latent_df = pd.read_csv(prefix+"/latent.csv", index_col = 0)
+mdata.obsm[TOTALVI_LATENT_KEY] = latent_df
+mdata.obsm[TOTALVI_LATENT_KEY] = mdata.obsm[TOTALVI_LATENT_KEY].values
+
+mde = pymde.preserve_neighbors(
+    mdata.obsm[TOTALVI_LATENT_KEY], #mdata.obsm[TOTALVI_LATENT_KEY].values
+    embedding_dim=2,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda'
+)
+
+import pickle
+model_pkl_file = prefix+"/mde_model.pkl"  
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(mde, file)
+
+# with open(model_pkl_file, 'rb') as file:  
+#     model = pickle.load(file)
+
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = mdata.mod['RNA'].obs.index) 
+mde_df.to_csv(prefix+"/mde.csv", index=True)
+
+pairs, distorsions = mde.high_distortion_pairs()
+pairs_df = pd.DataFrame(pairs.cpu(), columns=['cell1', 'cell2'])
+pairs_df['cell1'] = mdata.mod['RNA'].obs.index[pairs_df['cell1']]
+pairs_df['cell2'] = mdata.mod['RNA'].obs.index[pairs_df['cell2']]
+distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
+pairs_df['distortion'] = distorsions_df['distortion']
+#pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+pairs_df.to_csv(prefix+"/mde_distorsions.csv")
+#most_distorted_pairs = pairs[:500]
+mde.distortions_cdf()
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_distorsion_cdf.png")
+
+```
+
+
 Add metadata --> see metadata_update.Rmd
 Add new total dims in R seurat --> see metadata_update.Rmd
 --> /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds
 
 ```{r}
 prefix = "totalvi_20241008_rmIGTsample"
-prefix = "totalvi_20241006"
-umap_to_plot = "umap_totalvi_20241006"
-umap_to_plot = "mde_totalvi_20241006"
 
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+prefix = "totalvi_20241006"
+prefix2 = prefix
+umap_to_plot = "umap_totalvi_20241006"
+umap_to_plot = "mde2_totalvi_20241006"
+
+prefix = "totalviv2can"
+prefix2 = "totalvi_20241006"
+umap_to_plot = "umap_totalviv2_can"
+umap_to_plot = "mde_totalviv2_can"
+
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241016.Rds")
 so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
 so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
 
@@ -767,8 +849,8 @@ distorsions_outliers = distorsions[distorsions$distortion > 1,c("cell1", "cell2"
 
 so$highdistortion = F
 so$highdistortion[colnames(so) %in% distorsions_outliers] = T
-pdf("mde2_totalvi_20241006_topdistortedcells.pdf", 20, 20, useDingbats = F)
-DimPlot(so, reduction = red, group.by = "highdistortion", order = T, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
+pdf(sprintf("%s/MDE_topdistortedcells.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "highdistortion", order = T, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
 dev.off()
 
 ```
@@ -782,26 +864,40 @@ Plot UMAPs, genes and proteins for annotation
 # so[["ADT"]]$counts["CD4",s]
 
 #pdf(sprintf("%s_UMAP_organs.pdf", prefix), 20, 20, useDingbats = F)
-pdf(sprintf("%s_MDE_organs.pdf", prefix), 20, 20, useDingbats = F)
+# pdf(sprintf("%s/UMAP_organs.pdf", prefix), 20, 20, useDingbats = F)
+pdf(sprintf("%s/MDE_organs.pdf", prefix), 20, 20, useDingbats = F)
 DimPlot(so, reduction = umap_to_plot, group.by = "organ_simplified", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = umap_to_plot, group.by = "organ_simplified", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = umap_to_plot, group.by = "organ_simplified", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+print(DimPlot(so, reduction = red, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal))
+print(DimPlot(so, reduction = red, group.by = "Clustertotalvi_20241006_Res0.5", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal))
 dev.off()
 
-pdf(sprintf("%s_UMAP_organs_detailed_gut.pdf", prefix), 20, 20, useDingbats = F)
+pdf(sprintf("%s/MDE_annotation_level1.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+dev.off()
+
+pdf(sprintf("%s/UMAP_citeseq.pdf", prefix), 20, 20, useDingbats = F)
+# pdf(sprintf("%s/MDE_citeseq.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "cite_seq", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "cite_seq", split.by = "cite_seq", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+dev.off()
+
+pdf(sprintf("%/UMAP_organs_detailed_gut.pdf", prefix), 20, 20, useDingbats = F)
 DimPlot(so[,so$organ_simplified %in% c("small intestine", "colon")], reduction = umap_to_plot, group.by = "organ", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal) + NoLegend()
 DimPlot(so[,so$organ_simplified %in% c("small intestine", "colon")], reduction = umap_to_plot, group.by = "organ", split.by = "organ", ncol = 3, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal) + NoLegend()
 dev.off()
 
-#pdf(sprintf("%s_UMAP_clusters.pdf", prefix), 20, 20, useDingbats = F)
-pdf(sprintf("%s_MDE_clusters.pdf", prefix), 20, 20, useDingbats = F)
-p1 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 0.25), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
-p2 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 0.5), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
-p2.2 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 0.75), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
-p3 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 1), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
-p4 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 2), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
-p5 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 3), raster = T, raster.dpi = c(1024,1024), label = T ) + scale_color_manual(values = mypal)
-p6 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix, 4), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+# pdf(sprintf("%s/UMAP_clusters.pdf", prefix), 20, 20, useDingbats = F)
+pdf(sprintf("%s/MDE_clusters.pdf", prefix), 20, 20, useDingbats = F)
+p1 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 0.25), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+p2 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 0.5), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+p2.2 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 0.75), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+p3 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 1), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+p4 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 2), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+p5 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 3), raster = T, raster.dpi = c(1024,1024), label = T ) + scale_color_manual(values = mypal)
+p6 = DimPlot(so, reduction = umap_to_plot, group.by = sprintf("Cluster%s_Res%s", prefix2, 4), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
 print(p1) #+ NoLegend()
 print(p2)
 print(p2.2)
@@ -814,8 +910,8 @@ dev.off()
 
 DefaultAssay(so) = "RNA"
 
-#pdf(sprintf("%s_UMAP_genes3.pdf", prefix), 20,20, useDingbats = F)
-pdf(sprintf("%s_MDE_genes.pdf", prefix), 20,20, useDingbats = F)
+# pdf(sprintf("%s/UMAP_genes.pdf", prefix), 20,20, useDingbats = F)
+pdf(sprintf("%s/MDE_genes.pdf", prefix), 20,20, useDingbats = F)
 FeaturePlot(so, reduction = umap_to_plot,slot = "data", features = "Cd3e", order = F, raster = T, raster.dpi = c(1024,1024))
 FeaturePlot(so, reduction = umap_to_plot, slot = "data", features = "Trbc1", order = F, raster = T, raster.dpi = c(1024,1024))
 FeaturePlot(so, reduction = umap_to_plot, slot = "data", features = "Trbc2", order = F, raster = T, raster.dpi = c(1024,1024))
@@ -834,8 +930,8 @@ dev.off()
 
 
 DefaultAssay(so) = "ADT"
-#pdf(sprintf("%s_UMAP_proteins.pdf", prefix), 20,20, useDingbats = F)
-pdf(sprintf("%s_MDE_proteins.pdf", prefix), 20,20, useDingbats = F)
+# pdf(sprintf("%s/UMAP_proteins.pdf", prefix), 20,20, useDingbats = F)
+pdf(sprintf("%s/MDE_proteins.pdf", prefix), 20,20, useDingbats = F)
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "CD3", raster = T, order = F, raster.dpi = c(1024,1024))
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRB", raster = T, order = F, raster.dpi = c(1024,1024))
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "THY1.2", raster = T, order = F, raster.dpi = c(1024,1024))
@@ -846,7 +942,7 @@ FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "CD62L",
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "CD44", raster = T, order = F, raster.dpi = c(1024,1024))
 
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRGD", raster = T, order = F, raster.dpi = c(1024,1024))
-FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRVG1.1", raster = , order = F, raster.dpi = c(1024,1024))
+FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRVG1.1", raster = T, order = F, raster.dpi = c(1024,1024))
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRVG2", raster = T, order = F, raster.dpi = c(1024,1024))
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "TCRVG3", raster = T, order = F, raster.dpi = c(1024,1024))
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot, features = "CD19", raster = T, order = F, raster.dpi = c(1024,1024))
@@ -891,13 +987,15 @@ table(so$annotation_level1)
 
 #write.table(so$annotation_level1, file = "annotation_level1.csv", quote = F, sep = ",", row.names = T, col.names = F)
 
-pdf(sprintf("%s_UMAP_annotationlevel1_genes.pdf", prefix), 40,40, useDingbats = F)
+#pdf(sprintf("%s/UMAP_annotationlevel1_genes.pdf", prefix), 40,40, useDingbats = F)
+pdf(sprintf("%s/MDE_annotationlevel1_genes.pdf", prefix), 40,40, useDingbats = F)
 DefaultAssay(so) = "RNA"
 FeaturePlot(so, slot = "data", reduction = umap_to_plot, split.by = "annotation_level1", features = c("Trbc1","Trbc2","Cd4","Cd8a","Cd8b1","Foxp3","Trgc1", "Ifng", "Il17a", "Il4", "Il10"), ncol = 3, order = T, raster = T, raster.dpi = c(512,512))
 dev.off()
 
 
-pdf(sprintf("%s_UMAP_annotationlevel1_proteins.pdf", prefix), 40,40, useDingbats = F)
+#pdf(sprintf("%s/UMAP_annotationlevel1_proteins.pdf", prefix), 40,40, useDingbats = F)
+pdf(sprintf("%s/MDE_annotationlevel1_proteins.pdf", prefix), 40,40, useDingbats = F)
 DefaultAssay(so) = "ADT"
 FeaturePlot(so[,so$cite_seq == T], reduction = umap_to_plot,slot = "data", split.by = "annotation_level1", features = c("CD3","TCRB","THY1.2","CD4","CD8A","CD8B","CD62L", "CD44", "CD103", "TCRGD", "TCRVG1.1", "TCRVG2", "TCRVG3", "CD19", "ITAM.CD11B", "ITAX.CD11C", "KLRBC-NK1.1"), ncol = 3, order = T, raster = T, raster.dpi = c(512,512))
 dev.off()
@@ -1104,6 +1202,21 @@ mdata_cd8.mod['RNA'].obs['annotation_level1'].unique()
 mdata_unconv.mod['RNA'].obs['annotation_level1'].unique()
 mdata_miniverse.mod['RNA'].obs['annotation_level1'].unique()
 
+###Subset CD4:
+annotation_cd4_l1 = pd.read_csv(working_dir+"/annotation_CD4_clusters_l1.csv", index_col = 0, header = None)
+mdata.mod['RNA'].obs['annotation_cd4_l1'] = annotation_cd4_l1
+mdata.mod['RNA'].obs['annotation_cd4_l1'].isna().sum()
+mdata_cd4_act = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_activated']
+mdata_cd4_act.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_act.write(working_dir+'/export_data/igt1_96_20241014_CD4_activated.h5mu')
+
+mdata_cd4_rest = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_resting'] 
+mdata_cd4_rest.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_rest.write(working_dir+'/export_data/igt1_96_20241014_CD4_resting.h5mu')
+
+mdata_cd4_prolif = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_prolif'] 
+mdata_cd4_prolif.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_prolif.write(working_dir+'/export_data/igt1_96_20241014_CD4_prolif.h5mu')
 
 
 ```
@@ -1113,6 +1226,10 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd8_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_unconv_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse_rmIGTsample.sh
+
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_resting_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_activated_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4_prolif_rmIGTsample.sh
 
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -1136,7 +1253,7 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd8.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_unconv.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse.sh
-
+Is it necessary, or just enough to take the subset of cells, run a new UMAP from the original totalvi_20241014 latent space?
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_treg_rmIGTsample.sh
