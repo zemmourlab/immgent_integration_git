@@ -83,17 +83,22 @@ so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix
 
 ```
 
-Add Clusters totalvi_20241006/clusters.csv
+Add Clusters e.g. totalvi_20241006/clusters.csv
 ```{r}
-
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4_activated/totalvi_20241014_CD4_activated_rmIGTsample/Cluster_totalvi_20241014_CD4_activated_rmIGTsample_Res.csv",header = T, sep = ",", row.names = 1)
+annot2 = annot[match(colnames(so), rownames(annot)),]
+rownames(annot2) = colnames(so)
+so@meta.data = data.frame(so@meta.data,annot2)
 ```
-
 Add Annotations 
 annotation_level1.csv
 
 ```{r}
 annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level1.csv",header = F, sep = ",", row.names = 1)
 so$annotation_level1 = annotl1[colnames(so),1]
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_CD4_clusters_l1.csv",header = F, sep = ",", row.names = 1)
+so_orig$annotation_CD4_level1 = annot[match(colnames(so_orig), rownames(annot)),1]
 ```
 
 
