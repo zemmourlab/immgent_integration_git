@@ -87,7 +87,7 @@ so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
 **Load seurat expression data**
 --> igt1_96_treg_20241017.Rds
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
 
 so = so_orig[,so_orig$annotation_level1 == "CD8AB"]
 so[['mde_totalvi_20241006']] = NULL
@@ -210,8 +210,8 @@ UMAP/MDE with clusters
 pdf(sprintf("%s/MDE_Clusters.pdf", prefix), 20, 20, useDingbats = F)
 for (i in c(0.25,0.5,0.75,1,1.5,2,3,4)) {
     print(i)
-    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal))
-    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal))
+    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F, pt.size = 2) + scale_color_manual(values = mypal))
 }
 dev.off()
 
@@ -222,13 +222,13 @@ UMAP/MDE with genes
 # pdf(sprintf("%s/UMAP_genes.pdf", prefix), 20,20, useDingbats = F)
 pdf(sprintf("%s/MDE_genes.pdf", prefix), 40,40, useDingbats = F)
 DefaultAssay(so) = "RNA"
-FeaturePlot(so, slot = "data", reduction = reduc, features = c("Cd4", "Cd8a", "Cd8b1","Sell", "Ccr7", "Il7r", "Cd44", "Klrg1", "Gzmb", "Prf1", "Ifng", "Tcf7", "Bcl2", "Cxcr3", "Cxcr5", "Slamf6", "Eomes", "Foxp3","Tbx21", "Nr4a1", "Mki67", "Ifng","Pdcd1", "Havcr2", "Ctla4", "Tox", "Lag3", "Cd69", "Itgae", "Cxcr6", "Zeb2", "Runx3", "Slamf6", "Nkg7", "Zbtb16"), ncol = 6, order = T, raster = T, raster.dpi = c(512,512))
+FeaturePlot(so, slot = "data", reduction = reduc, features = c("Cd4", "Cd8a", "Cd8b1","Sell", "Ccr7", "Il7r", "Cd44", "Klrg1",  "Tcf7", "Bcl2", "Cxcr3", "Cxcr5", "Slamf6", "Eomes", "Foxp3","Tbx21", "Nr4a1", "Mki67","Pdcd1", "Havcr2", "Ctla4", "Tox", "Lag3", "Cd69", "Itgae", "Cxcr6", "Zeb2", "Runx3", "Slamf6", "Nkg7", "Zbtb16" ,"Gzmb", "Prf1", "Ifng", "Tnf", "Fasl", "Tnfsf10", "Il2", "Il10", "Klrk1", "Ccl3", 'Ccl4', "Ccl5", "Xcl1"), ncol = 7, order = T, raster = T, raster.dpi = c(1024,1024))
 dev.off()
 
 # pdf(sprintf("%s/UMAP_proteins.pdf", prefix), 20,20, useDingbats = F)
 pdf(sprintf("%s/MDE_proteins.pdf", prefix), 30,30, useDingbats = F)
 DefaultAssay(so) = "ADT"
-FeaturePlot(so[,so$cite_seq == T], reduction = reduc,slot = "data", features = c("CD3","CD4","CD8A","CD8B","TCRB","IL2RA.CD25","CD62L", "CD27", "IL7RA.CD127", "CD44", "CD45RB", "KLRG1", "CD137", "CD69", "CD103", "PDCD1.PD1.CD279", "HAVCR2", "TIGIT"), ncol = 5, order = T, raster = T, raster.dpi = c(512,512), pt.size = 2)
+FeaturePlot(so[,so$cite_seq == T], reduction = reduc,slot = "data", features = c("CD3","CD4","CD8A","CD8B","TCRB","IL2RA.CD25","CD62L", "CD27", "IL7RA.CD127", "CD44", "CD45RB", "KLRG1", "CD137", "CD69", "CD103", "PDCD1.PD1.CD279", "HAVCR2", "TIGIT"), ncol = 5, order = T, raster = T, raster.dpi = c(1024, 1024))
 dev.off()
 ```
 
@@ -261,31 +261,77 @@ dev.off()
 
 so$CD8AB_clusters = "unknown"
 so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl1"] = "CD8AB_cl1" #resting
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 %in% c("cl3", "cl4", "cl12")] = "CD8AB_cl1" #resting
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl9"] = "CD8AB_cl2" #resting
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl6"] = "CD8AB_cl3" #MPEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl6" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl17"] = "CD8AB_cl4"
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5"] = "CD8AB_cl5" #exhausted
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.75 == "cl18"] = "CD8AB_cl6" #Trm
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2"] = "CD8AB_cl7" #SLEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl16"] = "CD8AB_cl8" #MPEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl13" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res1 == "cl5"] = "CD8AB_cl9" #SLEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl13" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res1 == "cl27"] = "CD8AB_cl10" #SLEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8"] = "CD8AB_cl11" #MPEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl14"] = "CD8AB_cl7" #SLEC
-so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 %in% c("cl7", "cl10", "cl11")] = "CD8AB_cl12" #MPEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 %in% c("cl3", "cl4", "cl12")] = "CD8AB_cl1" #MERGING resting 
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl2"] = "CD8AB_cl2" #resting
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl9"] = "CD8AB_cl3" #resting
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl6"] = "CD8AB_cl4" #MPEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl6" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl17"] = "CD8AB_cl5"
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl6" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl17" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.75 == "cl11"] = "CD8AB_cl6"
+
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2"] = "CD8AB_cl13" #SLEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl16"] = "CD8AB_cl14" #MPEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl13" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res1 == "cl5"] = "CD8AB_cl15" #SLEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl2" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl13" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res1 == "cl27"] = "CD8AB_cl16" #SLEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8"] = "CD8AB_cl17" #
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.5 == "cl14"] = "CD8AB_cl18" #SLEC
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 == "cl22"] = "CD8AB_cl19" #
+so$CD8AB_clusters[so$CD8AB_clusters == "CD8AB_cl17" & so[["mde_totalvi_20241014_CD8AB_rmIGTsample"]]@cell.embeddings[,1]<0] = "CD8AB_cl1" #
+so$CD8AB_clusters[so$CD8AB_clusters == "CD8AB_cl17" & so[["mde_totalvi_20241014_CD8AB_rmIGTsample"]]@cell.embeddings[,1]>1] = "CD8AB_cl16" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl8" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 == "cl18"] = "CD8AB_cl20" #
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 %in% c("cl7", "cl10", "cl11")] = "CD8AB_cl20" #prolif
+
+# version1
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5"] = "CD8AB_cl5" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl18"] = "CD8AB_cl5" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.75 == "cl18"] = "CD8AB_cl6" #Trm
+
+# version2
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5"] = "CD8AB_cl7" #
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl48"] = "CD8AB_cl8" #CD4 contamination
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 == "cl25" ] = "CD8AB_cl9" #true Trm
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 %in% c("cl31","cl35", "cl20")] = "CD8AB_cl10" #Trm
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 %in% c("cl31", "cl20") ] = "CD8AB_cl11" # merge with
+so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res2 == "cl20" ] = "CD8AB_cl12" #
+# # version 3
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5"] = "CD8AB_cl21" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl48"] = "CD8AB_cl22" #CD4 contamination
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl42" ] = "CD8AB_cl23" #true Trm
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl12" ] = "CD8AB_cl24" #Trm
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl7" ] = "CD8AB_cl25" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl20" ] = "CD8AB_cl26" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl56" ] = "CD8AB_cl27" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl33" ] = "CD8AB_cl28" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl15" ] = "CD8AB_cl29" #
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res4 == "cl43" ] = "CD8AB_cl30" #
+
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(so$CD8AB_clusters)[order(extract_numeric(unique(so$CD8AB_clusters)))] %>% as.character()
+new_cluster_names = paste0("CD8AB_cl", seq_along(ordered_vector))
+names(new_cluster_names) = ordered_vector
+so$CD8AB_clusters_renamed = as.character(new_cluster_names[so$CD8AB_clusters])
+
+ordered_vector = unique(so$CD8AB_clusters_renamed)[order(extract_numeric(unique(so$CD8AB_clusters_renamed)))] %>% as.character()
+so$CD8AB_clusters = factor(so$CD8AB_clusters_renamed, levels = ordered_vector)
+so$CD8AB_clusters_renamed = NULL
+
 # so$CD8AB_clusters = sprintf("CD8AB_%s",so$CD8AB_clusters)
 so$CD8AB_clusters = factor(so$CD8AB_clusters)
+any(is.na(so$CD8AB_clusters))
+
 table(so$CD8AB_clusters)
 
+# so$CD8AB_clusters[so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.25 == "cl5" & so$Cluster_totalvi_20241014_CD8AB_rmIGTsample_Res0.75 == "cl18"] = "CD8AB_cl6" #Trm
 # so$test = so$CD8AB_clusters %in% "unknown"
 # DimPlot(so, reduction = reduc, group.by = "test", raster = F, order = T) + scale_color_manual(values = mypal)
 
 # pdf(sprintf("%s/UMAP_Clusters_Final.pdf", prefix), 20, 20, useDingbats = F)
 pdf(sprintf("%s/MDE_Clusters_Final.pdf", prefix), 20, 20, useDingbats = F)
-DimPlot(so, reduction = reduc, group.by = "CD8AB_clusters", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = reduc, group.by = "CD8AB_clusters", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = reduc, group.by = "CD8AB_clusters", split.by = "CD8AB_clusters", ncol = 4, raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = reduc, group.by = "CD8AB_clusters", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241014_CD8AB", group.by = "CD8AB_clusters", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
 dev.off()
 
 so_sub = so[,colnames(so_sub)]
@@ -304,8 +350,6 @@ plot(sil,
 dev.off()
 
 write.table(data.frame(colnames(so), so$CD8AB_clusters), file = "../annotation_level2_CD8AB.csv", sep = ",", quote = F, row.names = F, col.names = F)
-
-saveRDS(so, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/igt1_96_CD8AB_20241017.Rds")
 
 ```
 
@@ -417,7 +461,24 @@ SilhouetteSummaryPlots = function(sil_list = sil_list, column_name = column_name
     print(p + facet_wrap(~column_name))
 }
 
-#2 in each organ_simplified: how much does it fit each organ?
+# By IGT
+sil_list = list()
+column_name = "IGT"
+categories = levels(so[[column_name]][,1])
+cluster.name =  "CD8AB_clusters"
+
+for (i in categories) {
+    print(i)
+    reduc.dist = dist(so[[prefix]]@cell.embeddings[so[[column_name]] == i,])
+    cl = as.integer(so[[cluster.name]][so[[column_name]] == i,1])
+    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
+}
+
+pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 40, 40, useDingbats = F)
+SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
+dev.off()
+
+# in each organ_simplified: how much does it fit each organ?
 so2 = so[,!is.na(so$organ_simplified)]
 
 sil_list = list()
@@ -434,24 +495,7 @@ for (i in categories) {
     sil_list[[i]] = silhouette(cl, dist = reduc.dist)
 }
 
-pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 10, 10, useDingbats = F)
-SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
-dev.off()
-
-#3. By IGT
-sil_list = list()
-column_name = "IGT"
-categories = levels(so[[column_name]][,1])
-cluster.name =  "CD8AB_clusters"
-
-for (i in categories) {
-    print(i)
-    reduc.dist = dist(so[[prefix]]@cell.embeddings[so[[column_name]] == i,])
-    cl = as.integer(so[[cluster.name]][so[[column_name]] == i,1])
-    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
-}
-
-pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 10, 10, useDingbats = F)
+pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 20, 20, useDingbats = F)
 SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
 dev.off()
 
@@ -463,6 +507,5 @@ so[['RNA']]$data = NULL
 DefaultAssay(so) = "RNA"
 so[['ADT']]$data = NULL
 
-# saveRDS(so, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_treg_20241017.Rds")
-
+saveRDS(so, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/igt1_96_CD8AB_20241017.Rds")
 ```

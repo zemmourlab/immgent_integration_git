@@ -1253,7 +1253,7 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd4.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_cd8.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_unconv.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_miniverse.sh
-Is it necessary, or just enough to take the subset of cells, run a new UMAP from the original totalvi_20241014 latent space?
+Is it necessary, or just enough to take the subset of cells, run a new UMAP from the original totalvi_20241014 latent space? doesn't look very different (see CD4 analysis..)
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241014_treg_rmIGTsample.sh

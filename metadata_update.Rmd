@@ -90,18 +90,43 @@ annot2 = annot[match(colnames(so), rownames(annot)),]
 rownames(annot2) = colnames(so)
 so@meta.data = data.frame(so@meta.data,annot2)
 ```
+
 Add Annotations 
 annotation_level1.csv
-
+annotation_level2_XX.csv
 ```{r}
 annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level1.csv",header = F, sep = ",", row.names = 1)
 so$annotation_level1 = annotl1[colnames(so),1]
 
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_CD4_clusters_l1.csv",header = F, sep = ",", row.names = 1)
-so_orig$annotation_CD4_level1 = annot[match(colnames(so_orig), rownames(annot)),1]
+so$annotation_CD4_level1 = annot[match(colnames(so), rownames(annot)),1]
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_CD4.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level2_CD4 = annot[match(colnames(so), rownames(annot)),1]
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_CD8AB.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level2_CD8AB = annot[match(colnames(so), rownames(annot)),1]
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_treg.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level2_Treg = annot[match(colnames(so), rownames(annot)),1]
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_unconventional.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level2_unconventional = annot[match(colnames(so), rownames(annot)),1]
+
+head(so@meta.data[,grepl("annotation_level2_", colnames(so@meta.data))])
+
+so@meta.data$annotation_level2 = so@meta.data %>%
+  select(starts_with("annotation_level2_")) %>%
+  mutate(merged_annotations = coalesce(annotation_level2_CD4, 
+                                       annotation_level2_CD8AB, 
+                                       annotation_level2_Treg, 
+                                       annotation_level2_unconventional)) %>%
+  pull(merged_annotations)
+
+table(so$annotation_level2, so$annotation_level1)
+
+
 ```
-
-
 
 Load metadata csv file
 ```{r}
@@ -232,14 +257,6 @@ so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_
 
 ```
 
-Save
-```{r}
-
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241016.Rds")
-
-#saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
-```
-
 if needed, small adjustments
 ```{r}
 so$cite_seq = T
@@ -250,6 +267,26 @@ so$organ[so$IGTHT %in% igtht_thymus[,1]] = "thymus"
 so$organ_simplified[so$IGTHT %in% igtht_thymus[,1]] = "thymus"
 
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+```
+
+Add iNKT and MAIT info
+```{r}
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
+colnames(so) %in% tcr$isNKT
+so$iNKT = colnames(so) %in% tcr$IGT.cellID[tcr$isNKT]
+so$MAIT = colnames(so) %in% tcr$IGT.cellID[tcr$isMAIT]
+```
+
+Save
+```{r}
+DefaultAssay(so) = "ADT"
+so[['RNA']]$data = NULL
+DefaultAssay(so) = "RNA"
+so[['ADT']]$data = NULL
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241016.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
+
+#saveRDS(so, "totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 ```
 
 
