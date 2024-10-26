@@ -1,0 +1,444 @@
+---
+title: "composition_analysis"
+output: html_document
+date: "2024-10-24"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+R
+```
+
+```{r}
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+options(Seurat.object.assay.version = 'v5')
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = viridis(100)
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+```
+
+Prefix
+```{r}
+prefix = "."
+reduc = "totalvi_20241006"
+clusters = "annotation_level1"
+```
+
+**Most up-to-date data**
+
+```{r}
+so = readRDS("igt1_96_withtotalvi20241021.Rds")
+
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
+
+```
+
+**Count number of cells for each cluster level 2 in each sample**
+```{r}
+m = so@meta.data
+
+ncells = m %>% group_by(IGTHT) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m %>% group_by(IGTHT) %>% mutate(n_sampleid = n()) %>% group_by(IGTHT, annotation_level2) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, IGTHT ~ annotation_level2, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, IGTHT ~ annotation_level2, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+
+all(ncells$IGTHT == stat_df_ncells$IGTHT)
+
+m2 = merge(ncells, stat_df_ncells, by.x = "IGTHT", by.y = "IGTHT")
+m2 = merge(m2, stat_df_prop, by.x = "IGTHT", by.y = "IGTHT", suffixes = c(".ncells", ".prop"))
+
+write.table(m2, file = "annotation_level2_PropPerSample.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+
+m3 = merge(m2, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F)
+
+saveRDS(m3, file = "annotation_level2_PropPerSample_withMetadata.Rds")
+
+write.table(m3, file = "annotation_level2_PropPerSample_withMetadata.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+
+```
+
+```{r}
+library(pheatmap)
+
+m3 = readRDS("annotation_level2_PropPerSample_withMetadata.Rds")
+
+m3$sample_name_new = paste(m3$IGTHT, m3$sample_name, sep = ".")
+m3$sample_name_new = make.names(m3$sample_name_new)
+
+tmp3 = m3[,c("sample_name_new", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
+
+ColorRamp = rev(viridis(100))
+labels_matrix = signif(tmp3,2)*100
+labels_matrix[labels_matrix==0] = ""
+
+pdf(file = "annotation_level2_Sample_Composition_heatmap.pdf", width =50, height =150, useDingbats = F)
+
+pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample", na_col = "#FDE725")
+
+colz = grepl("CD4_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample for CD4 clusters", na_col = "#FDE725")
+
+colz = grepl("CD8AB_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample for CD8AB clusters", na_col = "#FDE725")
+
+colz = grepl("treg_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample for Treg clusters", na_col = "#FDE725")
+
+colz = grepl("unconv_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample for unconv clusters", na_col = "#FDE725")
+
+colz = grepl("miniverse_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample for miniverse clusters", na_col = "#FDE725")
+
+dev.off()
+
+```
+
+**Count number of cells for each cluster LEVEL 1 in each sample**
+```{r}
+m = so@meta.data
+
+ncells = m %>% group_by(IGTHT) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m %>% group_by(IGTHT) %>% mutate(n_sampleid = n()) %>% group_by(IGTHT, annotation_level1) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, IGTHT ~ annotation_level1, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, IGTHT ~ annotation_level1, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+
+all(ncells$IGTHT == stat_df_ncells$IGTHT)
+
+m2 = merge(ncells, stat_df_ncells, by.x = "IGTHT", by.y = "IGTHT")
+m2 = merge(m2, stat_df_prop, by.x = "IGTHT", by.y = "IGTHT", suffixes = c(".ncells", ".prop"))
+
+write.table(m2, file = "annotation_level1_PropPerSample.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+
+m3 = merge(m2, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F)
+
+saveRDS(m3, file = "annotation_level1_PropPerSample_withMetadata.Rds")
+
+write.table(m3, file = "annotation_level1_PropPerSample_withMetadata.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+
+```
+
+```{r}
+library(pheatmap)
+
+m3 = readRDS("annotation_level1_PropPerSample_withMetadata.Rds")
+
+m3$sample_name_new = paste(m3$IGTHT, m3$sample_name, sep = ".")
+m3$sample_name_new = make.names(m3$sample_name_new)
+
+tmp3 = m3[,c("sample_name_new", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
+
+ColorRamp = rev(viridis(100))
+labels_matrix = signif(tmp3,2)*100
+labels_matrix[labels_matrix==0] = ""
+
+pdf(file = "annotation_level1_Sample_Composition_heatmap.pdf", width =20, height =150, useDingbats = F)
+
+pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample", na_col = "#FDE725")
+dev.off()
+
+```
+
+
+
+**Count number of cells for each cluster level 2 in each IGT**
+```{r}
+m = so@meta.data
+
+ncells = m %>% group_by(IGT) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m %>% group_by(IGT) %>% mutate(n_sampleid = n()) %>% group_by(IGT, annotation_level2) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, IGT ~ annotation_level2, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, IGT ~ annotation_level2, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+
+all(ncells$IGT == stat_df_ncells$IGT)
+
+m2 = merge(ncells, stat_df_ncells, by.x = "IGT", by.y = "IGT")
+m2 = merge(m2, stat_df_prop, by.x = "IGT", by.y = "IGT", suffixes = c(".ncells", ".prop"))
+
+write.table(m2, file = "annotation_level2_PropPerIGT.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+saveRDS(m2, file = "annotation_level2_PropPerIGT.Rds")
+
+```
+
+```{r}
+library(pheatmap)
+
+m3 = readRDS("annotation_level2_PropPerIGT.Rds")
+
+tmp3 = m3[,c("IGT", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
+
+ColorRamp = rev(viridis(100))
+labels_matrix = signif(tmp3,2)*100
+labels_matrix[labels_matrix==0] = ""
+
+pdf(file = "annotation_level2_IGT_Composition_heatmap.pdf", width =20, height =20, useDingbats = F)
+pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample", na_col = "#FDE725")
+
+colz = grepl("CD4_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each IGT for CD4 clusters", na_col = "#FDE725")
+
+colz = grepl("CD8AB_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each IGT for CD8AB clusters", na_col = "#FDE725")
+
+colz = grepl("treg_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each IGT for Treg clusters", na_col = "#FDE725")
+
+colz = grepl("unconv_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each IGT for unconv clusters", na_col = "#FDE725")
+
+colz = grepl("miniverse_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each IGT for miniverse clusters", na_col = "#FDE725")
+
+dev.off()
+```
+
+**Count number of cells for each cluster level 2 in each organs**
+```{r}
+m = so@meta.data
+
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+#organ_simplified
+sample_metadata$organ_simplified = sample_metadata$organ
+sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
+sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
+sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
+sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
+sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
+sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
+sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
+
+m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+
+ncells = m2 %>% group_by(organ_simplified) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m2 %>% group_by(organ_simplified) %>% mutate(n_sampleid = n()) %>% group_by(organ_simplified, annotation_level2) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, organ_simplified ~ annotation_level2, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, organ_simplified ~ annotation_level2, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+
+all(ncells$organ_simplified == stat_df_ncells$organ_simplified)
+
+m3 = merge(ncells, stat_df_ncells, by.x = "organ_simplified", by.y = "organ_simplified")
+m4 = merge(m3, stat_df_prop, by.x = "organ_simplified", by.y = "organ_simplified", suffixes = c(".ncells", ".prop"))
+
+write.table(m4, file = "annotation_level2_PropPerOrgan.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+saveRDS(m4, file = "annotation_level2_PropPerOrgan.Rds")
+
+```
+
+```{r}
+library(pheatmap)
+
+m3 = readRDS("annotation_level2_PropPerOrgan.Rds")
+
+tmp3 = m3[,c("organ_simplified", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
+
+ColorRamp = rev(viridis(100))
+labels_matrix = signif(tmp3,2)*100
+labels_matrix[labels_matrix==0] = ""
+
+pdf(file = "annotation_level2_Organ_Composition_heatmap.pdf", width =20, height =10, useDingbats = F)
+pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ", na_col = "#FDE725")
+
+colz = grepl("CD4_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ for CD4 clusters", na_col = "#FDE725")
+
+colz = grepl("CD8AB_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ for CD8AB clusters", na_col = "#FDE725")
+
+colz = grepl("treg_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ for Treg clusters", na_col = "#FDE725")
+
+colz = grepl("unconv_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ for unconv clusters", na_col = "#FDE725")
+
+colz = grepl("miniverse_", colnames(tmp3))
+pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ for miniverse clusters", na_col = "#FDE725")
+
+dev.off()
+```
+
+
+**Count number of cells for each cluster level 1 in each organ**
+```{r}
+m = so@meta.data
+
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+#organ_simplified
+sample_metadata$organ_simplified = sample_metadata$organ
+sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
+sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
+sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
+sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
+sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
+sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
+sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
+
+m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+
+ncells = m2 %>% group_by(organ_simplified) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m2 %>% group_by(organ_simplified) %>% mutate(n_sampleid = n()) %>% group_by(organ_simplified, annotation_level1) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, organ_simplified ~ annotation_level1, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, organ_simplified ~ annotation_level1, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+
+all(ncells$organ_simplified == stat_df_ncells$organ_simplified)
+
+m3 = merge(ncells, stat_df_ncells, by.x = "organ_simplified", by.y = "organ_simplified")
+m4 = merge(m3, stat_df_prop, by.x = "organ_simplified", by.y = "organ_simplified", suffixes = c(".ncells", ".prop"))
+
+write.table(m4, file = "annotation_level1_PropPerOrgan.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+saveRDS(m4, file = "annotation_level1_PropPerOrgan.Rds")
+
+```
+
+```{r}
+library(pheatmap)
+
+m3 = readRDS("annotation_level1_PropPerOrgan.Rds")
+
+tmp3 = m3[,c("organ_simplified", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
+
+ColorRamp = rev(viridis(100))
+labels_matrix = signif(tmp3,2)*100
+labels_matrix[labels_matrix==0] = ""
+
+pdf(file = "annotation_level1_Organ_Composition_heatmap.pdf", width =10, height =10, useDingbats = F)
+pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ", na_col = "#FDE725")
+dev.off()
+```
+
+
+
+To do later?
+```{r}
+##2. Composition of each organ 
+df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), 
+                sample = factor(so$organ, levels = sort(unique(so$organ))) )
+tmp = table(df$cluster, df$sample)
+tmp2 = t(t(tmp) / colSums(tmp)) # normalize the number of cells per sample
+colSums(tmp2)
+tmp3 = tmp2
+rowSums(tmp3)
+tmp4 = melt(tmp3)
+head(tmp4)
+tmp4$sample = df$sample[match(tmp4$Var2, df$sample)]
+
+pdf(file = sprintf("%s_OrganComposition_%s.pdf", prefix, res), width =30, height =20)
+ColorRamp = rev(viridis(100))
+tmp3[tmp3==0] = NA
+labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
+#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
+pheatmap(mat = signif(tmp3,2)*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 15, main = "Percent of cells in each IGT", na_col = "#FDE725")
+
+ggplot(tmp4) + geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0 ) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0) + 
+    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
+    scale_color_manual(values = mypal) +
+    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample)  + NoLegend()
+
+ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample) + NoLegend()
+
+dev.off()
+
+
+```
+
+

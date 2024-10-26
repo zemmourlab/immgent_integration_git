@@ -665,6 +665,7 @@ saveRDS(so, file = "immgent_igt1_56_20241006.Rds")
 
 Export data --> export_data.Rmd
 
+**RUN TOTALV **
 Run totalvi_igt1_96_20241006
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -800,7 +801,7 @@ so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
 
 ```
 
-Clustering
+**Clustering**
 --> totalvi_20241006/clusters.csv
 
 ```{r}
@@ -1154,6 +1155,33 @@ dev.off()
 #saveRDS(so, file = "totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
 ```
 
+
+**Count number of cells for each cluster in each sample**
+```{r}
+m = so@meta.data
+
+stat = m %>% group_by(sample_id) %>% mutate(n_sampleid = n()) %>% group_by(sample_id, Cluster_totalvi20240525rmigtsample_Res0.5) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+write.table(stat, file = "Treg_Cluster_totalvi20240525rmigtsample_Res0.5_PropPerSampleID.csv",row.names = F, col.names = T, sep = ",", quote = F)
+
+summary_df <- m %>%
+  group_by(sample_id) %>%
+  mutate(total_count = n()) %>%  # Calculate the total count per sample_id
+  group_by(sample_id, Cluster_totalvi20240525rmigtsample_Res0.5) %>%
+  summarize(
+    absolute_count = n(),                            # Calculate the absolute count per cluster
+    fraction = n() / first(total_count)              # Calculate the fraction per sample_id
+  ) %>%
+  ungroup()  # Ungroup after summarizing
+
+
+stat %>% group_by(sample_id) %>% summarize(totalprop = sum(prop))
+
+```
+
+
+
+
 **TOTAL-VI INTEGRATION IGT 1-96, all genes, CD4, CD8, Tregs, unconventional, miniverse**
 
 
@@ -1294,65 +1322,3 @@ so_sub_d_int = dist(so_sub[["totalvi"]]@cell.embeddings, diag = FALSE, upper = F
 s = silhouette(so_sub$Rosetta_RNA_clusters, so_sub_d)
 
 ```
-
-
-**Integration evaluation: intra-batch clustering preservation**
-Calculate mean intracluster distances in one batch before and after integration
-```{r}
-prefix = "totalvi_20230509_allgenes"
-
-scib = import("scib", convert = FALSE)
-model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
-
-adata = model$adata
-
-adata_int = adata
-adata_int$obsm$X_emb = model$get_latent_representation()
-
-adata$obs$batch = adata$obs$IGT
-adata_int$obs$batch = adata_int$obs$IGT
-
-scib$metrics$hvg_overlap(adata, adata_int, batch_key = "IGT", n_hvg = 500)
-
-metrics = scib$metrics$metrics(adata, adata_int, batch_key = "IGT", embed='X_emb')
-
-
-
-```
-
-**Integration evaluation: scib (not working)**
-
-```{r}
-prefix = "totalvi_20230509_allgenes"
-
-scib = import("scib", convert = FALSE)
-model = scvi$model$TOTALVI$load(sprintf("%s/", prefix))
-
-adata = model$adata
-
-adata_int = adata
-adata_int$obsm$X_emb = model$get_latent_representation()
-
-adata$obs$batch = adata$obs$IGT
-adata_int$obs$batch = adata_int$obs$IGT
-
-scib$metrics$hvg_overlap(adata, adata_int, batch_key = "IGT", n_hvg = 500)
-
-metrics = scib$metrics$metrics(adata, adata_int, batch_key = "IGT", embed='X_emb')
-
-
-
-```
-
-
-**Contribution of protein or RNA in structure**
-
-Compare sum of log2FC between RNA and protein to see how much RNA signal and protein signal can distinguish  clusters (done in totalVI paper) 
-- do sum of log2FC RNA
-- do sum of log2FC protein
-- are some clusters better identified by RNA or bny protein?
-
-
-
-
-

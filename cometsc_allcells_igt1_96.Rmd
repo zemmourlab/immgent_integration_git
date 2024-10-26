@@ -1,0 +1,127 @@
+---
+title: "cometsc_miniverse"
+output: html_document
+date: "2024-10-23"
+---
+
+Continuation from clustering_miniverse_igt_1_96.Rmd
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+R
+```
+
+```{r}
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+options(Seurat.object.assay.version = 'v5')
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = viridis(100)
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+```
+
+Prefix
+```{r}
+prefix = "."
+reduc = "totalvi_20241006"
+clusters = "annotation_level1"
+```
+
+**Prepare the data**
+
+Filter the data:
+remove data without CITEseq: "IGT7"  "IGT8"  "IGT9"  "IGT44" "IGT45" "IGT46" "IGT73" "IGT85" "IGT91" "IGT92"
+Remove IGT1: CITEseq V1
+Remove IGT90: miniverse5.1/2 not the panel
+remove protein with less than 1000 rowSums, except TCRVA11.1-TCRVA11.2
+--> cometsc_20240607/totalvi_igt1_56_allgenes_miniverse_20240529_so_withclusters_filteredforCometsc.Rds
+```{r}
+so = readRDS("igt1_96_withtotalvi20241021.Rds")
+library(reshape2)
+library(pheatmap)
+so_orig = so
+
+#remove IGT without CITEseq:
+table(so$cite_seq, so$IGT)
+so = so[,so$cite_seq == T]
+so = so[,!so$IGT %in% c("IGT1", "IGT90")]
+
+#Remove ADT with no signal
+adt = so[["ADT"]]$counts
+remove_adt = setdiff(names(which(rowSums(adt) < 100)), c("TCRVA11.1-TCRVA11.2"))
+
+#remake seurat object without those
+adt = adt[!rownames(adt) %in% remove_adt,]
+so[["ADT"]] = NULL
+so[["ADT"]] = CreateAssayObject(counts = adt)
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+# so = so[,so$organ != "thymus"  ]
+# so = so[,so$annotation_level1 != "miniverse"  ]
+
+adt = so[["ADT"]]$data
+
+tmp = as.data.frame(t(as.matrix(adt)))
+tmp$annotation_level1 = so$annotation_level1
+tmp2 = melt(tmp)
+tmp2 = tmp2 %>% group_by(annotation_level1, variable) %>% summarise(mean(value))
+tmp2 = dcast(tmp2, variable ~ annotation_level1)
+rownames(tmp2) = tmp2[,1]
+tmp2 = tmp2[,-1]
+#tmp2 = apply(tmp2,1, as.numeric)
+# pdf(sprintf("%s/heatmap_ADT_annotation_level1.pdf", prefix), 10,15)
+# pdf(sprintf("%s/heatmap_ADT_annotation_level1_nothymus.pdf", prefix), 10,15)
+pdf(sprintf("%s/heatmap_ADT_annotation_level1_nothymus)nominiverse.pdf", prefix), 10,15)
+pheatmap(log10(tmp2+1), cluster_rows = F, cluster_cols = F, main = "Mean CLR ADT per annotation_level1")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = T, main = "Mean CLR ADT per annotation_level1")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Mean CLR ADT per annotation_level1")
+dev.off()
+
+tmp = as.data.frame(t(as.matrix(adt)))
+tmp$annotation_level2 = so$annotation_level2
+tmp2 = melt(tmp)
+tmp2 = tmp2 %>% group_by(annotation_level2, variable) %>% summarise(mean(value))
+tmp2 = dcast(tmp2, variable ~ annotation_level2)
+rownames(tmp2) = tmp2[,1]
+tmp2 = tmp2[,-1]
+#tmp2 = apply(tmp2,1, as.numeric)
+# pdf(sprintf("%s/heatmap_ADT_annotation_level2.pdf", prefix), 20,25)
+# pdf(sprintf("%s/heatmap_ADT_annotation_level2_nothymus.pdf", prefix), 20,25)
+pdf(sprintf("%s/heatmap_ADT_annotation_level2_nothymus_nominiverse.pdf", prefix), 20,25)
+pheatmap(log10(tmp2+1), cluster_rows = F, cluster_cols = F, main = "Mean CLR ADT per annotation_level2")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = T, main = "Mean CLR ADT per annotation_level2")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Mean CLR ADT per annotation_level2")
+dev.off()
+
+# saveRDS(so, sprintf("%s/igt1_96_withtotalvi20241021_forCometsc.Rds", prefix))
+
+
+
+
+```

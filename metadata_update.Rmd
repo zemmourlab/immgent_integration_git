@@ -9,6 +9,7 @@ Most uptodate seurat object
 ```{r}
 so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
 so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
 
 ```
 
@@ -113,17 +114,32 @@ so$annotation_level2_Treg = annot[match(colnames(so), rownames(annot)),1]
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_unconventional.csv",header = F, sep = ",", row.names = 1)
 so$annotation_level2_unconventional = annot[match(colnames(so), rownames(annot)),1]
 
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level2_miniverse.csv",header = F, sep = ",", row.names = 1)
+so$annotation_level2_miniverse = annot[match(colnames(so), rownames(annot)),1]
+
 head(so@meta.data[,grepl("annotation_level2_", colnames(so@meta.data))])
 
-so@meta.data$annotation_level2 = so@meta.data %>%
+so$annotation_level2 = so@meta.data %>%
   select(starts_with("annotation_level2_")) %>%
   mutate(merged_annotations = coalesce(annotation_level2_CD4, 
                                        annotation_level2_CD8AB, 
                                        annotation_level2_Treg, 
-                                       annotation_level2_unconventional)) %>%
+                                       annotation_level2_unconventional,
+                                       annotation_level2_miniverse)) %>%
   pull(merged_annotations)
 
-table(so$annotation_level2, so$annotation_level1)
+so$annotation_level2[so$annotation_level1 == "thymocyte"] = "thymocyte"
+so$annotation_level2[so$annotation_level1 == "nonT"] = "nonT"
+
+library(gtools)
+vec = unique(so$annotation_level2)
+vec = vec[!vec %in% c("nonT", "thymocyte")]
+sorted_vec = mixedsort(vec)
+sorted_vec = c(sorted_vec, c("thymocyte", "nonT"))
+sorted_vec
+so$annotation_level2 = factor(so$annotation_level2, levels = sorted_vec)
+
+table(so$annotation_level1, so$annotation_level2)
 
 
 ```
@@ -133,6 +149,7 @@ Load metadata csv file
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv",header = T, sep = ",")
 m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20240920_v6.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
 ```
 
 update the metadata in seurat object
