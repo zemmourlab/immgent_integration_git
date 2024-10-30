@@ -665,7 +665,7 @@ saveRDS(so, file = "immgent_igt1_56_20241006.Rds")
 
 Export data --> export_data.Rmd
 
-**RUN TOTALV **
+**RUN TOTALVI **
 Run totalvi_igt1_96_20241006
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
@@ -710,7 +710,7 @@ module load python
 source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
 cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 ```
-
+MDE
 ```{python}
 print("Importing libraries")
 import warnings; warnings.simplefilter('ignore')
@@ -776,6 +776,8 @@ fig = plt.gcf()
 fig.savefig(prefix+"/mde_distorsion_cdf.png")
 
 ```
+
+/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu
 
 
 Add metadata --> see metadata_update.Rmd
@@ -1179,12 +1181,7 @@ stat %>% group_by(sample_id) %>% summarize(totalprop = sum(prop))
 
 ```
 
-
-
-
 **TOTAL-VI INTEGRATION IGT 1-96, all genes, CD4, CD8, Tregs, unconventional, miniverse**
-
-
 ```{python}
 import warnings; warnings.simplefilter('ignore')
 import scvi
@@ -1300,6 +1297,109 @@ denoised_data=False
 cd $working_dir
 python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
 ```
+
+**TOTALVI removing genes and proteins**
+
+```{bash}
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+```
+
+mudata without ribosomal, mito, TCR, lncRNA genes, and TCR proteins, congenic markers
+```{python}
+
+pd.set_option('display.max_rows', None)  # None means show all rows
+pd.set_option('display.max_columns', None)  # Ensure all columns are shown if gene names are split
+pd.set_option('display.width', None)  # Use the maximum width of the console
+pd.set_option('display.max_colwidth', None)  # Use the full content width
+
+os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+prefix = "totalvi_igt1_96_20241006"
+
+mdata = mu.read("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu")
+mdata_orig = mdata
+
+import muon as mu
+
+# Define patterns for gene names to exclude
+ribosomal_genes_pattern = r"^Rpl|^Rps|^Mrpl|^Mrps"
+mitochondrial_genes_pattern = r"^mt-"
+lncRNA_genes_pattern = r"^Gm|Rik$|-ps"
+tcr_genes_pattern = r"Trav|Traj|Trac|Trbv|Trbd|Trbj|Trbc|Trdv|Trdj|Trdc|Trgv|Trgd|Trgj|Trgc"
+
+is_tcr_genes = mdata.mod["RNA"].var_names.str.contains(tcr_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_tcr_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_tcr_genes], columns=["Gene Names"])
+
+is_ribosomal_genes = mdata.mod["RNA"].var_names.str.contains(ribosomal_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_ribosomal_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_ribosomal_genes], columns=["Gene Names"])
+
+is_lnc_genes = mdata.mod["RNA"].var_names.str.contains(lncRNA_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_lnc_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_lnc_genes], columns=["Gene Names"])
+
+patterns_to_exclude = f"({ribosomal_genes_pattern})|({mitochondrial_genes_pattern})|({lncRNA_genes_pattern})|({tcr_genes_pattern})"
+# Identify the genes to exclude
+genes_to_exclude = mdata.mod["RNA"].var_names.str.contains(
+    patterns_to_exclude, case=True, regex=True
+)
+
+
+mdata.mod["RNA"].var_names[genes_to_exclude]
+# Keep only genes that are not in the exclusion list
+genes_to_keep = ~genes_to_exclude
+
+# Subset the RNA modality in the MuData object to keep only desired genes
+mdata_orig = mdata
+mdata.mod["RNA"] = mdata.mod["RNA"][:, genes_to_keep]
+
+# Subset protein modality in the MuData object to keep only desired proteins
+CD45.1, CD45.2, Thy1.2 THY1.1.CD90.1 
+TCRVA2 TCRVA8.3 TCRVA8.3bis  TCRVB5.1-TCRVB5.2 TCRVB8.1-TCRVB8.2 TCRVG1.1 TCRVG2 TCRVG3
+
+import numpy as np
+
+igt_indices = mdata.mod['RNA'].obs['IGT'] == 'IGT5'
+protein_data_igt5 = mdata.mod['protein'].X[igt_indices]
+non_zero_proteins_mask = np.sum(protein_data_igt5, axis=0) > 0
+non_zero_protein_names = mdata.mod['protein'].var_names[non_zero_proteins_mask]
+pd.DataFrame(non_zero_protein_names)
+excluded_proteins = [
+    "CD45.1", "CD45.2", "Thy1.2", "THY1.1.CD90.1", "TCRVA2", "TCRVA8.3", 
+    "TCRVA8.3bis", "TCRVB5.1-TCRVB5.2", "TCRVB8.1-TCRVB8.2", 
+    "TCRVG1.1", "TCRVG2", "TCRVG3"
+]
+filtered_protein_names = [protein for protein in non_zero_protein_names if protein not in excluded_proteins]
+mdata.mod["protein"] = mdata.mod["protein"][:, filtered_protein_names]
+
+mdata.write('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
+
+```
+
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241029.sh
+```{python}
+module load python
+
+source activate /project/zemmour/david/envs/scvi120_20241008
+
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006
+path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu
+prefix=totalvi_20241029_fitleredGenesProt
+batchkey=IGT
+categorical_covariate_keys=''
+corrected_counts=False
+denoised_data=False
+
+cd $working_dir
+
+python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
+
+```
+
+
 
 
 **Integration evaluation: conservation of HVG**

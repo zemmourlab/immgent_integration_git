@@ -72,10 +72,14 @@ cd $LABHOME
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-
 source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
 #source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
+
+#ENV FOR 1.2.0
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 
 R
 options(max.print=1000)
@@ -354,7 +358,7 @@ so@meta.data = m2
 source activate /project/zemmour/david/envs/scvi_20240315
 
 Don't make Make h5ad files: weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
-Make h5mu file!
+SO Make h5mu filE INSTEAD!
 ```{python}
 import pandas as pd
 from scipy.io import mmread
@@ -457,6 +461,79 @@ mdata.write(prefix+".h5mu")
 #mdata = mu.read(prefix+".h5mu")
 
 ```
+
+mudata without ribosomal genes, lncRNA
+```{python}
+pd.set_option('display.max_rows', None)  # None means show all rows
+pd.set_option('display.max_columns', None)  # Ensure all columns are shown if gene names are split
+pd.set_option('display.width', None)  # Use the maximum width of the console
+pd.set_option('display.max_colwidth', None)  # Use the full content width
+
+os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+prefix = "totalvi_igt1_96_20241006"
+
+mdata = mu.read("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu")
+mdata_orig = mdata
+
+import muon as mu
+
+# Define patterns for gene names to exclude
+ribosomal_genes_pattern = r"^Rpl|^Rps|^Mrpl|^Mrps"
+mitochondrial_genes_pattern = r"^mt-"
+lncRNA_genes_pattern = r"^Gm|Rik$|-ps"
+tcr_genes_pattern = r"Trav|Traj|Trac|Trbv|Trbd|Trbj|Trbc|Trdv|Trdj|Trdc|Trgv|Trgd|Trgj|Trgc"
+
+is_tcr_genes = mdata.mod["RNA"].var_names.str.contains(tcr_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_tcr_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_tcr_genes], columns=["Gene Names"])
+
+is_ribosomal_genes = mdata.mod["RNA"].var_names.str.contains(ribosomal_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_ribosomal_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_ribosomal_genes], columns=["Gene Names"])
+
+is_lnc_genes = mdata.mod["RNA"].var_names.str.contains(lncRNA_genes_pattern, case=True, regex=True)
+mdata.mod["RNA"].var_names[is_lnc_genes]
+pd.DataFrame(mdata.mod["RNA"].var_names[is_lnc_genes], columns=["Gene Names"])
+
+patterns_to_exclude = f"({ribosomal_genes_pattern})|({mitochondrial_genes_pattern})|({lncRNA_genes_pattern})|({tcr_genes_pattern})"
+# Identify the genes to exclude
+genes_to_exclude = mdata.mod["RNA"].var_names.str.contains(
+    patterns_to_exclude, case=True, regex=True
+)
+
+
+mdata.mod["RNA"].var_names[genes_to_exclude]
+# Keep only genes that are not in the exclusion list
+genes_to_keep = ~genes_to_exclude
+
+# Subset the RNA modality in the MuData object to keep only desired genes
+mdata_orig = mdata
+mdata.mod["RNA"] = mdata.mod["RNA"][:, genes_to_keep]
+
+# Subset protein modality in the MuData object to keep only desired proteins
+CD45.1, CD45.2, Thy1.2 THY1.1.CD90.1 
+TCRVA2 TCRVA8.3 TCRVA8.3bis  TCRVB5.1-TCRVB5.2 TCRVB8.1-TCRVB8.2 TCRVG1.1 TCRVG2 TCRVG3
+
+import numpy as np
+
+igt_indices = mdata.mod['RNA'].obs['IGT'] == 'IGT5'
+protein_data_igt5 = mdata.mod['protein'].X[igt_indices]
+non_zero_proteins_mask = np.sum(protein_data_igt5, axis=0) > 0
+non_zero_protein_names = mdata.mod['protein'].var_names[non_zero_proteins_mask]
+pd.DataFrame(non_zero_protein_names)
+excluded_proteins = [
+    "CD45.1", "CD45.2", "Thy1.2", "THY1.1.CD90.1", "TCRVA2", "TCRVA8.3", 
+    "TCRVA8.3bis", "TCRVB5.1-TCRVB5.2", "TCRVB8.1-TCRVB8.2", 
+    "TCRVG1.1", "TCRVG2", "TCRVG3"
+]
+filtered_protein_names = [protein for protein in non_zero_protein_names if protein not in excluded_proteins]
+mdata.mod["protein"] = mdata.mod["protein"][:, filtered_protein_names]
+
+mdata.write('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
+
+```
+
+
 
 EXTRA
 not useful anymore, already cleaned up upstream
