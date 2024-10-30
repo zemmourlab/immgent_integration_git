@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=gpu
+#SBATCH --partition=beagle3
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=184GB #184GB
 #SBATCH -J totalvi              
