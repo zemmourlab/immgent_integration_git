@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=beagle3-bigmem
+#SBATCH --partition=beagle3
 #SBATCH --gres=gpu:1 
-#SBATCH --mem=256GB #184GB
+#SBATCH --mem=184GB #184GB
 #SBATCH -J totalvi              
 #SBATCH -o totalvi_20241029_fitleredGenesProt.log
 #SBATCH -t 24:00:00              ##SBATCH --mem=8G
