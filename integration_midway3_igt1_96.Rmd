@@ -858,7 +858,6 @@ dev.off()
 
 ```
 
-
 Plot UMAPs, genes and proteins for annotation
 ```{r}
 
@@ -1157,7 +1156,6 @@ dev.off()
 #saveRDS(so, file = "totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
 ```
 
-
 **Count number of cells for each cluster in each sample**
 ```{r}
 m = so@meta.data
@@ -1298,7 +1296,7 @@ cd $working_dir
 python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --batchkey=$batchkey --categorical_covariate_keys=$categorical_covariate_keys --corrected_counts=$corrected_counts --denoised_data=$denoised_data
 ```
 
-**TOTALVI removing genes and proteins**
+**TOTALVI IGT 1-96 removing some genes and proteins**
 
 ```{bash}
 module load python
@@ -1308,6 +1306,23 @@ cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 
 mudata without ribosomal, mito, TCR, lncRNA genes, and TCR proteins, congenic markers
 ```{python}
+import warnings; warnings.simplefilter('ignore')
+# import scvi
+import os
+import sys
+import scanpy as sc
+# import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+# import seaborn as sns
+# import torch
+# import pymde #to run MDE
+
 
 pd.set_option('display.max_rows', None)  # None means show all rows
 pd.set_option('display.max_columns', None)  # Ensure all columns are shown if gene names are split
@@ -1356,11 +1371,6 @@ mdata_orig = mdata
 mdata.mod["RNA"] = mdata.mod["RNA"][:, genes_to_keep]
 
 # Subset protein modality in the MuData object to keep only desired proteins
-CD45.1, CD45.2, Thy1.2 THY1.1.CD90.1 
-TCRVA2 TCRVA8.3 TCRVA8.3bis  TCRVB5.1-TCRVB5.2 TCRVB8.1-TCRVB8.2 TCRVG1.1 TCRVG2 TCRVG3
-
-import numpy as np
-
 igt_indices = mdata.mod['RNA'].obs['IGT'] == 'IGT5'
 protein_data_igt5 = mdata.mod['protein'].X[igt_indices]
 non_zero_proteins_mask = np.sum(protein_data_igt5, axis=0) > 0
@@ -1374,7 +1384,23 @@ excluded_proteins = [
 filtered_protein_names = [protein for protein in non_zero_protein_names if protein not in excluded_proteins]
 mdata.mod["protein"] = mdata.mod["protein"][:, filtered_protein_names]
 
-mdata.write('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
+# mdata = mu.read('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
+# total_counts_per_cell = np.array(mdata.mod['RNA'].X.sum(axis=1)).flatten()
+# low_count_cells = total_counts_per_cell < 100
+# mdata.mod['RNA'].obs['low_count_cells'] = low_count_cells
+# print(f"Number of cells with fewer than 20 counts: {low_count_cells.sum()}")
+
+total_counts_per_genes = np.array(mdata.mod['RNA'].X.sum(axis=0)).flatten()
+low_count_genes = total_counts_per_genes < 1
+print(f"Number of genes with no counts: {low_count_genes.sum()}")
+
+mdata_filtered = mdata
+mdata_filtered.mod["RNA"] = mdata_filtered.mod["RNA"][:, ~low_count_genes]
+
+mdata_filtered.write('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
+
+
+
 
 ```
 
@@ -1399,6 +1425,18 @@ python $SCRIPT_DIR/run_totalvi_v2.py --working_dir=$working_dir --path_to_mudata
 
 ```
 
+--> add embedding: metadata_update.Rmd
+
+```{r}
+
+prefix = "totalvi_20241029_fitleredGenesProt"
+umap_to_plot = "mde_totalvi_20241029_fitleredGenesProt"
+
+pdf(sprintf("%s/MDE_annotation_level1.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+# DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+dev.off()
+```
 
 
 

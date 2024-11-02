@@ -7,14 +7,15 @@ date: "2024-05-29"
 
 Most uptodate seurat object
 ```{r}
-so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241028.Rds")
+# so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240529_so.Rds")
+# so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
+# so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
+# so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241028.Rds")
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241101.Rds")
 
 ```
 
-Load seurat object
+Load original seurat object
 ```{r}
 #IGT1-56 subsets
 prefix = "totalvi_igt1_56_20240306_allgenes"
@@ -81,6 +82,10 @@ so = AddLatentData(so, latent_file = sprintf("%s/umap_mde_aligned.csv",dir_with_
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalviv2can"
 so = AddLatentData(so, latent_file = sprintf("%s/umap.csv",dir_with_file), prefix = "umap_totalviv2_can", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/mde.csv",dir_with_file), prefix = "mde_totalviv2_can", calculate_umap = F)
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241029_fitleredGenesProt"
+so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241029_fitleredGenesProt", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241029_fitleredGenesProt", calculate_umap = F)
 
 
 ```
@@ -314,8 +319,7 @@ DefaultAssay(so) = "ADT"
 so[['RNA']]$data = NULL
 DefaultAssay(so) = "RNA"
 so[['ADT']]$data = NULL
-# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241016.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241028.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241101.Rds")
 
 ```
 

@@ -199,8 +199,6 @@ dev.off()
 
 ```
 
-
-
 **Count number of cells for each cluster level 2 in each IGT**
 ```{r}
 m = so@meta.data
@@ -334,7 +332,6 @@ pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numb
 
 dev.off()
 ```
-
 
 **Count number of cells for each cluster level 1 in each organ**
 ```{r}
