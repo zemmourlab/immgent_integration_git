@@ -72,14 +72,10 @@ cd $LABHOME
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
+
 source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
 #source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
-
-#ENV FOR 1.2.0
-module load python
-source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 
 R
 options(max.print=1000)
@@ -358,7 +354,7 @@ so@meta.data = m2
 source activate /project/zemmour/david/envs/scvi_20240315
 
 Don't make Make h5ad files: weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
-SO Make h5mu filE INSTEAD!
+Make h5mu file!
 ```{python}
 import pandas as pd
 from scipy.io import mmread
@@ -461,9 +457,6 @@ mdata.write(prefix+".h5mu")
 #mdata = mu.read(prefix+".h5mu")
 
 ```
-
-
-
 
 EXTRA
 not useful anymore, already cleaned up upstream
