@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=128GB #184GB
 #SBATCH -J unconvtotalvi              
-#SBATCH -o totalvi_20241113_not_CD4CD8.log
+#SBATCH -o totalviv2_20241113_not_CD4CD8.log
 #SBATCH -t 24:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
