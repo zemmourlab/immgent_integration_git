@@ -92,6 +92,12 @@ os.chdir(working_dir)
 mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
 print(mdata)
 
+print("Filter out genes with no data")
+total_counts_per_genes = np.array(mdata.mod['RNA'].X.sum(axis=0)).flatten()
+low_count_genes = total_counts_per_genes < 1
+print(f"Number of genes with no counts: {low_count_genes.sum()}")
+mdata.mod["RNA"] = mdata.mod["RNA"][:, ~low_count_genes]
+
 print("Creating RNA layer counts")
 mdata.mod["RNA"].layers["counts"] = mdata.mod["RNA"].X.copy()
 
