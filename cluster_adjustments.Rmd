@@ -1,0 +1,316 @@
+---
+title: "cluster_adjustments"
+output: html_document
+date: "2024-11-14"
+editor_options: 
+  chunk_output_type: console
+---
+
+#########Treg#########
+Tregs are fine
+
+#########Miniverse#########
+Miniverse as is for now
+
+#########unconvventional#########
+Remove the “unconventional” category altogether (it is pretty sketchy), and re-arrange at annotation level1:
+gdT: 2, 4, 5, 7, 9, 10, 11, 12, 23, 26 , 28, 32, 33, 35, 42, 43, 46
+TCRb+ DN:  3,  15, 18, 29, 31, 34, 39, 41
+TCRb+ CD8aa: 1, 16, 20, 40
+NonConv: 8, 13, 17, 21, 24, 27, 45 and also include the cells in the attached file tcr.recog.nonconvs.csv (NKT, MAIT and others)
+proliferating: 48
+ 
+Remove these cells entirely: 
+unconv_cl49                    (no CD3, looks like an ILC)
+unconv_cl30                    (suspect, one experiment only)
+unconv_cl38                    “”
+unconv_cl36                    (tiny cluster, not clear TCR+)
+ 
+Move to CD8ab:
+unconv_cl6                       (8ab positive and live in that region)
+unconv_cl22                    “”
+unconv_cl44                    “”
+ 
+Move to CD4:
+unconv_cl19                       (4 positive close to 22)
+ 
+Set aside for independent checking:
+unconv_cl14, 25, 37, 47                       These are the B-T ones, need a closer look
+
+#########CD8#########
+
+Move to unconv: CD8_cl3_dp_barcode.csv
+Move to CD4: 8
+Remove: 16 (crappy, ribo/rna, unstable)
+Merge 12+17
+
+#########CD4#########
+
+
+remove: 6 (nonT),24 (non spe binding)
+move to CD8: 11
+move to unconv: 19
+
+#########
+
+**update annotation levels**
+
+```{r}
+#so = readRDS("igt1_96_withtotalvi20241028.Rds")
+
+setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/ data_integration/IGT1_96")
+
+annotation_level2 = read.table("annotation_level2.csv", header = T, sep = ",", as.is = T, row.names = 1)
+annotation_level2$cell_id = rownames(annotation_level2)
+#write.table(x = names(table(annotation_level2$annotation_level2)), file = "annotation_level2_list.csv", row.names = F, quote = F)
+#update by hand when possible
+
+newannot = read.table("annotation_level2_list_20241113.csv", header = T, sep = ",", as.is = T)
+#table(newannot$level2, newannot$level1)
+
+annotation_table = merge(x = annotation_level2, y = newannot, by.x = "annotation_level2", by.y = "annotation_level2_v1", all.x = T)
+apply(annotation_table, 2, function(x) length(which(is.na(x))))
+annotation_table = annotation_table[match(annotation_level2$cell_id,annotation_table$cell_id),]
+rownames(annotation_table) = annotation_table$cell_id
+annotation_table$cell_id = NULL
+all(annotation_table$annotation_level2 == annotation_level2$annotation_level2)
+
+#add to nonconv: tcr.recog.nonconvs.csv --> not_CD4CD8_cl51
+nonconv1 = read.table("tcr.recog.nonconvs.csv", header = F, sep = ",")[,1]
+annotation_table$nonconv_tcr_recog = rownames(annotation_table) %in% nonconv1
+#add to not_CD4CD8: CD8_cl3_dp_barcode.csv --> not_CD4CD8_cl51
+nonconv2 = read.table("CD8_cl3_dp_barcode.csv", header = F, sep = ",")[,1]
+annotation_table$level2[rownames(annotation_table) %in% nonconv2] = "not_CD4CD8_cl51"
+annotation_table$level1[rownames(annotation_table) %in% nonconv2] = "not_CD4CD8"
+annotation_table$level0[rownames(annotation_table) %in% nonconv2] = "not_CD4CD8"
+head(annotation_table)
+table(annotation_table$nonconv_tcr_recog, annotation_table$level1)
+
+write.table(x = annotation_table, file = "annotation_table_20241113.csv", row.names = T, quote = F, sep = ",")
+
+```
+
+add in mudata to calculate new MDE
+```{python}
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+
+mdata = mu.read(path_to_mudata) 
+
+annotationl1 = pd.read_csv(working_dir+"/annotation_level1.csv", index_col = 0, header = None)
+mdata.mod['RNA'].obs['annotation_level1'] = annotationl1
+mdata.mod['RNA'].obs['annotation_level1'].isna().sum()
+
+mdata_treg = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'Treg'] 
+mdata_treg.write(working_dir+'/export_data/igt1_96_20241014_Treg.h5mu')
+
+mdata_cd4 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD4'] 
+mdata_cd4.write(working_dir+'/export_data/igt1_96_20241014_CD4.h5mu')
+
+mdata_cd8 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD8AB'] 
+mdata_cd8.write(working_dir+'/export_data/igt1_96_20241014_CD8AB.h5mu')
+
+mdata_unconv = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'unconventional'] 
+mdata_unconv.write(working_dir+'/export_data/igt1_96_20241014_unconventional.h5mu')
+
+mdata_miniverse = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'miniverse'] 
+mdata_miniverse.write(working_dir+'/export_data/igt1_96_20241014_miniverse.h5mu')
+
+mdata_treg.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd4.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd8.mod['RNA'].obs['annotation_level1'].unique()
+mdata_unconv.mod['RNA'].obs['annotation_level1'].unique()
+mdata_miniverse.mod['RNA'].obs['annotation_level1'].unique()
+
+###Subset CD4:
+annotation_cd4_l1 = pd.read_csv(working_dir+"/annotation_CD4_clusters_l1.csv", index_col = 0, header = None)
+mdata.mod['RNA'].obs['annotation_cd4_l1'] = annotation_cd4_l1
+mdata.mod['RNA'].obs['annotation_cd4_l1'].isna().sum()
+mdata_cd4_act = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_activated']
+mdata_cd4_act.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_act.write(working_dir+'/export_data/igt1_96_20241014_CD4_activated.h5mu')
+
+mdata_cd4_rest = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_resting'] 
+mdata_cd4_rest.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_rest.write(working_dir+'/export_data/igt1_96_20241014_CD4_resting.h5mu')
+
+mdata_cd4_prolif = mdata[mdata.mod['RNA'].obs['annotation_cd4_l1'] == 'CD4_prolif'] 
+mdata_cd4_prolif.mod['RNA'].obs['annotation_cd4_l1'].unique()
+mdata_cd4_prolif.write(working_dir+'/export_data/igt1_96_20241014_CD4_prolif.h5mu')
+
+```
+
+**Individual MDE by cell type from the overall totalvi_20241008_rmIGTsample + subset mudata in separate files**
+
+```{bash}
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
+
+cd $LABHOME
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+```
+
+
+```{python}
+# module load python
+# source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+# batchkey = 'IGT'
+# categorical_covariate_keys = ['sample_id']
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+#path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_CD4.h5mu
+path_to_annotation=working_dir+'/annotation_table_20241113.csv' #annotation_level1.csv
+prefix = 'totalvi_20241008_rmIGTsample' #prefix='totalvi_20241006'
+celltype='not_CD4CD8' #treg, CD4,CD8AB, not_CD4CD8
+# batchkey='IGT'
+# categorical_covariate_keys='IGTHT'
+# corrected_counts=False
+# denoised_data=False
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+pymde.seed(0)
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading mudata")
+os.chdir(working_dir)
+mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+print(mdata)
+
+print("Add latent variable")
+latent_df = pd.read_csv(prefix+"/latent.csv", index_col = 0)
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.obsm[TOTALVI_LATENT_KEY] = latent_df
+# mdata.obsm[TOTALVI_LATENT_KEY] = mdata.obsm[TOTALVI_LATENT_KEY].values
+
+annotationl1 = pd.read_csv(path_to_annotation, index_col = 0, header = 0)
+print(mdata.mod['RNA'].obs.index.equals(annotationl1.index)) 
+mdata.mod['RNA'].obs['annotation_level1'] = annotationl1['level0']
+mdata.mod['RNA'].obs['annotation_level1'].isna().sum()
+mdata.mod['RNA'].obs['annotation_level1'].unique()
+
+mdata_orig = mdata
+
+print(celltype)
+mdata = mdata_orig[mdata_orig.mod['RNA'].obs['annotation_level1'] == celltype] 
+mdata
+
+print("Save mde.csv")
+# mdata.obsm["X_mde"] = scvi.model.utils.mde(mdata.obsm[TOTALVI_LATENT_KEY])
+# mde_df = pd.DataFrame(mdata.obsm["X_mde"], index = mdata.mod['RNA'].obs.index)
+# mde_df.to_csv(prefix+'/mde_'+prefix+'_'+celltype+'.csv', index=True)
+
+mde = pymde.preserve_neighbors(
+    mdata.obsm[TOTALVI_LATENT_KEY].values, #mdata.obsm[TOTALVI_LATENT_KEY]
+    embedding_dim=2,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda'
+)
+
+import pickle
+model_pkl_file = prefix+'/mde_'+prefix+'_in'+celltype+'_model.pkl' #prefix+"/mde_model.pkl"  
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(mde, file)
+
+# with open(model_pkl_file, 'rb') as file:  
+#     model = pickle.load(file)
+
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = mdata.mod['RNA'].obs.index) 
+mde_df.to_csv(prefix+'/mde_'+prefix+'_in'+celltype+'.csv', index=True)
+
+
+print("save subset mudata for CD4, CD8, not_CD4CD8")
+mdata = mdata_orig
+
+mdata_cd4 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD4']
+mdata_cd4.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd4.write(working_dir+'/export_data/igt1_96_20241113_CD4.h5mu')
+
+mdata_cd8 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD8AB'] 
+mdata_cd8.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd8.write(working_dir+'/export_data/igt1_96_20241113_CD8AB.h5mu')
+
+mdata_unconv = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'not_CD4CD8'] 
+mdata_unconv.mod['RNA'].obs['annotation_level1'].unique()
+mdata_unconv.write(working_dir+'/export_data/igt1_96_20241113_not_CD4CD8.h5mu')
+
+
+# pairs, distorsions = mde.high_distortion_pairs()
+# pairs_df = pd.DataFrame(pairs.cpu(), columns=['cell1', 'cell2'])
+# pairs_df['cell1'] = mdata.mod['RNA'].obs.index[pairs_df['cell1']]
+# pairs_df['cell2'] = mdata.mod['RNA'].obs.index[pairs_df['cell2']]
+# distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
+# pairs_df['distortion'] = distorsions_df['distortion']
+# #pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+# pairs_df.to_csv(prefix+"/mde_distorsions.csv")
+# #most_distorted_pairs = pairs[:500]
+# mde.distortions_cdf()
+# fig = plt.gcf() 
+# fig.savefig(prefix+"/mde_distorsion_cdf.png")
+
+# umap_mde_aligned = pymde.align(source=embedding.cpu(), target=mdata.obsm['X_umap'])
+# umap_mde_aligned_df = pd.DataFrame(umap_mde_aligned, index = mdata.mod['RNA'].obs.index)
+# umap_mde_aligned_df.to_csv(prefix+"/umap_mde_aligned.csv", index=True)
+
+```
+
+
+**New integration**
+
+split mdata: see above
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd4_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd8_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_not_CD4CD8_rmIGTsample.sh
+

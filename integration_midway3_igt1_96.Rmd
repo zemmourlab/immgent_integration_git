@@ -13,8 +13,8 @@ ssh -Y zemmour@midway3.rcc.uchicago.edu
 sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
-sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
-sinteractive --time=3:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
 
 cd $LABHOME
@@ -703,8 +703,124 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241008_rmIGTsample.sh
 
 ```
 
-RunTotalviv2 Can
+Individual MDE by cell type from the overall totalvi_20241008_rmIGTsample (to compare with individual cell type integration, see code in the clustering_XX_igt1_96 for plots)
+```{python}
+# module load python
+# source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
 
+# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+# batchkey = 'IGT'
+# categorical_covariate_keys = ['sample_id']
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+#path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241014_CD4.h5mu
+path_to_annotation=working_dir+'/annotation_level1.csv'
+prefix = 'totalvi_20241008_rmIGTsample' #prefix='totalvi_20241006'
+celltype='unconventional' #Treg, CD4,CD8AB
+# batchkey='IGT'
+# categorical_covariate_keys='IGTHT'
+# corrected_counts=False
+# denoised_data=False
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading mudata")
+os.chdir(working_dir)
+mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+print(mdata)
+
+print("Add latent variable")
+latent_df = pd.read_csv(prefix+"/latent.csv", index_col = 0)
+TOTALVI_LATENT_KEY = "X_totalVI"
+mdata.obsm[TOTALVI_LATENT_KEY] = latent_df
+# mdata.obsm[TOTALVI_LATENT_KEY] = mdata.obsm[TOTALVI_LATENT_KEY].values
+
+annotationl1 = pd.read_csv(path_to_annotation, index_col = 0, header = None)
+mdata.mod['RNA'].obs['annotation_level1'] = annotationl1
+mdata.mod['RNA'].obs['annotation_level1'].isna().sum()
+
+mdata_orig = mdata
+
+print(celltype)
+mdata = mdata_orig[mdata_orig.mod['RNA'].obs['annotation_level1'] == celltype] 
+
+print("Save mde.csv")
+# mdata.obsm["X_mde"] = scvi.model.utils.mde(mdata.obsm[TOTALVI_LATENT_KEY])
+# mde_df = pd.DataFrame(mdata.obsm["X_mde"], index = mdata.mod['RNA'].obs.index)
+# mde_df.to_csv(prefix+'/mde_'+prefix+'_'+celltype+'.csv', index=True)
+
+mde = pymde.preserve_neighbors(
+    mdata.obsm[TOTALVI_LATENT_KEY].values, #mdata.obsm[TOTALVI_LATENT_KEY]
+    embedding_dim=2,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda'
+)
+
+import pickle
+model_pkl_file = prefix+'/mde_'+prefix+'_in'+celltype+'_model.pkl' #prefix+"/mde_model.pkl"  
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(mde, file)
+
+# with open(model_pkl_file, 'rb') as file:  
+#     model = pickle.load(file)
+
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = mdata.mod['RNA'].obs.index) 
+mde_df.to_csv(prefix+'/mde_'+prefix+'_in'+celltype+'.csv', index=True)
+
+# pairs, distorsions = mde.high_distortion_pairs()
+# pairs_df = pd.DataFrame(pairs.cpu(), columns=['cell1', 'cell2'])
+# pairs_df['cell1'] = mdata.mod['RNA'].obs.index[pairs_df['cell1']]
+# pairs_df['cell2'] = mdata.mod['RNA'].obs.index[pairs_df['cell2']]
+# distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
+# pairs_df['distortion'] = distorsions_df['distortion']
+# #pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+# pairs_df.to_csv(prefix+"/mde_distorsions.csv")
+# #most_distorted_pairs = pairs[:500]
+# mde.distortions_cdf()
+# fig = plt.gcf() 
+# fig.savefig(prefix+"/mde_distorsion_cdf.png")
+
+# umap_mde_aligned = pymde.align(source=embedding.cpu(), target=mdata.obsm['X_umap'])
+# umap_mde_aligned_df = pd.DataFrame(umap_mde_aligned, index = mdata.mod['RNA'].obs.index)
+# umap_mde_aligned_df.to_csv(prefix+"/umap_mde_aligned.csv", index=True)
+
+```
+
+RunTotalviv2 Can
 ```{bash}
 module load python
 source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
@@ -1437,6 +1553,7 @@ DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T
 # DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
 dev.off()
 ```
+
 
 
 

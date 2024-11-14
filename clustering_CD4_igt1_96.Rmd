@@ -143,6 +143,10 @@ so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), pre
 so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241014_CD4_rmIGTsample", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_CD4_rmIGTsample", calculate_umap = F)
 
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_totalvi_20241008_rmIGTsample_inTreg.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample_inTreg", calculate_umap = F)
+
+
 ```
 
 ```{r}
@@ -508,6 +512,23 @@ DefaultAssay(so) = "RNA"
 so[['ADT']]$data = NULL
 
 saveRDS(so, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/igt1_96_CD4_20241017.Rds")
+
+```
+
+**Compare mde_totalvi_20241014_Treg_rmIGTsample and mde_totalvi_20241008_rmIGTsample_Treg (MDE from totalvi_20241008_rmIGTsample on all cells, then subset Tregs to calculate MDE)**
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+so = readRDS("igt1_96_CD4_20241029_so.Rds")
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_totalvi_20241008_rmIGTsample_inCD4.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample_inCD4", calculate_umap = F)
+
+
+pdf(sprintf("%s/MDE_Clusters_ComparingMDEs.pdf", "."), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_totalvi_20241014_CD4_rmIGTsample", group.by = "annotation_level2_CD4", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_inCD4", group.by = "annotation_level2_CD4", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
 
 ```
 
