@@ -578,21 +578,22 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
     }
 }
 
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
+
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
-so = so_orig[,so$annotation_level0 == "not_CD4CD8"]
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
+so = so_orig[,so_orig$annotation_level0 == "not_CD4CD8"]
 
 table_data = table(so$annotation_level2_oct24, so$annotation_level2)
-pdf(sprintf("%s/ClustersOct24_Newclusters.pdf", "."), width = 10, height = 10)
-
-# Convert the table to a data frame for better readability in the PDF
-table_df <- as.data.frame(table_data)
-
-# Create the table in the PDF
-grid.table(table_df)
-
-# Close the PDF device
-dev.off()
+# pdf(sprintf("%s/ClustersOct24_Newclusters.pdf", "."), width = 10, height = 10)
+# 
+# # Convert the table to a data frame for better readability in the PDF
+# table_df <- as.data.frame(table_data)
+# 
+# # Create the table in the PDF
+# grid.table(table_df)
+# 
+# # Close the PDF device
+# dev.off()
 
 
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"

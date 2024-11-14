@@ -276,14 +276,17 @@ mdata = mdata_orig
 
 mdata_cd4 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD4']
 mdata_cd4.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd4.update()
 mdata_cd4.write(working_dir+'/export_data/igt1_96_20241113_CD4.h5mu')
 
 mdata_cd8 = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'CD8AB'] 
 mdata_cd8.mod['RNA'].obs['annotation_level1'].unique()
+mdata_cd8.update()
 mdata_cd8.write(working_dir+'/export_data/igt1_96_20241113_CD8AB.h5mu')
 
 mdata_unconv = mdata[mdata.mod['RNA'].obs['annotation_level1'] == 'not_CD4CD8'] 
 mdata_unconv.mod['RNA'].obs['annotation_level1'].unique()
+mdata_unconv.update()
 mdata_unconv.write(working_dir+'/export_data/igt1_96_20241113_not_CD4CD8.h5mu')
 
 
