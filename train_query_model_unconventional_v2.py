@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 import pandas as pd
 import mudata as mu
 import anndata as AnnData
@@ -13,21 +14,20 @@ from scipy.io import mmread
 from itertools import chain
 import torch
 
-# read in created matrix (Created from Seurat Object containing the data and annotations)
+# read in created matrix
 matrix_query = mmread("matrix/matrix.mtx")
 genes = pd.read_csv("matrix/genes.tsv", delimiter = "\t",header=None)
 cells_query = pd.read_csv("matrix/barcodes.tsv",header=None)
-# TSV file with the names of our proteins
 proteins = pd.read_csv("../proteins.tsv",header=None)
 genes = genes.drop(columns=0)
 genes = genes.values.astype(str)
 cells_query = cells_query.values.astype(str)
 
-# csc matrix for use in query mdata object
 csc_matrix_query = csc_matrix(matrix_query)
 csc_matrix_query = np.transpose(csc_matrix_query)
-# make RNA query anndata from csc matrix
 adata_q = AnnData.AnnData(csc_matrix_query)
+
+
 adata_q.var_names = genes.astype(str)
 adata_q.obs_names = cells_query.astype(str)
 
@@ -39,12 +39,12 @@ protein_data = protein_data.astype(int)
 #protein_data.columns = cells_query.astype(str)
 
 
-# read in reference mudata 
+# read in mudata
 adata = mu.read("../model/adata.h5mu") #load this one (results of this block)
 print(adata)
 adata.mod["RNA"].layers["counts"] = adata.mod["RNA"].X.copy()
 
-# add annotation level 1 and 2 to reference mdata, then subset for our subgroup of interest (unconventional in this case)
+# add annotation level 1 and 2, then subset
 annotation_level1 = pd.read_csv("../annotation_level1.csv", delimiter = ",", header = None)
 annotation_level2 = pd.read_csv("../annotation_level2.csv", delimiter = ",")
 annotation_level1 = annotation_level1.drop(columns = 0)
@@ -54,7 +54,7 @@ adata.obs['annotation_level2'] = annotation_level2.values.astype(str)
 adata = adata[adata.obs['annotation_level1'] == "unconventional"]
 adata.mod["RNA"].layers["counts"] = adata.mod["RNA"].X.copy()
 
-# setup protein anndata for query
+# setup protein adata
 protein_data_adata = adata.mod['protein'].copy()
 protein_data_adata.X = np.zeros((len(protein_data_adata), 180))
 #protein_data_adata = protein_data_adata[:len(cells_query)]
@@ -63,7 +63,7 @@ protein_adata = scanpy.AnnData(X=np.array(protein_data_adata[:len(cells_query), 
 protein_adata.obs_names = cells_query.astype(str)
 protein_adata.var_names = proteins.values.astype(str)
 
-# setup mudata for query
+# setup mudata
 mdata = mu.MuData({"RNA":adata_q, "protein":protein_adata})
 mdata.mod['RNA'].obs_names = cells_query.astype(str)
 mdata.mod['RNA'].var_names = genes.astype(str)
@@ -76,7 +76,7 @@ mdata.mod['protein'].obs['batch'] = "query"
 print(mdata)
 
 
-# read in trained model
+# read in model
 adata = adata.copy()
 model = scvi.model.TOTALVI.load("../model", adata=adata)
 model = scvi.model.TOTALVI.load("../model", adata=adata)
@@ -84,7 +84,7 @@ model.adata.mod['RNA'].var_names
 model.adata.mod['RNA'].obs_names
 
 
-# setup mudatas with model
+# setup mudatas
 # reference
 scvi.model.TOTALVI.setup_mudata(
     adata, 
@@ -113,15 +113,21 @@ mdata.mod['RNA'].obs['IGT'] = "query"
 mdata.mod['protein'].obs['IGT'] = "query"
 
 # load query to model
-totalvi_query = scvi.model.TOTALVI.load_query_data(
-    mdata,
-    model
-)
+#totalvi_query = scvi.model.TOTALVI.load_query_data(
+#    mdata,
+#    model
+#)
 
 # train query on model
-totalvi_query.train(10, plan_kwargs={"weight_decay": 0.0})
+# uncomment if query model not yet trained
+totalvi_query.train(200, plan_kwargs={"weight_decay": 0.0})
 #torch.save(totalvi_query,"N:/CBDM_Lab/Odhran/scVerse/ImmgenT_Workshop/CD4/BHLHE40/model.pt")
 totalvi_query.save("model/model.pt")
+
+# uncomment if model already trained
+#totalvi_query = scvi.model.TOTALVI.load("model/model.pt/", adata=mdata)
+#totalvi_query = scvi.model.TOTALVI.load("model/model.pt/", adata=mdata)
+
 
 # get latent representation etc
 # plot and visualise integration
@@ -148,8 +154,6 @@ scanpy.pl.umap(
 
 
 
-#mdata.write("N:/CBDM_Lab/Odhran/scVerse/ImmgenT_Workshop/CD4/BHLHE40/query_mudata.h5mu")
-#mu.write_h5mu("N:/CBDM_Lab/Odhran/scVerse/ImmgenT_Workshop/CD4/BHLHE40/query_mudata.h5mu", mdata)
 adata_query_RNA = mdata.mod['RNA'].copy()
 adata_query_RNA.write_h5ad("query_RNA_adata.h5ad")
 adata_query_protein = mdata.mod['protein'].copy()
@@ -175,25 +179,24 @@ adata_query.obsm[TOTALVI_LATENT_KEY] = mdata.obsm[TOTALVI_LATENT_KEY]
 #adata.obsm[TOTALVI_LATENT_KEY] = latent_ref
 
 adata.write_h5mu("ref_mudata.h5mu")
-mdata.write_h5mu("query_mudata.h5mu")
+#mdata.write_h5mu("query_mudata.h5mu")
 
-# add batch and annotation metadata to cells for use in plotting UMAP representation
 mdata.mod['RNA'].var_names = adata.mod['RNA'].var_names
 mdata.mod['protein'].var_names = adata.mod['protein'].var_names
-mdata.obs_names = cells_query.tolist()
+mdata.mod['RNA'].obs_names = cells_query.tolist()
+mdata.mod['protein'].obs_names = cells_query.tolist()
 mdata.obs['batch'] = "query"
 adata.obs['batch'] = "reference"
 mdata.obs['annotation_level2'] = query_metadata['celltypes'].values
 mdata.mod['RNA'].obs['annotation_level2'] = query_metadata['celltypes'].values
 
-# concat query and ref mudata and get latent space of both (query trained on model)
 full = mu.concat([adata,mdata], label = 'batch', keys=['reference','query'])
 
 full.obsm[TOTALVI_LATENT_KEY] = totalvi_query.get_latent_representation(full)
 full.obs['batch']
 full.obs['batch'][len(adata.obs_names):] = "query"
 full.obs['annotation_level2'][len(adata.obs_names):] = query_metadata['celltypes'].values
-adata.obs['annotation_level2'].values + query_metadata['celltypes'].values
+#adata.obs['annotation_level2'].values + query_metadata['celltypes'].values
 full.obs['clusters/celltypes'] = "NA"
 clusters_celltypes = pd.concat([adata.obs['annotation_level2'],query_metadata['celltypes']])
 full.obs['clusters/celltypes'] = clusters_celltypes.astype(str)
