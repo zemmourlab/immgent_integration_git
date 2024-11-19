@@ -34,7 +34,7 @@ query_df_reorder = query_df_all[genes,]
 Query_matrix_finished = as(query_df_reorder, "sparseMatrix")
 
 meta = so@meta.data
-write.csv2(meta, paste0(so_path, "cell_metadata.csv"))
+write.table(meta, paste0(so_path, "cell_metadata.csv"), quote = F, row.names = T, col.names = NA, sep = ",")
 
 write10xCounts(
   paste0(so_path, "matrix"),
