@@ -13,7 +13,7 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
-sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
 cd $LABHOME
 
 module load python/anaconda-2022.05 
@@ -549,6 +549,7 @@ dev.off()
 
 **clustering V2, post Oct 2024 workshop**
 
+mde_totalvi_20241008_rmIGTsample_innot_CD4CD8: MDE from totalvi_20241008_rmIGT in not_CD4CD8 cells only
 ```{r}
 AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
     totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
@@ -603,8 +604,35 @@ pdf(sprintf("%s/MDE_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "iNKT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "MAIT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 # print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
 dev.off()
+
+```
+
+mde_totalvi_20241008_rmIGTsample_innot_CD4CD8: MDE from new calculated totalvi_20241113_rmIGT in not_CD4CD8 cells only
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample"
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241113_not_CD4CD8_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
+
+pdf(sprintf("%s/MDE_Clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "iNKT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "MAIT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+dev.off()
+
+saveRDS(so, file = "igt1_96_notCD4CD8_20241113.Rds")
+
+
+
 
 ```
 

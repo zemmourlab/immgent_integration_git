@@ -53,6 +53,73 @@ move to unconv: 19
 
 #########
 
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315 #for R and old scvi
+module load openblas/0.3.13 #load again or error
+
+#module load python
+#source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+#cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+
+R
+options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+
+
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+```
+
 **update annotation levels**
 
 ```{r}
@@ -88,6 +155,26 @@ table(annotation_table$nonconv_tcr_recog, annotation_table$level1)
 
 write.table(x = annotation_table, file = "annotation_table_20241113.csv", row.names = T, quote = F, sep = ",")
 
+```
+
+--> update annotation_table_20241113 in seurat object --> metadata_update.Rmd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
+so = so_orig[,!so_orig$annotation_level0 %in% c("remove", "nonT")]
+prefix = "totalvi_20241006"
+umap_to_plot = "mde2_totalvi_20241006"
+
+pdf(sprintf("%s/MDE_annotationV2_202141114.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level0", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal) + NoLegend()
+DimPlot(so, reduction = umap_to_plot, group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "iNKT", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "MAIT", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+# DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+dev.off()
 ```
 
 add in mudata to calculate new MDE
@@ -169,6 +256,7 @@ cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 ```
 
 
+
 ```{python}
 # module load python
 # source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
@@ -214,6 +302,7 @@ pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 # sc.set_figure_params(figsize=(6, 6), frameon=False)
 scvi.settings.seed = 0  # optional: ensures reproducibility
+pymde.seed(0)
 #sns.set_theme()
 if torch.cuda.is_available():
     print("CUDA is available")
@@ -243,11 +332,6 @@ print(celltype)
 mdata = mdata_orig[mdata_orig.mod['RNA'].obs['annotation_level1'] == celltype] 
 mdata
 
-print("Save mde.csv")
-# mdata.obsm["X_mde"] = scvi.model.utils.mde(mdata.obsm[TOTALVI_LATENT_KEY])
-# mde_df = pd.DataFrame(mdata.obsm["X_mde"], index = mdata.mod['RNA'].obs.index)
-# mde_df.to_csv(prefix+'/mde_'+prefix+'_'+celltype+'.csv', index=True)
-
 mde = pymde.preserve_neighbors(
     mdata.obsm[TOTALVI_LATENT_KEY].values, #mdata.obsm[TOTALVI_LATENT_KEY]
     embedding_dim=2,
@@ -264,12 +348,16 @@ with open(model_pkl_file, 'wb') as file:
     pickle.dump(mde, file)
 
 # with open(model_pkl_file, 'rb') as file:  
-#     model = pickle.load(file)
+#     mde = pickle.load(file)
 
 embedding = mde.embed(verbose=True)
 mde_df = pd.DataFrame(embedding.cpu(), index = mdata.mod['RNA'].obs.index) 
 mde_df.to_csv(prefix+'/mde_'+prefix+'_in'+celltype+'.csv', index=True)
 
+print("Save mde.csv")
+# mdata.obsm["X_mde"] = scvi.model.utils.mde(mdata.obsm[TOTALVI_LATENT_KEY])
+# mde_df = pd.DataFrame(mdata.obsm["X_mde"], index = mdata.mod['RNA'].obs.index)
+# mde_df.to_csv(prefix+'/mde_'+prefix+'_'+celltype+'.csv', index=True)
 
 print("save subset mudata for CD4, CD8, not_CD4CD8")
 mdata = mdata_orig
@@ -310,10 +398,133 @@ mdata_unconv.write(working_dir+'/export_data/igt1_96_20241113_not_CD4CD8.h5mu')
 ```
 
 
-**New integration**
+**New group integration**
 
 split mdata: see above
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd4_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd8_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_not_CD4CD8_rmIGTsample.sh
+
+Anchor MDE from: https://github.com/cvxgrp/pymde/blob/main/examples/updating_an_existing_embedding.ipynb
+
+
+```{python}
+# module load python
+# source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+# batchkey = 'IGT'
+# categorical_covariate_keys = ['sample_id']
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4'
+#path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD4.h5mu'
+prefix='totalvi_20241113_CD4_rmIGTsample'
+mde_model_pkl_ref='totalvi_20241014_CD4_rmIGTsample/mde_model.pkl'
+mde_ref_file='totalvi_20241014_CD4_rmIGTsample/mde2.csv'
+totalvi_integrated_file='totalvi_20241113_CD4_rmIGTsample/latent.csv'
+
+# path_to_annotation=working_dir+'/annotation_table_20241113.csv' #annotation_level1.csv
+# prefix = 'totalvi_20241008_rmIGTsample' #prefix='totalvi_20241006'
+# celltype='CD4' #treg, CD4,CD8AB, not_CD4CD8
+
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+pymde.seed(0)
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+pymde.seed(0)
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading mudata")
+os.chdir(working_dir)
+mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+print(mdata)
+ 
+print("Reading integrated ref+query latent space")  
+totalvi_integrated = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
+
+print("anchor MDE")
+#test dataset
+# mde_ref_embedding_test = mde_ref_embedding[:5000]
+# rownames_tensor_test = rownames_tensor[:5000]
+# common_indices = totalvi_integrated.index.intersection(mde_ref_embedding_test.index)
+# other_indices = totalvi_integrated.index.difference(mde_ref_embedding_test.index)
+# random_sample_indices = np.random.choice(other_indices, size=1000, replace=False)
+# combined_indices = common_indices.union(random_sample_indices)
+# totalvi_integrated_test = totalvi_integrated.loc[combined_indices]
+
+#match mde_ref_embedding with index in totalvi_integrated
+mde_ref_embedding = pd.read_csv(mde_ref_file, index_col = 0, header = 0)
+mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(totalvi_integrated.index)] #subset cells present in the integrated space other wise mismatch between anchors and values in pymde.Anchored
+rownames = mde_ref_embedding.index.tolist()  # Convert index to list
+index_positions = [totalvi_integrated.index.get_loc(item) for item in rownames if item in totalvi_integrated.index]
+len(index_positions)
+len(mde_ref_embedding.index)
+rownames_tensor = torch.tensor(index_positions)
+
+anchor_constraint = pymde.Anchored(
+    anchors=rownames_tensor,
+    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32), #device='cpu' 'cuda:0'
+)
+
+incremental_mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+    embedding_dim=2,
+    constraint=anchor_constraint,
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True #,device = 'cpu'opp
+)
+
+# incremental_mde = pymde.preserve_neighbors(
+#     torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+#     constraint=anchor_constraint,
+#     init='random',
+#     verbose=True #,device = 'cpu'
+#     )
+    
+incremental_mde.embed(eps=1e-6, verbose=True)
+
+pymde.plot(mde_ref_embedding.values)
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_incremental_original.png")
+pymde.plot(incremental_mde.X)
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_incremental.png")
+
+model_pkl_file = prefix+'/mde_incremental_model.pkl' 
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(incremental_mde, file)
+
+incremental_mde_df = pd.DataFrame(incremental_mde.X, index = totalvi_integrated.index)
+incremental_mde_df.to_csv(prefix+'/mde_incremental.csv' , index=True)
+
+```
 

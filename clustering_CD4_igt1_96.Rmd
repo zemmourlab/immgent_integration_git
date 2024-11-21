@@ -593,4 +593,38 @@ dev.off()
 
 ```
 
+```{r}
+
+prefix = "totalvi_20241113_CD4_rmIGTsample"
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/totalvi_20241113_CD4_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241113_CD4_rmIGTsample", calculate_umap = F)
+
+pdf(sprintf("%s/MDE_Clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_totalvi_20241113_CD4_rmIGTsample", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_CD4_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241113_CD4_rmIGTsample", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
+
+```
+
+```{r}
+
+prefix = "totalvi_20241113_CD4_rmIGTsample"
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/totalvi_20241113_CD4_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+pdf(sprintf("%s/MDEincremental_Clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
+
+saveRDS(so, file = "igt1_96_CD4_20241113.Rds")
+
+
+
+```
+
 

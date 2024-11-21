@@ -1515,9 +1515,6 @@ mdata_filtered.mod["RNA"] = mdata_filtered.mod["RNA"][:, ~low_count_genes]
 
 mdata_filtered.write('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_20241006_noTCRRiboMitoLncgenes_TCRCongenicproteins.h5mu')
 
-
-
-
 ```
 
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241029.sh
@@ -1553,8 +1550,6 @@ DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T
 # DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
 dev.off()
 ```
-
-
 
 
 **Integration evaluation: conservation of HVG**
