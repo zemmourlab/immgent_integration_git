@@ -408,6 +408,7 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_not_CD4CD8_rmIGTsample.sh
 Anchor MDE from: https://github.com/cvxgrp/pymde/blob/main/examples/updating_an_existing_embedding.ipynb
 
 
+
 ```{python}
 # module load python
 # source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
