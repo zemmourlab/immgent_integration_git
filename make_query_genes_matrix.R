@@ -20,13 +20,16 @@ genes_query = rownames(so)
 cells_query = colnames(so)
 
 # make genes matrix
+sc <- readRDS("N:/CBDM_Lab/scRNAseq/ImmgenT/IGT92/dataset_clean.Rds")
+genes <- rownames(sc)
 query_df = query_df[rownames(query_df) %in% genes,]
 gene_diff = length(genes) - length(rownames(query_df))
-missing_genes = setdiff(genes, rownames(query_df))
+missing_genes <- setdiff(genes, rownames(query_df))
 
 zero_rows <- as.data.frame(matrix(0, nrow = gene_diff, ncol = length(cells_query)))
 colnames(zero_rows) <- colnames(query_df)
 rownames(zero_rows) <- missing_genes
+query_df <- as.data.frame(query_df)
 query_df_all = rbind(query_df, zero_rows)
 
 query_df_reorder = query_df_all[genes,]
