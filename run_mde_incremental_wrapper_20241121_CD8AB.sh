@@ -19,7 +19,7 @@ SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB
 path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD8AB.h5mu
 prefix=totalvi_20241113_CD8AB_rmIGTsample
-mde_ref_file=totalvi_20241113_CD8AB_rmIGTsample/mde2.csv
+mde_ref_file=totalvi_20241014_CD8AB_rmIGTsample/mde2.csv
 totalvi_integrated_file=totalvi_20241113_CD8AB_rmIGTsample/latent.csv
 
 cd $working_dir
