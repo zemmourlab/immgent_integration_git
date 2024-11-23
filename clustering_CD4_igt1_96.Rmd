@@ -584,7 +584,7 @@ table_data = table(so$annotation_level2_oct24, so$annotation_level2)
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
 so = AddLatentData(so, latent_file = sprintf("%s/mde_totalvi_20241008_rmIGTsample_inCD4.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample_inCD4", calculate_umap = F)
 
-pdf(sprintf("%s/MDE_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
+pdf(sprintf("%s/MDE_totalvi_20241008_rmIGTsample_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_inCD4", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_inCD4", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_inCD4", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)

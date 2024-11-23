@@ -407,13 +407,10 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd8_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_not_CD4CD8_rmIGTsample.sh
 
 Anchor MDE from: https://github.com/cvxgrp/pymde/blob/main/examples/updating_an_existing_embedding.ipynb
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_notCD4CD8.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_CD8AB.sh
 
-```{bash}
-
-```
-
-
-
+for CD4:
 ```{python}
 # module load python
 # source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
@@ -486,6 +483,241 @@ print("anchor MDE")
 # combined_indices = common_indices.union(random_sample_indices)
 # totalvi_integrated_test = totalvi_integrated.loc[combined_indices]
 
+#match mde_ref_embedding with index in totalvi_integrated
+mde_ref_embedding = pd.read_csv(mde_ref_file, index_col = 0, header = 0)
+mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(totalvi_integrated.index)] #subset cells present in the integrated space other wise mismatch between anchors and values in pymde.Anchored
+rownames = mde_ref_embedding.index.tolist()  # Convert index to list
+index_positions = [totalvi_integrated.index.get_loc(item) for item in rownames if item in totalvi_integrated.index]
+len(index_positions)
+len(mde_ref_embedding.index)
+rownames_tensor = torch.tensor(index_positions)
+
+anchor_constraint = pymde.Anchored(
+    anchors=rownames_tensor,
+    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32), #device='cpu' 'cuda:0'
+)
+
+incremental_mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+    embedding_dim=2,
+    constraint=anchor_constraint,
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True #,device = 'cpu'opp
+)
+
+# incremental_mde = pymde.preserve_neighbors(
+#     torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+#     constraint=anchor_constraint,
+#     init='random',
+#     verbose=True #,device = 'cpu'
+#     )
+    
+incremental_mde.embed(eps=1e-6, verbose=True)
+
+pymde.plot(mde_ref_embedding.values)
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_incremental_original.png")
+pymde.plot(incremental_mde.X)
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_incremental.png")
+
+model_pkl_file = prefix+'/mde_incremental_model.pkl' 
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(incremental_mde, file)
+
+incremental_mde_df = pd.DataFrame(incremental_mde.X, index = totalvi_integrated.index)
+incremental_mde_df.to_csv(prefix+'/mde_incremental.csv' , index=True)
+
+```
+
+TEST CD4 + 20000 subset of all other cells
+
+```{python}
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+prefix='test_mde'
+mde_ref_file='CD4/totalvi_20241014_CD4_rmIGTsample/mde2.csv'
+totalvi_integrated_file='totalvi_20241006/latent.csv'
+
+path_to_annotation=working_dir+'/annotation_table_20241113.csv' #annotation_level1.csv
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+pymde.seed(0)
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+pymde.seed(0)
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading mudata")
+os.chdir(working_dir)
+mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+print(mdata)
+
+annotationl1 = pd.read_csv(path_to_annotation, index_col = 0, header = 0)
+print(mdata.mod['RNA'].obs.index.equals(annotationl1.index)) 
+mdata.mod['RNA'].obs['annotation_level1'] = annotationl1['level0']
+mdata.mod['RNA'].obs['annotation_level1'].isna().sum()
+mdata.mod['RNA'].obs['annotation_level1'].unique()
+
+cd4_indices = np.where(mdata.mod['RNA'].obs['annotation_level1'] == 'CD4')[0]
+random_cd4_indices = np.random.choice(cd4_indices, size=30000, replace=False)
+cd4_indices = mdata.mod['RNA'].obs.index[random_cd4_indices]
+non_cd4_indices = np.where(mdata.mod['RNA'].obs['annotation_level1'] != 'CD4')[0]
+random_non_cd4_indices = np.random.choice(non_cd4_indices, size=30000, replace=False)
+random_non_cd4_indices = mdata.mod['RNA'].obs.index[random_non_cd4_indices]
+combined_indices = np.concatenate((cd4_indices, random_non_cd4_indices))
+cd4_indices.size, random_non_cd4_indices.size, combined_indices.size
+
+#subset totalvi_integrated with combined_indices only
+totalvi_integrated = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
+totalvi_integrated.index.size
+totalvi_integrated = totalvi_integrated.loc[totalvi_integrated.index.intersection(combined_indices)] 
+totalvi_integrated.index.size
+
+totalvi_integrated.to_csv(prefix+'/latent.csv' , index=True)
+
+
+mde_ref_embedding = pd.read_csv(mde_ref_file, index_col = 0, header = 0)
+mde_ref_embedding.index.size
+mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(combined_indices)] #subset cells present in the 
+mde_ref_embedding.index.size
+mde_ref_embedding.to_csv(prefix+'/mde2.csv' , index=True)
+
+
+
+#######
+rownames = mde_ref_embedding.index.tolist()  # Convert index to list
+index_positions = [totalvi_integrated.index.get_loc(item) for item in rownames if item in totalvi_integrated.index]
+len(index_positions)
+len(mde_ref_embedding.index)
+rownames_tensor = torch.tensor(index_positions)
+
+anchor_constraint = pymde.Anchored(
+    anchors=rownames_tensor,
+    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32), #device='cpu' 'cuda:0'
+)
+
+incremental_mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+    embedding_dim=2,
+    constraint=anchor_constraint,
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True #,device = 'cpu'opp
+)
+
+
+#index of all CD4 cells in mdata
+
+#subset cells in mdata: all CD4 T cells and subset of all other cells from
+
+# mde_ref_embedding_test = mde_ref_embedding[:5000]
+# rownames_tensor_test = rownames_tensor[:5000]
+# common_indices = totalvi_integrated.index.intersection(mde_ref_embedding_test.index)
+# other_indices = totalvi_integrated.index.difference(mde_ref_embedding_test.index)
+# random_sample_indices = np.random.choice(other_indices, size=1000, replace=False)
+# combined_indices = common_indices.union(random_sample_indices)
+# totalvi_integrated_test = totalvi_integrated.loc[combined_indices]
+
+```
+
+```{python}
+# module load python
+# source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
+# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
+# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
+# batchkey = 'IGT'
+# categorical_covariate_keys = ['sample_id']
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4'
+#path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD4.h5mu'
+prefix='test'
+mde_ref_file='totalvi_20241014_CD4_rmIGTsample/mde2.csv'
+totalvi_integrated_file='totalvi_20241006/latent.csv'
+
+
+# mde_ref_embedding_test = mde_ref_embedding[:5000]
+# rownames_tensor_test = rownames_tensor[:5000]
+# common_indices = totalvi_integrated.index.intersection(mde_ref_embedding_test.index)
+# other_indices = totalvi_integrated.index.difference(mde_ref_embedding_test.index)
+# random_sample_indices = np.random.choice(other_indices, size=1000, replace=False)
+# combined_indices = common_indices.union(random_sample_indices)
+# totalvi_integrated_test = totalvi_integrated.loc[combined_indices]
+
+# path_to_annotation=working_dir+'/annotation_table_20241113.csv' #annotation_level1.csv
+# prefix = 'totalvi_20241008_rmIGTsample' #prefix='totalvi_20241006'
+# celltype='CD4' #treg, CD4,CD8AB, not_CD4CD8
+
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+pymde.seed(0)
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+pymde.seed(0)
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading mudata")
+os.chdir(working_dir)
+mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+print(mdata)
+ 
+print("Reading integrated ref+query latent space")  
+totalvi_integrated = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
+
+print("anchor MDE")
 #match mde_ref_embedding with index in totalvi_integrated
 mde_ref_embedding = pd.read_csv(mde_ref_file, index_col = 0, header = 0)
 mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(totalvi_integrated.index)] #subset cells present in the integrated space other wise mismatch between anchors and values in pymde.Anchored

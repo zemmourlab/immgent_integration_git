@@ -3,12 +3,13 @@
 #author: David Zemmour
 #date: 10/08/2024
 #run_mde_incremental.py [cwd] [path to mudata .h5mu] [prefix] [mde_ref_file] [totalvi_integrated_file]
+run_mde_incremental.py [cwd] [prefix] [mde_ref_file] [totalvi_integrated_file]
 
 import warnings; warnings.simplefilter('ignore')
 import argparse
 parser = argparse.ArgumentParser(description="run TOTALVI from a MuData object specifying batch_key and categorical_covariate_keys if needed, can also return corrected counts and denoised data")
 parser.add_argument('--working_dir', help='Working directory')
-parser.add_argument('--path_to_mudata', help='Path to MuData object')
+# parser.add_argument('--path_to_mudata', help='Path to MuData object')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--mde_ref_file', default=None, help='csv file with reference MDE')
@@ -17,7 +18,7 @@ parser.add_argument('--totalvi_integrated_file', default=None, help='csv file wi
 print("Arguments")
 args = parser.parse_args()
 working_dir = args.working_dir
-path_to_mudata = args.path_to_mudata
+# path_to_mudata = args.path_to_mudata
 prefix = args.prefix
 mde_ref_file = args.mde_ref_file
 totalvi_integrated_file = args.totalvi_integrated_file
@@ -30,7 +31,7 @@ totalvi_integrated_file = args.totalvi_integrated_file
 # totalvi_integrated_file='totalvi_20241113_CD4_rmIGTsample/latent.csv'
 
 print(f"Working Directory: {working_dir}")
-print(f"Path to AnnData: {path_to_mudata}")
+# print(f"Path to AnnData: {path_to_mudata}")
 print(f"Prefix: {prefix}")
 print(f"MDE reference file: {mde_ref_file}")
 print(f"totalvi_integrated_file: {totalvi_integrated_file}")
@@ -67,10 +68,10 @@ if torch.cuda.is_available():
     print("Using device:", torch.cuda.get_device_name())
     torch.set_float32_matmul_precision("high")
 
-print("Reading mudata")
-os.chdir(working_dir)
-mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-print(mdata)
+# print("Reading mudata")
+# os.chdir(working_dir)
+# mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+# print(mdata)
  
 print("Reading integrated ref+query latent space")  
 totalvi_integrated = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
