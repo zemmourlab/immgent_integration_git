@@ -3,7 +3,7 @@
 #author: David Zemmour
 #date: 10/08/2024
 #run_mde_incremental.py [cwd] [path to mudata .h5mu] [prefix] [mde_ref_file] [totalvi_integrated_file]
-run_mde_incremental.py [cwd] [prefix] [mde_ref_file] [totalvi_integrated_file]
+# run_mde_incremental.py [cwd] [prefix] [mde_ref_file] [totalvi_integrated_file]
 
 import warnings; warnings.simplefilter('ignore')
 import argparse
