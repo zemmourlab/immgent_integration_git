@@ -17,11 +17,12 @@ source activate /project/zemmour/david/envs/scvi120_20241008
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB
-path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD8AB.h5mu
+# path_to_mudata=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD8AB.h5mu
 prefix=totalvi_20241113_CD8AB_rmIGTsample
 mde_ref_file=totalvi_20241014_CD8AB_rmIGTsample/mde2.csv
 totalvi_integrated_file=totalvi_20241113_CD8AB_rmIGTsample/latent.csv
 
 cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
+# python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --path_to_mudata=$path_to_mudata --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
