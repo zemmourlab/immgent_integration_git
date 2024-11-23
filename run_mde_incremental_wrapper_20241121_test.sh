@@ -4,12 +4,12 @@
 #SBATCH --gres=gpu:1 
 #SBATCH --mem=128GB #184GB
 #SBATCH -J mde              
-#SBATCH -o mde_incremental_20241121_CD8AB.log
+#SBATCH -o mde_incremental_20241121_test_mde.log
 #SBATCH -t 12:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_CD8AB.sh
+#run as: sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_test.sh
 
 module load python
 
