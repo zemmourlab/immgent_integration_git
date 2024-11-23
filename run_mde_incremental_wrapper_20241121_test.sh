@@ -17,7 +17,7 @@ source activate /project/zemmour/david/envs/scvi120_20241008
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/test_mde
-prefix=test_mde
+prefix=.
 mde_ref_file=mde2.csv
 totalvi_integrated_file=latent.csv
 
