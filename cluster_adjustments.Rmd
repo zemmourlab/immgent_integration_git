@@ -651,7 +651,8 @@ so = so_orig[,rownames(tmp)]
 
 so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
-pdf(sprintf("%s/MDE_clusters.pdf", "."), 20, 20, useDingbats = F)
+pdf(sprintf("%s/MDE_clusters2.pdf", "."), 20, 20, useDingbats = F)
+DimPlot(so[,so$annotation_level1 == "CD4"], reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = "green")
 DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
