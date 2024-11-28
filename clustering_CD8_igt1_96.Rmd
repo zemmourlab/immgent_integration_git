@@ -627,3 +627,26 @@ saveRDS(so, file = "igt1_96_CD8AB_20241113.Rds")
 
 ```
 
+**Kaplan's data**
+
+```{r}
+
+pdf("MDE_Kaplan.pdf", 12, 12, useDingbats = F)
+DimPlot(so[,so$IGT == "IGT46"], reduction = "mde_incremental", group.by = "sample_name_david", raster = F, raster.dpi = c(512,512), label = F) + scale_color_manual(values = mypal)
+DimPlot(so[,so$IGT == "IGT46"], reduction = "mde_incremental", group.by = "sample_name_david", raster = F, raster.dpi = c(512,512), label = F) + scale_color_manual(values = mypal) + NoLegend()
+DimPlot(so[,so$IGT == "IGT46"], reduction = "mde_incremental", group.by = "annotation_level2", split.by = "sample_name_david", raster = F, raster.dpi = c(512,512), label = F, ncol = 4) + scale_color_manual(values = mypal) + NoLegend()
+DimPlot(so[,so$IGT == "IGT46"], reduction = "mde_incremental", group.by = "annotation_level2", split.by = "condition_detailed_organ", raster = F, raster.dpi = c(512,512), label = F, ncol = 3) + scale_color_manual(values = mypal)
+DimPlot(so[,so$IGT == "IGT46"], reduction = "mde_incremental", group.by = "annotation_level2", split.by = "condition_detailed_organ", raster = F, raster.dpi = c(512,512), label = F, ncol = 3) + scale_color_manual(values = mypal) + NoLegend()
+dev.off()
+
+
+
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
+
+```
+
+
+
