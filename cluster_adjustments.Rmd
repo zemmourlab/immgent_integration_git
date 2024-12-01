@@ -39,18 +39,15 @@ unconv_cl14, 25, 37, 47                       These are the B-T ones, need a clo
 
 #########CD8#########
 
-Move to unconv: CD8_cl3_dp_barcode.csv
+Move to unconv: CD8_cl3_dp_barcode.csv --> not_CD4_CD8AB_cl51 --> abT_DP_cl51
 Move to CD4: 8
 Remove: 16 (crappy, ribo/rna, unstable)
 Merge 12+17
 
 #########CD4#########
-
-
 remove: 6 (nonT),24 (non spe binding)
 move to CD8: 11
-move to unconv: 1
-9
+move to unconv: 19
 
 #########
 
@@ -72,9 +69,9 @@ module load openblas/0.3.13
 source activate /project/zemmour/david/envs/scvi_20240315 #for R and old scvi
 module load openblas/0.3.13 #load again or error
 
-#module load python
-#source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
-#cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 
 R
 options(max.print=1000)
@@ -256,8 +253,6 @@ source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
 cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 ```
 
-
-
 ```{python}
 # module load python
 # source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
@@ -399,7 +394,7 @@ mdata_unconv.write(working_dir+'/export_data/igt1_96_20241113_not_CD4CD8.h5mu')
 ```
 
 
-**New group integration**
+**New group integration and incremental MDE**
 
 split mdata: see above
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_cd4_rmIGTsample.sh
@@ -409,127 +404,7 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241113_not_CD4CD8_rmIGTsample.sh
 Anchor MDE from: https://github.com/cvxgrp/pymde/blob/main/examples/updating_an_existing_embedding.ipynb
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_notCD4CD8.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_CD8AB.sh
-
-for CD4:
-```{python}
-# module load python
-# source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
-
-# working_dir = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/'
-# path_to_mudata = '/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/export_data/totalvi_igt1_56_20231030_allgenes_mdata.h5mu'
-# prefix = 'totalvi_igt1_56_allgenes_20240526_igtsampleregressedout'
-# batchkey = 'IGT'
-# categorical_covariate_keys = ['sample_id']
-
-working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4'
-#path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
-path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241113_CD4.h5mu'
-prefix='totalvi_20241113_CD4_rmIGTsample'
-mde_model_pkl_ref='totalvi_20241014_CD4_rmIGTsample/mde_model.pkl'
-mde_ref_file='totalvi_20241014_CD4_rmIGTsample/mde2.csv'
-totalvi_integrated_file='totalvi_20241113_CD4_rmIGTsample/latent.csv'
-
-# path_to_annotation=working_dir+'/annotation_table_20241113.csv' #annotation_level1.csv
-# prefix = 'totalvi_20241008_rmIGTsample' #prefix='totalvi_20241006'
-# celltype='CD4' #treg, CD4,CD8AB, not_CD4CD8
-
-
-print("Importing libraries")
-import warnings; warnings.simplefilter('ignore')
-import scvi
-import os
-import sys
-import scanpy as sc
-import muon as mu
-import mudata as mu
-
-import numpy as np
-import mplscience
-import matplotlib.pyplot as plt
-import pickle
-import pandas as pd
-import seaborn as sns
-import torch
-import pymde #to run MDE
-pymde.seed(0)
-
-print("Global configurations")
-pd.set_option('display.max_rows', 1000)
-pd.set_option('display.max_columns', 1000)
-# sc.set_figure_params(figsize=(6, 6), frameon=False)
-scvi.settings.seed = 0  # optional: ensures reproducibility
-pymde.seed(0)
-#sns.set_theme()
-if torch.cuda.is_available():
-    print("CUDA is available")
-    print("Using device:", torch.cuda.get_device_name())
-    torch.set_float32_matmul_precision("high")
-
-print("Reading mudata")
-os.chdir(working_dir)
-mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-print(mdata)
- 
-print("Reading integrated ref+query latent space")  
-totalvi_integrated = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
-
-print("anchor MDE")
-#test dataset
-# mde_ref_embedding_test = mde_ref_embedding[:5000]
-# rownames_tensor_test = rownames_tensor[:5000]
-# common_indices = totalvi_integrated.index.intersection(mde_ref_embedding_test.index)
-# other_indices = totalvi_integrated.index.difference(mde_ref_embedding_test.index)
-# random_sample_indices = np.random.choice(other_indices, size=1000, replace=False)
-# combined_indices = common_indices.union(random_sample_indices)
-# totalvi_integrated_test = totalvi_integrated.loc[combined_indices]
-
-#match mde_ref_embedding with index in totalvi_integrated
-mde_ref_embedding = pd.read_csv(mde_ref_file, index_col = 0, header = 0)
-mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(totalvi_integrated.index)] #subset cells present in the integrated space other wise mismatch between anchors and values in pymde.Anchored
-rownames = mde_ref_embedding.index.tolist()  # Convert index to list
-index_positions = [totalvi_integrated.index.get_loc(item) for item in rownames if item in totalvi_integrated.index]
-len(index_positions)
-len(mde_ref_embedding.index)
-rownames_tensor = torch.tensor(index_positions)
-
-anchor_constraint = pymde.Anchored(
-    anchors=rownames_tensor,
-    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32), #device='cpu' 'cuda:0'
-)
-
-incremental_mde = pymde.preserve_neighbors(
-    torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
-    embedding_dim=2,
-    constraint=anchor_constraint,
-    repulsive_fraction=0.7,
-    n_neighbors = 15,
-    verbose=True #,device = 'cpu'opp
-)
-
-# incremental_mde = pymde.preserve_neighbors(
-#     torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
-#     constraint=anchor_constraint,
-#     init='random',
-#     verbose=True #,device = 'cpu'
-#     )
-    
-incremental_mde.embed(eps=1e-6, verbose=True)
-
-pymde.plot(mde_ref_embedding.values)
-fig = plt.gcf() 
-fig.savefig(prefix+"/mde_incremental_original.png")
-pymde.plot(incremental_mde.X)
-fig = plt.gcf() 
-fig.savefig(prefix+"/mde_incremental.png")
-
-model_pkl_file = prefix+'/mde_incremental_model.pkl' 
-with open(model_pkl_file, 'wb') as file:  
-    pickle.dump(incremental_mde, file)
-
-incremental_mde_df = pd.DataFrame(incremental_mde.X, index = totalvi_integrated.index)
-incremental_mde_df.to_csv(prefix+'/mde_incremental.csv' , index=True)
-
-```
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20241121_CD4.sh
 
 TEST 30000 CD4 + 30000 all other cells
 1.subset the data
@@ -659,4 +534,100 @@ DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24",
 dev.off()
 
 ```
+
+**Split nonconv for new totalvi and update annotation table**
+--> annotation_table_20241201.csv
+
+abT_DP: unclear_cl14 --> abT_DP_cl14
+not_CD4CD8_cl51 --> abT_DP_cl51
+not_CD4CD8_cl50 --> gdT_cl50
+
+```{r}
+# setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+library(reshape2)
+library(dplyr)
+annot = read.table("annotation_table_20241113.csv", header = T, sep = ",")
+table(annot$level2)
+annot$level2[annot$level2 == "unclear_cl14"] = "abT_DP_cl14"
+annot$level1[annot$level2 == "abT_DP_cl14"] = "abT_DP"
+annot$level2[annot$level2 == "not_CD4CD8_cl51"]  = "abT_DP_cl51"
+annot$level1[annot$level2 == "abT_DP_cl51"]  = "abT_DP"
+annot$level2[annot$level2 == "not_CD4CD8_cl50"] = "gdT_cl50"
+annot$level1[annot$level2 == "gdT_cl50"] = "gdT"
+
+for (i in unique(annot$level1)) {
+    print(i)
+    print(annot %>% filter(level1 == i) %>% pull(level2) %>% unique())
+}
+
+
+annot$level0 = NULL
+write.table(x = annot, file = "annotation_table_20241201.csv", row.names = F, quote = F, sep = ",")
+
+annot_table = table(annot$level1, annot$level2) %>% as.data.frame() %>% melt() %>% filter(value != 0)
+annot_table$variable = NULL
+colnames(annot_table) = c("level1", "level2", "n_cells")
+
+write.table(x = annot_table, file = "annotation_table_history_20241201.csv", row.names = F, quote = F, sep = ",")
+
+```
+
+add in mudata to calculate new TOTALVI for each subgour of unconventional
+```{python}
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+
+mdata = mu.read(path_to_mudata) 
+
+annotationl1 = pd.read_csv(working_dir+"/annotation_table_20241201.csv", index_col = 0, header = 0)
+set(annotationl1.index) == set(mdata.mod['RNA'].obs.index)
+mdata.mod['RNA'].obs['level1'] = annotationl1['level1']
+mdata.mod['RNA'].obs['level1'].isna().sum()
+
+mdata.mod['RNA'].obs['level1'].unique()
+
+mdata_gdT = mdata[mdata.mod['RNA'].obs['level1'] == 'gdT'] 
+mdata_gdT.write(working_dir+'/export_data/igt1_96_20241201_gdT.h5mu')
+mdata_gdT
+
+mdata_abTCD8aa = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_CD8aa'] 
+mdata_abTCD8aa
+mdata_abTCD8aa.write(working_dir+'/export_data/igt1_96_20241201_abT_CD8aa.h5mu')
+
+mdata_nonconv = mdata[mdata.mod['RNA'].obs['level1'] == 'nonconv'] 
+mdata_nonconv
+mdata_nonconv.write(working_dir+'/export_data/igt1_96_20241201_nonconv.h5mu')
+
+mdata_abT_DN = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_DN'] 
+mdata_abT_DN
+mdata_abT_DN.write(working_dir+'/export_data/igt1_96_20241201_abT_DN.h5mu')
+
+
+mdata_gdT.mod['RNA'].obs['level1'].unique()
+mdata_abTCD8aa.mod['RNA'].obs['level1'].unique()
+mdata_nonconv.mod['RNA'].obs['level1'].unique()
+mdata_abT_DN.mod['RNA'].obs['level1'].unique()
+
+```
+
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_gdT_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_CD8aa_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_nonconv_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_DN_rmIGTsample.sh
+
+
 
