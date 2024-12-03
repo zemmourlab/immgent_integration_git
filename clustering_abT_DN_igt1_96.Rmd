@@ -40,7 +40,7 @@ R
 options(max.print=1000)
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
-""
+
 libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
@@ -122,6 +122,26 @@ dev.off()
 cluster_adjustments.Rmd: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_CD8aa_rmIGTsample.sh
 --> igt1_96_abT_CD8aa_20241202.Rds
 
+```{r}
+prefix = "totalvi_20241202_abT_DN_rmIGTsample"
+umap_to_plot = "mde_totalvi_20241202_abT_DN_rmIGTsample"
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241202.Rds")
+so = so_orig[,so_orig$annotation_level1 == "abT_DN"]
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN/totalvi_20241202_abT_DN_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241202_abT_DN_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241202_abT_DN_rmIGTsample", calculate_umap = F)
+
+pdf(sprintf("%s/MDE_clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column = "nonconv_tcr_recog", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$iNKT == T)), highlight_column = "iNKT", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
+dev.off()
+
+saveRDS(so, file = "igt1_96_abT_DN_20241202.Rds")
 
 ```
 

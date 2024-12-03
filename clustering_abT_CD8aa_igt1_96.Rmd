@@ -120,5 +120,54 @@ dev.off()
 cluster_adjustments.Rmd: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_CD8aa_rmIGTsample.sh
 --> igt1_96_abT_CD8aa_20241202.Rds
 
+```{r}
+prefix = "totalvi_20241202_abT_CD8aa_rmIGTsample"
+umap_to_plot = "mde_totalvi_20241202_abT_CD8aa_rmIGTsample"
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241202.Rds")
+so = so_orig[,so_orig$annotation_level1 == "abT_CD8aa"]
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa/totalvi_20241202_abT_CD8aa_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241202_abT_CD8aa_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241202_abT_CD8aa_rmIGTsample", calculate_umap = F)
+
+pdf(sprintf("%s/MDE_clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column = "nonconv_tcr_recog", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$iNKT == T)), highlight_column = "iNKT", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
+dev.off()
+
+outliers2 = names(which(so[[umap_to_plot]]@cell.embeddings[,2] < -10))
+write.table(outliers2, file = "outliers_abT_CD8aa_20241202.csv", sep = ",", quote = F, row.names = F, col.names = F)
+
+saveRDS(so, file = "igt1_96_abT_CD8aa_20241202.Rds")
+
+so1 = readRDS("igt1_96_abT_CD8aa_20241201.Rds")
+so1$outliers = colnames(so1) %in% outliers2
+MyDimPlotHighlight(seurat_object = so1, umap_to_plot = "mde_totalvi_20241201_abT_CD8aa_rmIGTsample", cells_to_highlight = outliers2, highlight_column = "outliers", pixels = c(512, 512), mycols = "red")
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241014_unconventional_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
+so$outliers = colnames(so) %in% outliers2
+DimPlot(so, reduction = "mde_totalvi_20241014_unconventional_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_totalvi_20241014_unconventional_rmIGTsample", cells_to_highlight = outliers2, highlight_column = "outliers", pixels = c(512, 512), mycols = "red", print_plot1 = T, print_plot2 = F)
+
+so1 = readRDS("igt1_96_abT_CD8aa_20241201.Rds")
+outliers1 = read.table("outliers_abT_CD8aa.csv")[,1]
+so1$outliers = colnames(so1) %in% c(outliers1,outliers2) 
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241014_unconventional_rmIGTsample"
+so1 = AddLatentData(so1, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
+MyDimPlotHighlight(seurat_object = so1, umap_to_plot = "mde_totalvi_20241014_unconventional_rmIGTsample", cells_to_highlight = names(which(so1$outliers)), highlight_column = "outliers", pixels = c(512, 512), mycols = "red", print_plot1 = T, print_plot2 = F)
+
+
+
+
+
+
+```
+
+
 
 

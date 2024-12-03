@@ -83,7 +83,7 @@ MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.em
     
 }
 
-MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column_name ="nonconv_tcr_recog", pixels = c(512, 512), mycols = "red") {
+MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column_name ="nonconv_tcr_recog", pixels = c(512, 512), mycols = "red", print_plot1 = T, print_plot2 = T) {
     so = seurat_object
     dim1 = so[[umap_to_plot]]@cell.embeddings[,1]
     dim2 = so[[umap_to_plot]]@cell.embeddings[,2]
@@ -95,8 +95,12 @@ MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20
     
     plot1 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_minimal()
     plot2 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_void() + NoLegend()
-    print(plot1)
-    print(plot2)
+    if (print_plot1 == T) {
+        print(plot1)
+    }
+    if (print_plot2 == T) {
+        print(plot2)
+    }
 }
 
 
