@@ -537,7 +537,6 @@ dev.off()
 
 **Split nonconv for new totalvi and update annotation table**
 --> annotation_table_20241201.csv
-
 abT_DP: unclear_cl14 --> abT_DP_cl14
 not_CD4CD8_cl51 --> abT_DP_cl51
 not_CD4CD8_cl50 --> gdT_cl50
@@ -628,6 +627,80 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_gdT_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_CD8aa_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_nonconv_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_DN_rmIGTsample.sh
+
+--> see clustering_unconventional_igt_1_96.Rmd
+
+**remove outliers in abT_DN and abT_CD8aa and update annotation table**
+remove outliers in abT_DN and abT_CD8aa --> annotation_table_20241202.csv
+```{r}
+# setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+library(reshape2)
+library(dplyr)
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20241201.csv", header = T, sep = ",")
+dim(annot)
+outliers1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN/outliers_abT_DN.csv", header = F, sep = ",")[,1]
+outliers2 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa/outliers_abT_CD8aa.csv", header = F, sep = ",")[,1]
+annot$level2[annot$cell_id %in% c(outliers1, outliers2)] = "remove"
+annot$level1[annot$cell_id %in% c(outliers1, outliers2)] = "remove"
+
+for (i in unique(annot$level1)) {
+    print(i)
+    print(annot %>% filter(level1 == i) %>% pull(level2) %>% unique())
+}
+
+annot$level0 = NULL
+write.table(x = annot, file = "annotation_table_20241202.csv", row.names = F, quote = F, sep = ",")
+
+annot_table = table(annot$level1, annot$level2) %>% as.data.frame() %>% melt() %>% filter(value != 0)
+annot_table$variable = NULL
+colnames(annot_table) = c("level1", "level2", "n_cells")
+
+write.table(x = annot_table, file = "annotation_table_history_20241202.csv", row.names = F, quote = F, sep = ",")
+
+```
+
+remove in mudata and rerun totalvi
+```{python}
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+
+mdata = mu.read(path_to_mudata) 
+
+annotationl1 = pd.read_csv(working_dir+"/annotation_table_20241202.csv", index_col = 0, header = 0)
+set(annotationl1.index) == set(mdata.mod['RNA'].obs.index)
+mdata.mod['RNA'].obs['level1'] = annotationl1['level1']
+mdata.mod['RNA'].obs['level1'].isna().sum()
+
+mdata.mod['RNA'].obs['level1'].unique()
+
+mdata_abTCD8aa = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_CD8aa'] 
+mdata_abTCD8aa
+mdata_abTCD8aa.write(working_dir+'/export_data/igt1_96_20241202_abT_CD8aa.h5mu')
+
+
+mdata_abT_DN = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_DN'] 
+mdata_abT_DN
+mdata_abT_DN.write(working_dir+'/export_data/igt1_96_20241202_abT_DN.h5mu')
+
+mdata_abTCD8aa.mod['RNA'].obs['level1'].unique()
+mdata_abT_DN.mod['RNA'].obs['level1'].unique()
+
+```
 
 
 

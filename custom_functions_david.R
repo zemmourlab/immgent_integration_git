@@ -83,6 +83,23 @@ MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.em
     
 }
 
+MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column_name ="nonconv_tcr_recog", pixels = c(512, 512), mycols = "red") {
+    so = seurat_object
+    dim1 = so[[umap_to_plot]]@cell.embeddings[,1]
+    dim2 = so[[umap_to_plot]]@cell.embeddings[,2]
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    # tmp[[highlight_col]] = factor(tmp[[highlight_col]])
+    tmp2 = tmp[cells_to_highlight,]
+    bkrg = ggplot(tmp) + geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels) 
+    p2 = geom_point(data = tmp2, aes(dim1, dim2, color = !!sym(highlight_column_name)),size = 1, alpha = I(1)) 
+    
+    plot1 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_minimal()
+    plot2 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_void() + NoLegend()
+    print(plot1)
+    print(plot2)
+}
+
+
 #Functions for integration_midway3.Rmd
 
 ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
@@ -342,6 +359,37 @@ removeDuplicateColumns <- function(df) {
     print(colnames(df)[!uniqueCols])
     return(dfUnique)
 }
+
+#Function to add Latent Data (UMAP, MDE, PCA..) in seurat object
+
+AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
+    totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
+    # pattern = "(IGT\\S*)_(\\d+)"
+    # rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+    colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+    #all(rownames(totalvi) == colnames(so))
+    totalvi = as.matrix(totalvi)
+    pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+    matches = grepl(pattern, rownames(totalvi))
+    if (!all(matches)) {
+        print("updating cell names in csv file, assuming same order as seurat object" )
+        #rownames(totalvi) = gsub(pattern = "(\\S*)_(\\d+)", replacement = "\\1", rownames(totalvi))
+        rownames(totalvi) = colnames(so)
+    }
+    totalvi = totalvi[colnames(so),]
+    if (all(colnames(so) == rownames(totalvi))) {
+        print("all cells ARE in the latent_file")
+        so[[prefix]] = CreateDimReducObject(embeddings = totalvi, key = prefix, assay = "RNA") #sprintf("totalvi_%s", prefix2)
+        if (calculate_umap == T) {
+            so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = prefix, n.components = 2, reduction.name = sprintf("umap_%s", prefix))
+        }
+        return(so)
+    } else {
+        print("all cells ARE NOT in the latent_file")
+        return(so)
+    }
+}
+
 
 
 

@@ -1551,57 +1551,6 @@ DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T
 dev.off()
 ```
 
-**IGT1-96 for Kaplan paper**
-here just for the plotting code.
-```{r}
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/forKaplan")
-prefix = "." #"forKaplan"
-umap_to_plot = "mde2_totalvi_20241006"
-
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
-so = so_orig
-table(so$annotation_level1)
-so = so[,!(so$annotation_level1 %in% c("nonT", "not_CD4CD8", "remove", "thymocyte", "unclear", "thymocyte)") | so$organ %in% "thymus")]
-
-so$annotation_level1[so$annotation_level1 == "nonconv"] = "unconventional"
-
-mycols = c("salmon3", "darkred", "chartreuse4", "magenta", "cadetblue4", "cornflowerblue") 
-
-mycols = c(mycols, "grey")
-
-pdf(sprintf("%s/MDE_annotation_level1.pdf", prefix), 5, 5, useDingbats = F)
-DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal) + theme_void() + NoLegend()
-# DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
-dev.off()
-
-eric_cl = read.table("igt46_eric_clusters.csv", header = T, sep = ",")
-so$eric_clusters = eric_cl$cluster_eric[match(colnames(so),eric_cl$cell_id)]
-# so$eric_clusters[is.na(so$eric_clusters)] = "immgenT"
-table(so$eric_clusters[so$IGT== "IGT46"], so$sample_name_david[so$IGT== "IGT46"])
-
-dim1 = so[[umap_to_plot]]@cell.embeddings[,1]
-dim2 = so[[umap_to_plot]]@cell.embeddings[,2]
-tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
-tmp$eric_clusters = factor(tmp$eric_clusters)
-tmp2 = tmp[!is.na(tmp$eric_clusters),]
-bkrg = ggplot(tmp) + geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = c(512, 512))
-
-pdf(sprintf("%s/MDE_eric_smaller.pdf", prefix), 5, 5, useDingbats = F)
-p2 = geom_point(data = tmp2, aes(dim1, dim2, color = eric_clusters),size = 1, alpha = I(1)) 
-bkrg+p2 + scale_color_manual(values = mycols)  + theme_minimal()
-bkrg+p2 + scale_color_manual(values = mycols) + theme_void() + NoLegend()
-
-p2 = geom_point(data = tmp2, aes(dim1, dim2, color = condition_detailed),size = 1, alpha = I(1)) 
-bkrg+p2 + scale_color_manual(values = c("magenta", "forestgreen") ) + theme_minimal()
-bkrg+p2 + scale_color_manual(values = c("magenta", "forestgreen") )   + theme_void() + NoLegend()
-dev.off()
-
-
-
-
-```
-
 
 **Integration evaluation: conservation of HVG**
 Calculate mean intracluster distances in one batch before and after integration

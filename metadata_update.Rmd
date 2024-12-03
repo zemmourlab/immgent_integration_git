@@ -149,7 +149,7 @@ table(so$annotation_level1, so$annotation_level2)
 
 ```
 
-add annotation_table_202141113.csv
+add annotation_table_20241113.csv
 ```{r}
 so$annotation_level1 = NULL
 so$annotation_level2 = NULL
@@ -164,6 +164,27 @@ so$annotation_level0 = annotl1[colnames(so),"level0"]
 so$annotation_level1 = annotl1[colnames(so),"level1"]
 so$annotation_level2 = annotl1[colnames(so),"level2"]
 so$nonconv_tcr_recog = annotl1[colnames(so),"nonconv_tcr_recog"]
+
+```
+
+add annotation_table_20241201.csv
+```{r}
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
+so$annotation_level0_20241113 = so$annotation_level0
+so$annotation_level0 = NULL
+so$annotation_level1_20241113 = so$annotation_level1
+so$annotation_level1 = NULL
+so$annotation_level2_20241113 = so$annotation_level2
+so$annotation_level2 = NULL
+
+
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20241201.csv",header = T, sep = ",", row.names = 1)
+all(rownames(annotl1) == colnames(so))
+colnames(annotl1)
+so$annotation_level1 = annotl1[colnames(so),"level1"]
+so$annotation_level2 = annotl1[colnames(so),"level2"]
+
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
 
 ```
 
@@ -337,7 +358,8 @@ DefaultAssay(so) = "ADT"
 so[['RNA']]$data = NULL
 DefaultAssay(so) = "RNA"
 so[['ADT']]$data = NULL
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
 
 ```
 
