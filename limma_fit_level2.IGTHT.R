@@ -50,7 +50,6 @@ if (!all(rownames(design) == colnames(so))) {
 }
 design = model.matrix(~ 0 + annotation_level2.IGTHT, data=design) 
 colnames(design) = gsub("annotation_level2.IGTHT", "", colnames(design))
-#cat("ncol=",ncol(design),"rank=", qr(design)$rank,"\n")
 fit = lmFit(tmm, design = design)
 saveRDS(fit, file = sprintf("%s/%s",output_dir,fit_file_name))
 message("Fit object saved to: ", fit_file_name)
