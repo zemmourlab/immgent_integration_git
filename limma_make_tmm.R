@@ -15,6 +15,7 @@ tmm_file_name = args[3]
 # path_to_wd = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4"
 # path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/igt1_96_CD4_20241113.Rds" #path to RNA: "count/outs/filtered_feature_bc_matrix/"
 
+# Validate inputs
 if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
     cat("Folder created:", output_dir, "\n")
