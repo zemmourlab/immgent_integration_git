@@ -49,8 +49,9 @@ cat("Number of genes to keep:", sum(genes_to_keep), "\n")
 count = so[["RNA"]]$counts[genes_to_keep, ]
 dge = DGEList(count)
 dge = calcNormFactors(dge)
-tmm = EList()
+tmm = new("EList")
 message("TMM normalization")
 tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
 
 saveRDS(tmm, file = tmm_file_name)
+message("Fit object saved to: ", tmm_file_name)
