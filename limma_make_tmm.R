@@ -22,6 +22,10 @@ if (!dir.exists(output_dir)) {
     cat("Folder already exists:", output_dir, "\n")
 }
 
+if (!file.exists(path_to_seurat_object)) {
+    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
+}
+
 setwd(output_dir)
 
 message("loading R libraries and custom functions")

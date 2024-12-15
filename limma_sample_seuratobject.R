@@ -18,12 +18,18 @@ so_file_name = args[3]
 # output_dir = "DGE_limma/20241214"
 # so_file_name = "igt1_96_CD4_20241113_sampled.Rds"
 
+# Validate inputs
 if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
     cat("Folder created:", output_dir, "\n")
 } else {
     cat("Folder already exists:", output_dir, "\n")
 }
+
+if (!file.exists(path_to_seurat_object)) {
+    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
+}
+
 
 setwd(output_dir)
 
