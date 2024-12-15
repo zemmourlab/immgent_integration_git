@@ -5,6 +5,9 @@
 options(max.print=1000)
 
 args = commandArgs(TRUE)
+if (length(args) < 3) {
+    stop("Usage: Rscript limma_make_tmm.R [path_to_seurat_object] [output_dir] [tmm_file_name]")
+}
 path_to_seurat_object = args[1] 
 output_dir = args[2] 
 tmm_file_name = args[3]
