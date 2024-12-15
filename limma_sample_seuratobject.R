@@ -4,7 +4,11 @@
 
 options(max.print=1000)
 
+# Parse arguments
 args = commandArgs(TRUE)
+if (length(args) < 3) {
+    stop("Usage: Rscript limma_sample_seuratobject.R [path_to_seurat_object] [output_dir] [so_file_name]")
+}
 path_to_seurat_object = args[1] 
 output_dir = args[2] 
 so_file_name = args[3] 
@@ -14,12 +18,11 @@ so_file_name = args[3]
 # output_dir = "DGE_limma/20241214"
 # so_file_name = "igt1_96_CD4_20241113_sampled.Rds"
 
-folder_path = sprintf("%s/", output_dir)
-if (!dir.exists(folder_path)) {
-    dir.create(folder_path, recursive = TRUE)
-    cat("Folder created:", folder_path, "\n")
+if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+    cat("Folder created:", output_dir, "\n")
 } else {
-    cat("Folder already exists:", folder_path, "\n")
+    cat("Folder already exists:", output_dir, "\n")
 }
 
 setwd(output_dir)
@@ -30,7 +33,10 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 
 # source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-message("loading seurat object")
+message("Loading Seurat object")
+if (!file.exists(path_to_seurat_object)) {
+    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
+}
 so_orig = readRDS(file = sprintf("%s", path_to_seurat_object))
 
 message("Sample cells so that no more than 20 cell per cluster per sample")
@@ -39,7 +45,11 @@ sampled_cells = so_orig@meta.data %>%
     group_modify(~ slice_sample(.x, n = min(20, nrow(.x)), replace = FALSE)) %>%
     ungroup() %>%
     pull(colnames)
-length(sampled_cells)
+if (length(sampled_cells) == 0) {
+    stop("No cells were sampled. Check the input Seurat object and metadata.")
+}
+cat("Number of sampled cells:", length(sampled_cells), "\n")
 write.table(sampled_cells, file = sprintf("%s/sampledcells_IGTHT_annotationlevel2.csv", "."), row.names = F, col.names = F, sep = ",", quote = F)
 so = so_orig[,sampled_cells]
 saveRDS(so, file = so_file_name)
+message("Saved sampled Seurat object to:", so_file_name)

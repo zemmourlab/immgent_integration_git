@@ -8,17 +8,15 @@ args = commandArgs(TRUE)
 path_to_seurat_object = args[1] 
 output_dir = args[2] 
 tmm_file_name = args[3]
-# prefix2 = args[4]
 
 # path_to_wd = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4"
 # path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/igt1_96_CD4_20241113.Rds" #path to RNA: "count/outs/filtered_feature_bc_matrix/"
 
-folder_path = sprintf("%s/", output_dir)
-if (!dir.exists(folder_path)) {
-    dir.create(folder_path, recursive = TRUE)
-    cat("Folder created:", folder_path, "\n")
+if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+    cat("Folder created:", output_dir, "\n")
 } else {
-    cat("Folder already exists:", folder_path, "\n")
+    cat("Folder already exists:", output_dir, "\n")
 }
 
 setwd(output_dir)
@@ -30,22 +28,25 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 # source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 message("loading seurat object")
-so_orig = readRDS(file = path_to_seurat_object)
+if (!file.exists(path_to_seurat_object)) {
+    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
+}
+so = readRDS(file = path_to_seurat_object)
 
-message("Remove TCR, mt, ribo, Gm and Rik genes and genes that are not expressed")
-tcr_genes = rownames(so)[grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")]
-gm_rik_genes = rownames(so)[grepl(x = rownames(so), pattern = "Gm|Rik$")]
-ribo_genes = rownames(so)[grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
-mt_genes = rownames(so)[grepl(x = rownames(so), pattern = "^mt-")]
-genes_not_expressed = colSums(so[["RNA"]]$counts) == 0
-genes_to_keep = !(rownames(so) %in% c(genes_not_expressed, tcr_genes, gm_rik_genes, ribo_genes, mt_genes))
-length(which(genes_to_keep))
+message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
+tcr_genes = grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
+gm_rik_genes = grepl(x = rownames(so), pattern = "Gm|Rik$")
+ribo_genes = grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")
+mt_genes = grepl(x = rownames(so), pattern = "^mt-")
+genes_not_expressed = rowSums(so[["RNA"]]$counts) == 0
+genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
+cat("Number of genes to keep:", sum(genes_to_keep), "\n")
 
 #Make tmm objet for limma
-count = so[["RNA"]]$counts
+count = so[["RNA"]]$counts[genes_to_keep, ]
 dge = DGEList(count)
 dge = calcNormFactors(dge)
-tmm = new("EList")
+tmm = EList()
 message("TMM normalization")
 tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
 
