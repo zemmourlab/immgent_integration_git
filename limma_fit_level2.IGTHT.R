@@ -30,8 +30,6 @@ if (!file.exists(path_to_tmm_object)) {
     stop("The specified TMM object file does not exist: ", path_to_tmm_object)
 }
 
-setwd(output_dir)
-
 message("loading R libraries and custom functions")
 libs = c("limma", "edgeR", "Seurat","BPCells", "dplyr", "rlang","reshape2") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
@@ -54,5 +52,5 @@ design = model.matrix(~ 0 + annotation_level2.IGTHT, data=design)
 colnames(design) = gsub("annotation_level2.IGTHT", "", colnames(design))
 #cat("ncol=",ncol(design),"rank=", qr(design)$rank,"\n")
 fit = lmFit(tmm, design = design)
-saveRDS(fit, file = fit_file_name)
+saveRDS(fit, file = sprintf("%s/%s",output_dir,fit_file_name))
 message("Fit object saved to: ", fit_file_name)

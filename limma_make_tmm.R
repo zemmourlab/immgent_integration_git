@@ -27,7 +27,7 @@ if (!file.exists(path_to_seurat_object)) {
     stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
 }
 
-setwd(output_dir)
+# setwd(output_dir)
 
 message("loading R libraries and custom functions")
 libs = c("limma", "edgeR", "Seurat","BPCells", "dplyr", "rlang","reshape2") 
@@ -36,9 +36,6 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 # source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 message("loading seurat object")
-if (!file.exists(path_to_seurat_object)) {
-    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
-}
 so = readRDS(file = path_to_seurat_object)
 
 message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
@@ -58,5 +55,5 @@ tmm = new("EList")
 message("TMM normalization")
 tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
 
-saveRDS(tmm, file = tmm_file_name)
+saveRDS(tmm, file = sprintf("%s/%s",output_dir,tmm_file_name))
 message("Tmm object saved to: ", tmm_file_name)
