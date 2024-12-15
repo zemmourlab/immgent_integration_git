@@ -14,7 +14,7 @@
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-source activate /project/zemmour/david/envs/scvi_20240315
+conda activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git

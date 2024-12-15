@@ -39,7 +39,7 @@ sampled_cells = so_orig@meta.data %>%
     group_modify(~ slice_sample(.x, n = min(20, nrow(.x)), replace = FALSE)) %>%
     ungroup() %>%
     pull(colnames)
-length(sampled_data)
+length(sampled_cells)
 write.table(sampled_cells, file = sprintf("%s/sampledcells_IGTHT_annotationlevel2.csv", "."), row.names = F, col.names = F, sep = ",", quote = F)
 so = so_orig[,sampled_cells]
 saveRDS(so, file = so_file_name)
