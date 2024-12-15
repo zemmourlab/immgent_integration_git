@@ -12,7 +12,7 @@ if (length(args) < 4) {
 path_to_seurat_object = args[1]
 path_to_tmm_object = args[2]
 output_dir = args[3] 
-tmm_file_name = args[4]
+fit_file_name = args[4]
 
 # Validate inputs
 if (!dir.exists(output_dir)) {
