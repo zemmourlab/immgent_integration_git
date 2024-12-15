@@ -705,7 +705,7 @@ mdata_abT_DN.mod['RNA'].obs['level1'].unique()
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_CD8aa_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_DN_rmIGTsample.sh
 
-**remove more outliers in abT_CD8aa and update annotation table**
+**remove more outliers in abT_CD8aa and update annotation table** WASN'T USEFUL
 remove outliers in abT_CD8aa --> annotation_table_20241203.csv
 ```{r}
 # setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")

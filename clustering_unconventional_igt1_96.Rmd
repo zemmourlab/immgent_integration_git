@@ -657,9 +657,3 @@ saveRDS(so, file = "igt1_96_notCD4CD8_20241113.Rds")
 
 **clustering V3 20241201**
 see cluster_adjustments.Rmd and clustering_gdT_igt1_96.Rmd, clustering_abT_DN_igt1_96.Rmd, clustering_abT_CD8aa_igt1_96.Rmd, clustering_nonconv_igt1_96.Rmd
-
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_gdT_rmIGTsample.sh
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_CD8aa_rmIGTsample.sh
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_nonconv_rmIGTsample.sh
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_DN_rmIGTsample.sh
-=

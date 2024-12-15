@@ -1,0 +1,1707 @@
+---
+title: "DGE_limma_CD4.Rmd"
+output: html_document
+date: "2024-12-13"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+#screen -S 0429
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=64GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+
+R
+
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("limma", "edgeR", "Seurat","BPCells", "ggplot2", "dplyr", "rlang","reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+#options(Seurat.object.assay.version = 'v5')
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+PlotsAfterIntegration = function (seurat_object = so, dim1 = so@reductions$umap@cell.embeddings[,1], dim2 = so@reductions$umap@cell.embeddings[,2], split_by = "IGT", genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res") {
+
+    so = seurat_object
+    so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    
+    alpha = 0.5
+    sample_name_colors = mypal[1:length(unique(so@meta.data[,split_by]))]
+    names(sample_name_colors) = levels(so$sample_name)
+    sample_name_colors2 = sample_name_colors
+    sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    p1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + geom_point_rast(aes(dim1, dim2, color = split_by), alpha = I(alpha), raster.dpi = 100) + theme_bw() + scale_color_manual(values = mypal)
+    print(p1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point(data = tmp, aes(dim1, dim2, color = split_by), size = 1,  alpha = alpha) 
+    
+    q = p + p2 + scale_color_manual(values = sample_name_colors)  + theme_bw() + facet_wrap(~ split_by)
+    print(q)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+        
+        p3 = p + p2  + scale_color_manual(values = c("black", "red")) + scale_alpha_manual(values = c(0.5,1))  + theme_bw() + facet_wrap(~split_by) + ggtitle(g)
+        print(p3)
+    }
+    
+
+    message("Plot 4: UMAP Clusters") 
+    for (i in colnames(so@meta.data)[grepl("cluster_key", colnames(so@meta.data))]) {
+        print(i)
+        p = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+            geom_point_rast(aes(dim1, dim2), color = so@meta.data[,i], alpha = I(alpha), raster.dpi = 100) + scale_color_manual(values = mypal) + ggtitle(i) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+        print(p + facet_wrap(~split_by))
+    }
+    
+}
+```
+
+**Functions** --> also in custom_functions_david.R
+```{r}
+GetGroups <- function(metadata, group1_filter, group2_filter, id_column) {
+    require(dplyr)
+    require(rlang)
+    # Evaluate the filter expressions within the context of metadata
+    group1 <- metadata %>% filter(!! group1_filter)
+    group2 <- metadata %>% filter(!! group2_filter)
+    
+    # Pull the specified identifier column
+    group1_ids <- group1 %>% pull(!! sym(id_column))
+    group2_ids <- group2 %>% pull(!! sym(id_column))
+    
+    # Combine groups and add group identifiers
+    group1$group <- "group1"
+    group2$group <- "group2"
+    combined_groups <- rbind(group1, group2)
+    
+    # Function to perform Chi-squared test
+    test_balanced <- function(var) {
+        obs <- table(combined_groups$group, combined_groups[[var]])
+        test <- tryCatch({
+            chisq.test(obs)
+        }, error = function(e) NA)  # Return NA on error
+        if (!is.na(test$p.value)) {
+            return(test$p.value)
+        } else {
+            return(1)  # Return non-significant p-value if test could not be performed
+        }
+    }
+    
+    # Apply test to each relevant column and suppress warnings
+    results <- suppressWarnings(
+        lapply(colnames(metadata)[!colnames(metadata) %in% c("sample_id", id_column)], test_balanced)
+    )
+    names(results) <- colnames(metadata)[!colnames(metadata) %in% c("sample_id", id_column)]
+    
+    # Check for significant results
+    if (any(na.omit(unlist(results) < 0.05))) {
+        message("WARNING: IMBALANCED GROUPS FOR:")
+        print(names(results)[which(unlist(results) < 0.05)])
+    }
+    
+    return(list(group1_ids = group1_ids, group2_ids = group2_ids, results = results))
+}
+
+CreateComparisonName <- function(group1_filter, group2_filter) {
+    require(rlang)
+    require(stringr)
+    # Convert the expressions to strings
+    group1_name <- expr_text(group1_filter)
+    group2_name <- expr_text(group2_filter)
+    
+    # Function to extract quoted substrings
+    extract_quoted_parts <- function(name) {
+        str_match_all(name, '"([^"]+)"')[[1]][,2]
+    }
+    
+    # Extract quoted parts for each group
+    group1_parts <- extract_quoted_parts(group1_name)
+    group2_parts <- extract_quoted_parts(group2_name)
+    
+    # Concatenate the extracted parts
+    group1_clean <- paste0(group1_parts, collapse = "")
+    group2_clean <- paste0(group2_parts, collapse = "")
+    
+    # Create the comparison name
+    comparison_name <- paste0(group1_clean, "_vs_", group2_clean)
+    
+    return(comparison_name)
+}
+
+CollapseDiff_limmatrend = function(l) {
+  l = lapply(l, function(x) x = data.frame(x, rownames = rownames(x)))
+
+  fc = data.frame(l[[1]][,c("rownames", "logFC")])
+  for (i in 2:length(l)) { fc = merge(x = fc, y = l[[i]][,c("rownames", "logFC")], by.x = "rownames", by.y = "rownames", all = T) }
+  
+  mean = data.frame(l[[1]][,c("rownames", "AveExpr")])
+  for (i in 2:length(l)) { mean = merge(x = mean, y = l[[i]][,c("rownames", "AveExpr")], by.x = "rownames", by.y = "rownames", all = T) }
+
+  pv = data.frame(l[[1]][,c("rownames", "P.Value")])
+  for (i in 2:length(l)) { pv = merge(x = pv, y = l[[i]][,c("rownames", "P.Value")], by.x = "rownames", by.y = "rownames", all = T) }
+
+  qcl = data.frame(l[[1]][,c("rownames", "adj.P.Val")])
+  for (i in 2:length(l)) { qcl = merge(x = qcl, y = l[[i]][,c("rownames", "adj.P.Val")], by.x = "rownames", by.y = "rownames", all = T) }
+
+  rownames(fc) = fc[,1]
+  rownames(mean) = fc[,1]
+  rownames(pv) = pv[,1]
+  rownames(qcl) = qcl[,1]
+  fc = fc[,-1]
+  mean = mean[,-1]
+  pv = pv[,-1]
+  qcl = qcl[,-1]
+  colnames(fc) = paste("logFC", names(l), sep = "_")
+  colnames(mean) = paste("AveExpr", names(l), sep = "_")
+  colnames(pv) = paste("P.Value", names(l), sep = "_")
+  colnames(qcl) = paste("adj.P.Val", names(l), sep = "_")
+  all(rownames(fc) == rownames(pv))
+  all(rownames(fc) == rownames(mean))
+  all(rownames(fc) == rownames(qcl))
+  fc[is.na(fc)] = 0
+  pv[is.na(pv)] = 1
+  qcl[is.na(qcl)] = 1
+  diff = data.frame(fc, mean, pv, qcl)
+  which(is.na(diff))
+  
+  return(diff)
+
+}
+
+#########
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc, y = pval), colour = "black", alpha = I(1), size = I(0.5)) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+VplotAddSig = function(p, vplot, y_text = 10^-100) {
+  a = length(which(vplot$fc < 1))
+  b = length(which(vplot$fc > 1))
+  c_up = length(which(vplot$fc[vplot$sig == "up"] < 1))
+  d_up = length(which(vplot$fc[vplot$sig == "up"] > 1))
+  cont_table = rbind(total = c(round(a/(a+b)*(c_up+d_up)), round(b/(a+b)*(c_up+d_up))), geneset = c(c_up, d_up))
+colnames(cont_table) = c("FC<1", "FC>1")
+  c = chisq.test(cont_table)
+  pvalsigup = c$p.value
+
+  a = length(which(vplot$fc < 1))
+  b = length(which(vplot$fc > 1))
+  c_down = length(which(vplot$fc[vplot$sig == "down"] < 1))
+  d_down = length(which(vplot$fc[vplot$sig == "down"] > 1))
+  cont_table = rbind(total = c(round(a/(a+b)*(c_down+d_down)), round(b/(a+b)*(c_down+d_down))), geneset = c(c_down, d_down))
+colnames(cont_table) = c("FC<1", "FC>1")
+  c = chisq.test(cont_table)
+  pvalsigdown = c$p.value
+
+  q = p + geom_point_rast(aes(fc,pval, color = sig), data = vplot[vplot$sig %in% c("up", "down"), ], raster.dpi = 100) + scale_color_manual(values = c("blue", "red")) + ggtitle(label = sigtoplot) + 
+    #annotate("text", label = sprintf("Expected: %s vs %s \n geneset: %s vs %s \n p = %s ", cont_table[1,1], cont_table[1,2], cont_table[2,1], cont_table[2,2], round(c$p.value, 6)), x = 1, y = 10^-6) + 
+    #annotate("text", label = sprintf("sigup: p = %s \n sigdown: p = %s", round(pvalsigup, 6), round(pvalsigdown, 6)), x = 1, y = 10^-6) +
+    annotate("text", label = sprintf("total = %s - %s \n sigup: p = %s, observed = %s - %s \n sigdown: p = %s, observed = %s - %s",a,b,round(pvalsigup, 6), c_up, d_up, round(pvalsigdown, 6), c_down, d_down), x = 1, y = y_text)
+  return(q)
+  
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+
+```
+
+```{r}
+# prefix = "totalvi_igt1_56_allgenes_Treg_20240529"
+prefix = "DGE_limma"
+prefix2 = "20241214"
+
+folder_path = sprintf("%s/%s", prefix, prefix2)
+if (!dir.exists(folder_path)) {
+  dir.create(folder_path, recursive = TRUE)
+  cat("Folder created:", folder_path, "\n")
+} else {
+  cat("Folder already exists:", folder_path, "\n")
+}
+
+```
+
+
+**Import Seurat Object**
+
+```{r}
+so = readRDS("igt1_96_CD4_20241113.Rds")
+so
+so_orig = so
+
+
+
+```
+
+**Quick diff expression with Seurat and Enhanced Volcano**
+```{r}
+so$group = paste(so$ClusterCCA_Revised_Annotation_General_predict,so$sample_type, sep = ".")
+Idents(so) = so$group
+diff = FindMarkers(so, assay = "RNA", slot = "counts", min.pct = 0, ident.1 = "Treg.DeltaFoxp3_DeltaFoxp1_PBS", ident.2 = "Treg.DeltaFoxp3")
+
+tmp = list()
+tmp[[1]] = diff
+
+#Volcano option 1
+library("EnhancedVolcano")
+pdf(sprintf("%s_%s_volcano.pdf", prefix, names(da_results)[i]), 10,10)
+p = EnhancedVolcano(diff,
+                    x = 'avg_log2FC', 
+                    y = 'p_val',
+                    lab = diff$SYMBOL,
+                    pCutoff = 0.1, 
+                    FCcutoff = 1, 
+                    drawConnectors = T,
+                    col=c("black", "black", "black", "red"),
+                    title= "Tregs in DeltaFoxp3_DeltaFoxp1 vs DeltaFoxp3",subtitle = NULL ) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+dev.off()
+
+#Volcano option 2, best
+pdf("Treg_Foxp3Foxp1DKO_vs_Foxp3KO.pdf", width = 10, height = 10, useDingbats = F)
+#for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$avg_log2FC, pval = tmp[[i]]$p_val+10^-300)
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+  sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+#}
+dev.off()
+
+pvalsig = c()
+tt2 = vplot
+tmp2 = vplot
+tmp2$geneset = tt2$SYMBOL %in% c("Foxp3", "Ctla4", "Il2ra", "Il2rb", "Tnfrsf18", "Tnfrsf4", "Tnfrsf9", "Capg", "Hopx", "Ikzf2", "Gpr83")#tt2$SYMBOL[tt2[,i]] #vplot$SYMBOL %in% tt2$SYMBOL[tt2[,i]]
+tryCatch({
+    tmp2 = tmp2[tmp2$geneset ==T,]
+    tmp2$geneset  = factor(tmp2$geneset)
+    q = p + geom_point(data  = tmp2, aes(x =fc, y = pval, color  = geneset)) + scale_colour_manual(values = c("red" ), guide = F)
+    a = length(which(tt2$fc < 1))
+    b = length(which(tt2$fc > 1))
+    c = length(which(tmp2$fc < 1))
+    d = length(which(tmp2$fc > 1))
+    cont_table = rbind(total = c(round(a/(a+b)*(c+d)), round(b/(a+b)*(c+d))),
+                       geneset = c(c, d))
+    colnames(cont_table) = c("FC<1", "FC>1")
+    c = chisq.test(cont_table)
+    pvalsig[i] = c$p.value
+    pvalcol[i] = cont_table[2,2] > cont_table[1,2]  
+    r = q + annotate("text", label = sprintf("Expected: %s vs %s \n geneset: %s vs %s \n p = %s ", cont_table[1,1], cont_table[1,2], cont_table[2,1], cont_table[2,2], round(c$p.value, 6)), x = 1, y = 10^-6) #+ ggtitle(colnames(tt2)[i]) #+ geom_text(data = tmp2, aes(fc, pval, label = ifelse(pval<0.05, as.character(SYMBOL), "")), position = "identity",size = I(3) )
+    if (pvalsig[i] < 0.05) { print(names(pvalsig)[i]) ; print(r) }
+}, error=function(e){})
+
+########
+VplotAddSig = function(p, vplot, y_text = 10^-100) {
+    if (any(vplot$sig == "up")) {
+        a = length(which(vplot$fc < 1))
+        b = length(which(vplot$fc > 1))
+        c_up = length(which(vplot$fc[vplot$sig == "up"] < 1))
+        d_up = length(which(vplot$fc[vplot$sig == "up"] > 1))
+        cont_table = rbind(total = c(round(a/(a+b)*(c_up+d_up)), round(b/(a+b)*(c_up+d_up))), geneset = c(c_up, d_up))
+        colnames(cont_table) = c("FC<1", "FC>1")
+        c = chisq.test(cont_table)
+        pvalsigup = c$p.value
+    }
+    
+    if (any(vplot$sig == "down")) {
+        a = length(which(vplot$fc < 1))
+        b = length(which(vplot$fc > 1))
+        c_down = length(which(vplot$fc[vplot$sig == "down"] < 1))
+        d_down = length(which(vplot$fc[vplot$sig == "down"] > 1))
+        cont_table = rbind(total = c(round(a/(a+b)*(c_down+d_down)), round(b/(a+b)*(c_down+d_down))), geneset = c(c_down, d_down))
+        colnames(cont_table) = c("FC<1", "FC>1")
+        c = chisq.test(cont_table)
+        pvalsigdown = c$p.value
+    }
+    
+ 
+  q = p + geom_point_rast(aes(fc,pval, color = sig), data = vplot[vplot$sig %in% c("up", "down"), ], raster.dpi = 100) + scale_color_manual(values = c("blue", "red")) + ggtitle(label = sigtoplot) + 
+    #annotate("text", label = sprintf("Expected: %s vs %s \n geneset: %s vs %s \n p = %s ", cont_table[1,1], cont_table[1,2], cont_table[2,1], cont_table[2,2], round(c$p.value, 6)), x = 1, y = 10^-6) + 
+    #annotate("text", label = sprintf("sigup: p = %s \n sigdown: p = %s", round(pvalsigup, 6), round(pvalsigdown, 6)), x = 1, y = 10^-6) +
+    annotate("text", label = sprintf("total = %s - %s \n sigup: p = %s, observed = %s - %s \n sigdown: p = %s, observed = %s - %s",a,b,round(pvalsigup, 6), c_up, d_up, round(pvalsigdown, 6), c_down, d_down), x = 1, y = y_text)
+  return(q)
+  
+}
+
+#colnames(ttl$log2FC)
+i = "HDlikeTreg_vs_DysregulatedTregInIPEX"
+
+genes_to_plot = c("Foxp3", "Ctla4", "Il2ra", "Il2rb", "Tnfrsf18", "Tnfrsf4", "Capg", "Hopx")
+vplot$sig = NA
+vplot$sig[vplot$SYMBOL %in% genes_to_plot ] = "up"
+
+pdf("Volcano_HDlikeTreg_vs_DysregulatedTregInIPEX_tregsig.pdf", width = 8, height = 7)
+
+#vplot = data.frame(SYMBOL = ttl$SYMBOL, fc = 2^ttl$log2FC[,i], pval = ttl$adj.P.Val[,i]+10^-50, log2AveExpr = ttl$log2AveExpr[,i])
+sigtoplot = "treg"
+vplot$sig = NA
+vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+#vplot = vplot[vplot$log2AveExpr > log2(27),]
+#dim(vplot)
+
+p = Vplot(vplot = vplot, xlab = i, xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+library(ggrepel)
+q = VplotAddSig(p, vplot,y_text = 10^-30 )
+p + guides(color = F)
+q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+q + guides(color = F)
+q = p + geom_text_repel(data = vplot[vplot$SYMBOL %in% genes_to_plot & vplot$sig %in% c("up","down"),], aes(x = fc, y = pval, label = SYMBOL))
+q + guides(color = F)
+dev.off()
+
+
+
+
+######
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+
+
+
+```
+
+**Differential expression with limma-trend following Soneston et al. (pseudo-bulk)**
+
+**Create and save TMM for loading**
+-->totalvi_igt1_56_allgenes_Treg_20240529_tmm.Rds
+```{r}
+# tmm = readRDS(sprintf("%s/totalvi_igt1_56_allgenes_Treg_20240529_tmm.Rds",prefix))
+
+#Sample cells so that no more than 20 cell per cluster per sample
+sampled_cells = so_orig@meta.data %>%
+  group_by(IGTHT, annotation_level2) %>%
+  group_modify(~ slice_sample(.x, n = min(20, nrow(.x)), replace = FALSE)) %>%
+  ungroup() %>%
+  pull(colnames)
+length(sampled_data)
+so = so_orig[,sampled_cells]
+# write.table(sampled_cells, file = sprintf("%s/%s/IGTHT_annotationlevel2_sampledcells.csv", prefix, prefix2), row.names = F, col.names = F, sep = ",", quote = F)
+
+#if want to remove TCR, mt, ribo, Gm and Rik genes: use this
+tcr_genes = rownames(so)[grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")]
+gm_rik_genes = rownames(so)[grepl(x = rownames(so), pattern = "Gm|Rik$")]
+ribo_genes = rownames(so)[grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
+mt_genes = rownames(so)[grepl(x = rownames(so), pattern = "^mt-")]
+genes_not_expressed = colSums(so[["RNA"]]$counts) == 0
+genes_to_keep = !(rownames(so) %in% c(genes_not_expressed, tcr_genes, gm_rik_genes, ribo_genes, mt_genes))
+length(which(genes_to_keep))
+
+#Make tmm objet for limma
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(edgeR))
+count = so[["RNA"]]$counts
+
+dge = DGEList(count)
+dge = calcNormFactors(dge)
+tmm = new("EList")
+message("TMM normalization")
+tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
+saveRDS(tmm, file = sprintf("%s/%s/igt1_96_CD4_20241113_sampled_tmm.Rds", prefix, prefix2))
+
+```
+
+**Building the design matrix and model**
+~ 0 + annotation_level2.IGTHT: linear model with cluster and variable. Each coefficient calculated for annotation_level2.IGTHT
+And combine annotation_level2.IGTHT as needed to make the comparisons.
+-->igt1_96_CD4_20241113_sampled_fit_onannotation_level2.IGTHT.Rds
+```{r}
+design = data.frame(so@meta.data[,c("annotation_level2","IGTHT")]) 
+design$annotation_level2.IGTHT = paste(design$annotation_level2, design$IGTHT, sep = ".")
+all(rownames(design) == colnames(so))
+design = model.matrix(~ 0 + annotation_level2.IGTHT, data=design) 
+colnames(design) = gsub("annotation_level2.IGTHT", "", colnames(design))
+#cat("ncol=",ncol(design),"rank=", qr(design)$rank,"\n")
+fit = lmFit(tmm, design = design)
+saveRDS(fit, file = sprintf("igt1_96_CD4_20241113_sampled_fit_onannotation_level2.IGTHT.Rds", prefix, prefix2))
+
+# saveRDS(fit, file = sprintf("%s/%s_fit.Rds", prefix, prefix2))
+
+```
+
+```{r}
+# Custom group comparisons example
+library(readxl)
+comparisons <- read_xlsx(sprintf("%s_Group_comparisons.xlsx", subgroup))
+comparisons[,1]
+comparisons[,2]
+comparisons[,3]
+group_index <- c(which(!is.na(comparisons[,1])), (length(rownames(comparisons)) + 1 ))
+gp1_index <- c(group_index[1], group_index[2] -1)
+comparisons_custom <- comparisons[gp1_index[1]:gp1_index[2],]
+custom_clusters <- c()
+for (i in gp1_index[1]:gp1_index[2]) {
+    if (grepl(",", comparisons[i,2][[1]])) {
+        cl_1 <- strsplit(as.character(comparisons[i,2]), ", ")[[1]]
+    } 
+    else {
+        cl_1 <- comparisons[i,2][[1]]
+    }
+    
+    if (grepl(",", comparisons[i,3][[1]])) {
+        cl_2 <- strsplit(as.character(comparisons[i,3]), ", ")[[1]]
+    } 
+    else {
+        cl_2 <- comparisons[i,3][[1]]
+    }
+    
+    custom_clusters <- c(custom_clusters, cl_1, cl_2)
+    custom_clusters <- unique(custom_clusters)
+}
+
+
+
+gp2_index <- c(group_index[2], group_index[3] -1)
+comparisons_resting <- comparisons[gp2_index[1]:gp2_index[2],]
+resting_clusters <- c()
+for (i in gp2_index[1]:gp2_index[2]) {
+    if (grepl(",", comparisons[i,2][[1]])) {
+        cl_1 <- strsplit(as.character(comparisons[i,2]), ", ")[[1]]
+    } 
+    else {
+        cl_1 <- comparisons[i,2][[1]]
+    }
+    
+    if (grepl(",", comparisons[i,3][[1]])) {
+        cl_2 <- strsplit(as.character(comparisons[i,3]), ", ")[[1]]
+    } 
+    else {
+        cl_2 <- comparisons[i,3][[1]]
+    }
+    
+    resting_clusters <- c(resting_clusters, cl_1, cl_2)
+    resting_clusters <- unique(resting_clusters)
+}
+
+gp3_index <- c(group_index[3], group_index[4] -1)
+comparisons_activated <- comparisons[gp3_index[1]:gp3_index[2],]
+activated_clusters <- c()
+for (i in gp3_index[1]:gp3_index[2]) {
+    if (grepl(",", comparisons[i,2][[1]])) {
+        cl_1 <- strsplit(as.character(comparisons[i,2]), ", ")[[1]]
+    } 
+    else {
+        cl_1 <- comparisons[i,2][[1]]
+    }
+    
+    if (grepl(",", comparisons[i,3][[1]])) {
+        cl_2 <- strsplit(as.character(comparisons[i,3]), ", ")[[1]]
+    } 
+    else {
+        cl_2 <- comparisons[i,3][[1]]
+    }
+    
+    activated_clusters <- c(activated_clusters, cl_1, cl_2)
+    activated_clusters <- unique(activated_clusters)
+}
+
+gp4_index <- c(group_index[4], group_index[5] - 1)
+comparisons_resting_activated <- comparisons[gp4_index[1]:gp4_index[2],]
+resting_activated_clusters <- c()
+for (i in gp4_index[1]:gp4_index[2]) {
+    if (grepl(",", comparisons[i,2][[1]])) {
+        cl_1 <- strsplit(as.character(comparisons[i,2]), ", ")[[1]]
+    } 
+    else {
+        cl_1 <- comparisons[i,2][[1]]
+    }
+    
+    if (grepl(",", comparisons[i,3][[1]])) {
+        cl_2 <- strsplit(as.character(comparisons[i,3]), ", ")[[1]]
+    } 
+    else {
+        cl_2 <- comparisons[i,3][[1]]
+    }
+    
+    resting_activated__clusters <- c(resting_activated_clusters, cl_1, cl_2)
+    resting_activated_clusters <- unique(resting_activated_clusters)
+}
+
+
+
+gp5_index <- c(group_index[5], group_index[6] -1 )
+comparisons_one_v_all <- comparisons[gp5_index[1]:gp5_index[2],]
+one_v_all_clusters <- c()
+for (i in gp5_index[1]:gp5_index[2]) {
+    if (grepl(",", comparisons[i,2][[1]])) {
+        cl_1 <- strsplit(as.character(comparisons[i,2]), ", ")[[1]]
+    } 
+    else {
+        cl_1 <- comparisons[i,2][[1]]
+    }
+    
+    if (grepl(",", comparisons[i,3][[1]])) {
+        cl_2 <- strsplit(as.character(comparisons[i,3]), ", ")[[1]]
+    } 
+    else {
+        cl_2 <- comparisons[i,3][[1]]
+    }
+    
+    one_v_all_clusters <- c(one_v_all_clusters, cl_1, cl_2)
+    one_v_all_clusters <- unique(one_v_all_clusters)
+}
+
+list_of_comparisons <- c()
+list_of_comparisons <- list(comparisons_custom, comparisons_resting, comparisons_activated, comparisons_resting_activated, comparisons_one_v_all)
+list_of_clusters <- list(custom_clusters, resting_clusters, activated_clusters, resting_activated_clusters, one_v_all_clusters)
+
+```
+
+Each cl vs all the others
+```{r}
+fit = readRDS("igt1_96_CD4_20241113_sampled_fit_onannotation_level2.IGTHT.Rds")
+design = fit$design
+
+metadata = data.frame(so@meta.data[,c("annotation_level2","IGTHT")])
+metadata$annotation_level2.IGTHT = paste(metadata$annotation_level2, metadata$IGTHT, sep = ".")
+metadata = metadata %>% unique()
+dim(metadata)
+rownames(metadata) = metadata$annotation_level2.IGTHT
+
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$annotation_level2)) {
+    group1_filter <- expr(annotation_level2 == cl & condition_broad == "healthy")
+    group2_filter <- expr(!(annotation_level2 %in% cl) & condition_broad == "healthy")
+    groups = GetGroups(metadata, group1_filter,group2_filter, "Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")
+    nmecontrast = sprintf("%s_vs_AllOthersInHealthy", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    gene_symbol = rownames(so[["RNA"]]$counts)
+}
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list_1 = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list_1
+names(tmp)
+
+pdf(sprintf("%s/%s/DiffExpression_volcano1.pdf", prefix, prefix2), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+
+tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+
+
+
+########
+
+
+group1 = metadata %>% filter(Cluster_totalvi20240525rmigtsample_Res0.5 == "cl1" & condition_broad == "healthy") # &\ %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = metadata %>% filter(Cluster_totalvi20240525rmigtsample_Res0.5 == "cl1" & condition_broad == "virus") #%>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group1$group = "group1"
+group2$group = "group2"
+combined_groups = rbind(group1, group2)
+results = lapply(colnames(metadata)[!colnames(metadata) %in% c("sample_id","Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")], test_balanced)  %>% unlist() %>% suppressWarnings()
+names(results) = colnames(metadata)[!colnames(metadata) %in% c("sample_id","Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")]
+if (any(na.omit(results<0.05))) {
+    message("WARNING: IMBALANCED GROUPS FOR:")
+    results[which(results<0.05)]
+}
+group1 = group1 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = group2 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+
+contrasts = c()
+namescontrasts = c()
+i = 1
+group1 = group1 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = group2 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+contrasts[i] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+namescontrasts[i] = "cl1InHealthy_vs_cl2InHealthy"
+names(contrasts) = namescontrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+
+```
+
+
+Each cl vs all the others in Healthy
+```{r}
+fit = readRDS("igt1_96_CD4_20241113_sampled_fit_onannotation_level2.IGTHT.Rds")
+design = fit$design
+
+metadata = data.frame(so@meta.data[,c("Cluster_totalvi20240525rmigtsample_Res0.5","organ_simplified","condition_broad", "condition_detailed", "sex", "IGT", "sample_id")])
+metadata$Cluster_totalvi20240525rmigtsample_Res0.5.sample_id = paste(metadata$Cluster_totalvi20240525rmigtsample_Res0.5, metadata$sample_id, sep = ".")
+metadata = metadata %>% unique()
+dim(metadata)
+rownames(metadata) = metadata$Cluster_totalvi20240525rmigtsample_Res0.5.sample_id
+
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$Cluster_totalvi20240525rmigtsample_Res0.5)) {
+    group1_filter <- expr(Cluster_totalvi20240525rmigtsample_Res0.5 == cl & condition_broad == "healthy")
+    group2_filter <- expr(!(Cluster_totalvi20240525rmigtsample_Res0.5 %in% cl) & condition_broad == "healthy")
+    groups = GetGroups(metadata, group1_filter,group2_filter, "Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")
+    nmecontrast = sprintf("%s_vs_AllOthersInHealthy", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    gene_symbol = rownames(so[["RNA"]]$counts)
+}
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list_1 = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list_1
+names(tmp)
+
+pdf(sprintf("%s/%s/DiffExpression_volcano1.pdf", prefix, prefix2), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+
+tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+
+
+
+########
+
+
+group1 = metadata %>% filter(Cluster_totalvi20240525rmigtsample_Res0.5 == "cl1" & condition_broad == "healthy") # &\ %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = metadata %>% filter(Cluster_totalvi20240525rmigtsample_Res0.5 == "cl1" & condition_broad == "virus") #%>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group1$group = "group1"
+group2$group = "group2"
+combined_groups = rbind(group1, group2)
+results = lapply(colnames(metadata)[!colnames(metadata) %in% c("sample_id","Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")], test_balanced)  %>% unlist() %>% suppressWarnings()
+names(results) = colnames(metadata)[!colnames(metadata) %in% c("sample_id","Cluster_totalvi20240525rmigtsample_Res0.5.sample_id")]
+if (any(na.omit(results<0.05))) {
+    message("WARNING: IMBALANCED GROUPS FOR:")
+    results[which(results<0.05)]
+}
+group1 = group1 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = group2 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+
+contrasts = c()
+namescontrasts = c()
+i = 1
+group1 = group1 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+group2 = group2 %>% pull(Cluster_totalvi20240525rmigtsample_Res0.5.sample_id)
+contrasts[i] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+namescontrasts[i] = "cl1InHealthy_vs_cl2InHealthy"
+names(contrasts) = namescontrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+
+```
+
+Each cl vs all the others in each Organ, Healthy
+```{r}
+fit = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_idConcat.Rds")
+design = fit$design
+
+metadata = data.frame(so@meta.data[,c("Cluster_totalvi20240525rmigtsample_Res0.5","organ_simplified","condition_broad", "condition_detailed", "sex", "IGT", "sample_id")])
+metadata$Cluster_totalvi20240525rmigtsample_Res0.5.sample_id = paste(metadata$Cluster_totalvi20240525rmigtsample_Res0.5, metadata$sample_id, sep = ".")
+metadata = metadata %>% unique()
+dim(metadata)
+rownames(metadata) = metadata$Cluster_totalvi20240525rmigtsample_Res0.5.sample_id
+metadata$organ_simplified = make.names(metadata$organ_simplified) %>% as.factor()
+
+t = table(metadata$organ_simplified, metadata$condition_broad)
+meta
+
+#organs = metadata %>% filter(condition_broad == "healthy") %>% pull(organ_simplified) %>% unique() %>% as.character() #some organs not at healthy so it doesn't work...
+
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$Cluster_totalvi20240525rmigtsample_Res0.5)) {
+    for (org in levels(metadata$organ_simplified)) {
+        print(sprintf("%s %s", cl, org))
+        group1_filter <- expr(Cluster_totalvi20240525rmigtsample_Res0.5 == cl & condition_broad == "healthy" & organ_simplified == org)
+        group2_filter <- expr(!(Cluster_totalvi20240525rmigtsample_Res0.5 %in% cl) & condition_broad == "healthy" & organ_simplified == org)
+        groups = tryCatch(GetGroups(metadata, group1_filter,group2_filter, "Cluster_totalvi20240525rmigtsample_Res0.5.sample_id"), error = function (e) {NULL})
+        if (!is.null(groups)) {
+            nmecontrast = sprintf("%s_vs_AllOthersInHealthy%s", cl, org)
+            # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+            
+            # contrasts = c()
+            # namescontrasts = c()
+            # # i = 1
+            group1 = groups[[1]]
+            group2 = groups[[2]]
+            contrasts[sprintf("%s.%s",cl,org)] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+            namescontrasts[sprintf("%s.%s",cl,org)] = nmecontrast
+            # names(contrasts) = namescontrasts
+            gene_symbol = rownames(so[["RNA"]]$counts)
+        }
+    }
+}
+
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tt_list_2 = tt_list
+tmp = tt_list_2
+names(tmp)
+
+pdf(sprintf("%s/%s/DiffExpression_volcano2.pdf", prefix, prefix2), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+
+tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+```
+
+clXsignature in each organ vs clXsignatureinALL !!
+Tissue signature vs spleen
+Tissue signature vs spleen in cl1 only, cl2 only etc --> should show differences in microenvironment if thery exist in a specific microenvironment
+(Tissue signature vs spleen removing the cluster effect: might need a new fit here, too complicated with the current one: ~ organ + cluster, ref is spleen healthy cl1)
+
+
+(QUESTION : Each Tregs Cluster_totalvi_20240525_rmigtsample_Res0.5 vs all others, only in healthy tissues, independently of sample_id) WRONG but gives an idea of what I tried
+```{r}
+fit = readRDS("totalvi_igt1_56_allgenes_Treg_20240529_fit_onCluster_totalvi20240525rmigtsample_Res0.5Sample_idConcat.Rds")
+design = fit$design
+colnames(design)
+
+contrast_matrix = makeContrasts(
+    Cl1vsOthers = Intercept - (cl2 + cl3 + cl4 + cl5+cl6+cl7+cl8+cl9)/8,  # Adjust the denominator based on the actual number of clusters minus 1
+    levels = colnames(design)
+)
+
+contrast_matrix = makeContrasts(
+    Cl2ColonvsCl3Colon = cl2colon - cl3colon,  # Adjust the denominator based on the actual number of clusters minus 1
+    levels = colnames(design)
+)
+
+contrast_fit = contrasts.fit(fit, contrast_matrix)
+contrast_fit = eBayes(contrast_fit, trend = TRUE, robust = TRUE)
+t = topTable(contrast_fit,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+t %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 10) 
+
+contrast_matrix <- makeContrasts(
+    # Adjust this formula based on the actual representation in your model matrix
+    Cl1BaselineVsOthersBaseline = (Intercept + Intercept:Intercept) - (Intercept * (sum(cl2+cl3+cl4+cl5+cl6+cl7+cl8+cl9) / 8)),
+    levels = design
+)
+
+t %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 50) 
+
+
+#######
+
+cl = so$Cluster_totalvi20240525rmigtsample_Res0.5
+cl = levels(cl)
+
+subsamples = so$sample_id[!so$condition_broad %in% c("healthy")] %>% unique()
+
+group = paste(cl, subsamples, sep = ".")
+group = group[group %in% colnames(design)] # filter to only existing groups
+length(group)
+colnames(design)[colnames(design) %in% group]
+colnames(design)[!colnames(design) %in% group]
+
+# group = paste(so$Cluster_totalvi20240525rmigtsample_Res0.5, so$sample_id, sep = ".")
+# group[!so$condition_broad %in% c("healthy")] = "notincluded"
+# unique(group)
+# group = factor(group)
+# group = levels(group)
+# group = group[group != "notincluded"]
+# length(group)
+
+#group[grepl(sprintf("%s\\.",cl[1]), group)]
+contrasts = c()
+for (i in 1:length(cl)) {
+    print(i)
+    group1 = group[grepl(sprintf("%s\\.",cl[i]), group)]
+    group2 = group[!grepl(sprintf("%s\\.",cl[i]), group)]
+    any(group1 %in% group2)
+    contrasts[i] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+}
+# contrasts = sapply(x, FUN = function(i) sprintf("(%s)/%s-(%s)/%s", paste(x[grepl("cl1\\.", i)], collapse = "+"), length(i[grepl("cl1\\.", i)]), paste(i[!grepl("cl1\\.", i)], collapse = "+"), length(i[!grepl("cl1\\.", i)])))
+namescontrasts = paste(cl, "_vs_OtherClustersinHealthy2", sep = "")
+names(contrasts) = namescontrasts
+cont.matrix = makeContrasts( contrasts = contrasts, levels = model)
+colnames(cont.matrix) = names(contrasts)
+#contrasts
+gene_symbol = rownames(so[["RNA"]]$counts)
+
+fit2 = contrasts.fit(fit, cont.matrix)
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tt_list_2 = tt_list
+tmp = tt_list
+names(tmp)
+
+pdf(sprintf("%s_DiffExpression_volcano2.pdf", prefix), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+  print(i)
+  vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+  p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+  sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+  sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+  sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+  #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+  library(ggrepel)
+  print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+  print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+
+```
+
+
+Merge and save tt_list
+```{r}
+tt_list = readRDS(sprintf("%s/%s/ttlist_20240615.Rds", prefix, prefix2))
+tt_list = c(tt_list_1, tt_list_2)
+saveRDS(tt_list, file = sprintf("%s/%s/ttlist_20240615.Rds", prefix, prefix2))
+```
+
+Collapse tt_list
+```{r}
+tt_list = readRDS(sprintf("%s/%s/ttlist_20240615.Rds", prefix, prefix2))
+tt = CollapseDiff_limmatrend(tt_list)
+#rownames(tt) = do.call(rbind,strsplit(rownames(tt), split = "_"))[,2]
+tt$SYMBOL = rownames(tt)#fData(cds2)$SYMBOL[match(rownames(tt), rownames(cds2))]
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+#tt[tt$SYMBOL == "FOXP3",]
+
+write.table(x = tt, file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t", quote = F)
+#tt = read.table(file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t")
+
+```
+
+Make and export Gene signatures
+```{r}
+tt2 = read.table(file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t")
+ttl = list(log2FC = tt2[,grepl("log2FC", colnames(tt2))],
+           log2AveExpr = tt2[,grepl("log2AveExpr", colnames(tt2))],
+           P.Value = tt2[,grepl("P.Value", colnames(tt2))],
+           adj.P.Val = tt2[,grepl("adj.P.Val", colnames(tt2))],
+           AveExpr = tt2[,grepl("^AveExpr", colnames(tt2))], 
+           StdDev = tt2[,grepl("StdDev", colnames(tt2))], 
+           CIMean = tt2[,grepl("CIMean", colnames(tt2))])
+#ttl = lapply(ttl, function(x) cbind(SYMBOL = tt2$SYMBOL, x))
+ttl$SYMBOL = tt2$SYMBOL
+#colnames = gsub(pattern = "^AveExpr_", replacement = "", colnames(ttl$AveExpr))
+for (i in 1:2) { print(colnames(ttl[[i]])) }
+for (i in 1:6) {
+  colnames(ttl[[i]]) = gsub(pattern = "^log2FC_|^log2AveExpr_|^P.Value_|^adj.P.Val_|^AveExpr_|^StdDev_|^CIMean_", replacement = "", colnames(ttl[[i]]))
+}
+
+ttl$log2FC["Foxp3",ttl$adj.P.Val["Foxp3",] < 0.05]
+ttl$log2FC["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
+ttl$adj.P.Val["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
+
+th = 0.5
+
+# gene_list = list()
+# for (j in colnames(ttl$log2FC)) {
+#     gene_ord = ttl$SYMBOL[order(abs(ttl$log2FC[j]), decreasing=T)]
+#     gene_list[[sprintf("%s_up", j)]] = gene_ord[gene_ord %in% as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] > th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
+#     gene_list[[sprintf("%s_down", j)]] = gene_ord[gene_ord %in%as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] < -th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
+# }
+# which(unlist(lapply(gene_list, function(x) any(x %in% "Ccr7"))))
+# lapply(gene_list, length)
+
+gene_list = list()
+for (j in colnames(ttl$log2FC)) {
+    gene_ord = ttl$SYMBOL[order(abs(ttl$log2FC[j]), decreasing=T)]
+    up = gene_ord[gene_ord %in% as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] > th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
+    down = gene_ord[gene_ord %in%as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] < -th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
+    gene_list[[sprintf("%s_up", j)]] = data.frame(SYMBOL = up, log2FC = ttl$log2FC[j][up,], P.Value = ttl$P.Value[j][up,], adj.P.Val = ttl$adj.P.Val[j][up,])
+    gene_list[[sprintf("%s_down", j)]] = data.frame(SYMBOL = down, log2FC = ttl$log2FC[j][down,], P.Value = ttl$P.Value[j][down,], adj.P.Val = ttl$adj.P.Val[j][down,])
+}
+
+which(unlist(lapply(gene_list, function(x) any(x$SYMBOL %in% "Ccr7"))))
+lapply(gene_list, dim)
+
+#gene_list_original = gene_list
+
+#dir.create("DiffExpression_signatures")
+for (i in 1:length(gene_list)) {
+    print(i)
+    write.table(gene_list[[i]], sprintf("%s/%s/DiffExpression_signatures/%s.csv", prefix, prefix2, names(gene_list)[i]), sep = ",", quote = F, row.names = F, col.names = T)
+    # write.table(gene_list[[i]], sprintf("./DiffExpression_signatures/%s.txt", names(gene_list)[i]), sep = "\t", quote = F, row.names = F, col.names = F)
+}
+
+unique(so$clustersCCA7RenamedSplit)
+ttl$log2FC["Tbx21",grepl("InHD$", colnames(ttl$log2FC))]
+ttl$log2FC["RORC",grepl("InHD$", colnames(ttl$log2FC))]
+ttl$log2FC["GATA3",grepl("InHD$", colnames(ttl$log2FC))]
+
+```
+
+(Heatmap with all data and all signatures: not used in this analyis)
+```{r}
+gene_list = gene_list_original[grepl("vs_OtherClustersInHD|_vs_HD",names(gene_list))]
+gene_list = gene_list_original[grepl("vs_OtherClustersInHD",names(gene_list))]
+gene_list = gene_list[as.numeric(unlist(sapply(paste(levels(so$ClusterRPCA_Revised),"_", sep = ""), function(x) grep(x, names(gene_list)))))]
+gene_list = c(gene_list, gene_list_original[grepl("_vs_HD",names(gene_list_original))])
+names(gene_list)
+sub = as.character(unique(unlist(gene_list)))
+tmp = ttl$AveExpr[match(sub, ttl$SYMBOL),]
+rownames(tmp) = ttl$SYMBOL[match(sub, ttl$SYMBOL)]
+colnames(tmp)
+ord0 =  c(unique(so$patient[so$sample_type == "IPEX"]), unique(so$patient[so$sample_type == "HD"]), unique(so$patient[so$sample_type == "Het"]), unique(so$patient[so$sample_type == "postHSCT"]))
+ord = c(sapply(levels(so$ClusterRPCA_Revised), function(x) paste(x, ord0, sep = "_")))
+tmp = tmp[,ord] #as.numeric(unlist(sapply(ord, function(x) grep(x, colnames(tmp)))))
+colnames(tmp)
+meta_row = do.call(cbind, lapply(gene_list, function(x) rownames(tmp) %in% x))
+rownames(meta_row) = rownames(tmp)
+meta_row[,grepl("_up", colnames(meta_row))][meta_row[,grepl("_up", colnames(meta_row))] == T] = 1
+meta_row[,grepl("_down", colnames(meta_row))][meta_row[,grepl("_down", colnames(meta_row))] == T] = -1
+unique(gsub("_up|_down", "", colnames(meta_row)))
+meta_row = data.frame(meta_row)
+sigs = unique(gsub("_up|_down", "", colnames(meta_row)))
+meta_row = sapply(sigs, FUN = function(x) {
+  meta_row[,x] = rowSums(meta_row[,grep(paste(x, "_", sep = ""), colnames(meta_row))])
+})
+meta_row = data.frame(meta_row)
+meta_row[meta_row == "1"] = "up"
+meta_row[meta_row == "-1"] = "down"
+meta_row[meta_row == "0"] = "NA"
+annotation_colors = lapply(sigs, function(x) x = c(up = "red", down = "blue", "NA" = "white"))
+names(annotation_colors) = sigs
+#meta_row = meta_row[,c(1:11, 75:102)]
+#meta_row = meta_row[,as.numeric(sapply(levels(so$ClusterRPCA_Revised), function(x) grep(x, colnames(meta_row))))]
+
+meta_col = data.frame(clusters = do.call(rbind, strsplit(colnames(tmp), "_"))[,1], sample_name = do.call(rbind, strsplit(colnames(tmp), "_"))[,2])
+meta_col$sample_type = so$sample_type[match(meta_col$sample_name,so$patient)]
+rownames(meta_col) = colnames(tmp)
+annotation_colors[["clusters"]] = mypal[1:length(unique(meta_col$clusters))]
+names(annotation_colors[["clusters"]]) = unique(meta_col$clusters)
+annotation_colors[["sample_name"]] = mypal[1:length(unique(meta_col$sample_name))]
+names(annotation_colors[["sample_name"]]) = unique(meta_col$sample_name)
+annotation_colors[["sample_type"]] = mypal[1:length(unique(meta_col$sample_type))]
+names(annotation_colors[["sample_type"]]) = unique(meta_col$sample_type)
+
+pdf("IPEX_10x_batch2to7_DiffExpression_Heatmap_AllGenesAllSamples.pdf", width = 20, height =100)
+tmp2 = tmp/rowMeans(tmp)#tmp/rowSums(tmp)
+tmp2[tmp2 > 2] = 2
+ColorRamp = rev(colorRampPalette(c('red','white', "blue"))(100))
+#tpm = log2(t(t(tmp)/colSums(tmp))*10^6+1)
+pheatmap(mat = tmp2, cluster_rows = F, cluster_cols = F, breaks = seq(0,2, length.out = 101), clustering_distance_rows = "correlation", fontsize_row = 2, fontsize_col = 20, fontsize = 20, annotation_row = data.frame(meta_row), annotation_col = meta_col, annotation_colors = annotation_colors, annotation_legend = F, main = sprintf("%s (scaled by rowMeans)", "All DGE genes"))
+#dev.off()
+
+sub = rownames(tmp2) %in% tf
+pheatmap(mat = tmp2[sub,], cluster_rows = F, cluster_cols = F, breaks = seq(0,2, length.out = 101), fontsize_row = 30, fontsize = 20, annotation_row = data.frame(meta_row), annotation_col = meta_col, annotation_colors = annotation_colors, annotation_legend = F, main = sprintf("%s (scaled by rowMeans)", "TF genes"))
+
+sub = rownames(tmp2) %in% cellmembrane
+pheatmap(mat = tmp2[sub,], cluster_rows = F, cluster_cols = F,breaks = seq(0,2, length.out = 101), fontsize_row = 30, fontsize = 20, annotation_row = data.frame(meta_row), annotation_col = meta_col, annotation_colors = annotation_colors, annotation_legend = F, main = sprintf("%s (scaled by rowMeans)", "Cell surface genes"))
+
+#sub = rownames(tmp2) %in% effmol
+#pheatmap(mat = tmp2[sub,], cluster_rows = F, cluster_cols = F, breaks = seq(0,2, length.out = 101), fontsize_row = 30, fontsize = 20, annotation_row = data.frame(meta_row), annotation_col = meta_col, annotation_colors = annotation_colors, annotation_legend = F, main = sprintf("%s (scaled by rowMeans)", "Effector molecules"))
+
+#sub = rownames(tmp2) %in% chemreceptor
+#pheatmap(mat = tmp2[sub,], cluster_rows = F, cluster_cols = F, breaks = seq(0,2, length.out = 101), fontsize_row = 50, fontsize = 20, annotation_row = data.frame(meta_row), annotation_col = meta_col, annotation_colors = annotation_colors, annotation_legend = F, main = sprintf("%s (scaled by rowMeans)", "Chemokine Receptors"))
+
+dev.off()
+```
+
+**Analysis of the Treg sig expression and Signature Enrichment Analysis**
+show the Core Treg genes and whole Treg sig gene in DKO and STAT5CA
+
+Load tt2
+```{r}
+tt2 = read.table(file = "scanvi_20230429_Detailed_ttlist_20240430_with_meansdci_bysample_name.txt", sep = "\t")
+ttl = list(log2FC = tt2[,grepl("log2FC", colnames(tt2))],
+           log2AveExpr = tt2[,grepl("log2AveExpr", colnames(tt2))],
+           P.Value = tt2[,grepl("P.Value", colnames(tt2))],
+           adj.P.Val = tt2[,grepl("adj.P.Val", colnames(tt2))],
+           AveExpr = tt2[,grepl("^AveExpr", colnames(tt2))], 
+           StdDev = tt2[,grepl("StdDev", colnames(tt2))], 
+           CIMean = tt2[,grepl("CIMean", colnames(tt2))])
+#ttl = lapply(ttl, function(x) cbind(SYMBOL = tt2$SYMBOL, x))
+#colnames = gsub(pattern = "^AveExpr_", replacement = "", colnames(ttl$AveExpr))
+for (i in 1:length(ttl)) { print(colnames(ttl[[i]])) }
+for (i in 1:length(ttl)) {
+  colnames(ttl[[i]]) = gsub(pattern = "^log2FC_|^log2AveExpr_|^P.Value_|^adj.P.Val_|^AveExpr_|^StdDev_|^CIMean_", replacement = "", colnames(ttl[[i]]))
+}
+ttl$SYMBOL = tt2$SYMBOL
+# 
+# th = 0.5
+# 
+# gene_list = list()
+# for (j in colnames(ttl$log2FC)) {
+#   gene_list[[sprintf("%s_up", j)]] = as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] > th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])
+# gene_list[[sprintf("%s_down", j)]] = as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] < -th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])
+# }
+
+# gene_list_original = gene_list
+```
+
+Load signatures
+```{r}
+##LOAD SIGNATURES
+load("/project/zemmour/david/signatures/mouse/signaturelist20171024.Rda")
+signaturelist1 = signaturelist
+
+load("/project/zemmour/david/signatures/mouse/signaturelistGSEA.Rda")
+signaturelist2 = signaturelist
+
+signaturelist = c(signaturelist1, signaturelist2)
+names(signaturelist)
+
+signaturelist = signaturelist[grepl("Treg|treg|TREG|TCELL", names(signaturelist))]
+#names(signaturelist)[grepl("Treg|treg|Foxp3", names(signaturelist))]
+#names(signaturelist)[grepl("IPEX", names(signaturelist))]
+
+# which(unlist(lapply(signaturelist,function(x) any(x %in% "Foxp1"))))
+
+```
+Are Tregs in KO, DKO and STAT5CA still Tregs / express Treg sig?
+```{r}
+pdf("VolcanoSig_TregSigInWT_KO_DKO_STATC5.pdf", width = 8, height = 7)
+
+for (i in c("Treg_vs_TconvInWT", "Treg_vs_TconvInDeltaFoxp3", "Treg_vs_TconvInDeltaFoxp3DeltaFoxp1", "Treg_vs_TconvInDeltaFoxp3STAT5BCA")) {
+    print(i)
+    vplot = data.frame(SYMBOL = ttl$SYMBOL, fc = 2^ttl$log2FC[,i], pval = ttl$adj.P.Val[,i]+10^-50, log2AveExpr = ttl$log2AveExpr[,i])
+    sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    #vplot = vplot[vplot$log2AveExpr > log2(27),]
+    #dim(vplot)
+    
+    p = Vplot(vplot = vplot, xlab = i, xlimits = c(1/10,10), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+    sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+    sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    p = VplotAddSig(p, vplot,y_text = 10^-30 )
+    p + guides(color = F)
+    q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+    # q = p + geom_text_repel(data = vplot[vplot$SYMBOL %in% genes_to_plot & vplot$sig %in% c("up","down"),], aes(x = fc, y = pval, label = SYMBOL))
+    print(q + guides(color = F))
+    
+}
+
+dev.off() 
+```
+
+Downregulation of the Treg sig in DKO and compensation by STAT5CA?
+```{r}
+pdf("VolcanoSig_TregSigDiff.pdf", width = 8, height = 7)
+
+for (i in c("TregSigInWT_vs_TregSigInFoxp3KO", "TregSigInWT_vs_TregSigInFoxp3KOFoxp1KO", "TregSigInFoxp3KO_vs_TregSigInFoxp3KOFoxp1KO", "TregSigInFoxp3KO_vs_TregSigInFoxp3KOSTAT5CA", "TregSigInFoxp3KO_vs_TregSigInWT")) {
+    print(i)
+    vplot = data.frame(SYMBOL = ttl$SYMBOL, fc = 2^ttl$log2FC[,i], pval = ttl$adj.P.Val[,i]+10^-50, log2AveExpr = ttl$log2AveExpr[,i])
+    sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    #vplot = vplot[vplot$log2AveExpr > log2(27),]
+    #dim(vplot)
+    
+    p = Vplot(vplot = vplot, xlab = i, xlimits = c(1/10,10), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+    sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+    sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50] | !(is.na(vplot$sig))
+    library(ggrepel)
+    p = VplotAddSig(p, vplot,y_text = 10^-30 )
+    p + guides(color = F)
+    q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+    # q = p + geom_text_repel(data = vplot[vplot$SYMBOL %in% genes_to_plot & vplot$sig %in% c("up","down"),], aes(x = fc, y = pval, label = SYMBOL))
+    print(q + guides(color = F))
+    
+}
+
+dev.off() 
+```
+
+Specific Volcano plot with Treg sig
+```{r}
+#colnames(ttl$log2FC)
+colnames(ttl[[1]])
+
+i = "TregInDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3"
+
+#genes_to_plot = c("S100A4","ANXA2","ITGB1","IL32","S100A11","S100A10","ANXA5","LGALS1","IL2RG","IL7R","CD2","HLA-DPB1","CD99","ITGB2","HLA-DRA","HLA-DRB1","FOXP3", "IKZF2")
+
+pdf(sprintf("VolcanoSig_%s.pdf", i), width = 8, height = 7)
+
+vplot = data.frame(SYMBOL = ttl$SYMBOL, fc = 2^ttl$log2FC[,i], pval = ttl$adj.P.Val[,i]+10^-50, log2AveExpr = ttl$log2AveExpr[,i])
+sigtoplot = "treg"
+vplot$sig = NA
+vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+#vplot = vplot[vplot$log2AveExpr > log2(27),]
+#dim(vplot)
+
+p = Vplot(vplot = vplot, xlab = i, xlimits = c(1/3,3), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05
+sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+library(ggrepel)
+p = VplotAddSig(p, vplot,y_text = 10^-30 )
+p + guides(color = F)
+q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+print(q + guides(color = F))
+# q = p + geom_text_repel(data = vplot[vplot$SYMBOL %in% genes_to_plot & vplot$sig %in% c("up","down"),], aes(x = fc, y = pval, label = SYMBOL))
+# q + guides(color = F)
+dev.off()
+
+```
+
+Specific FC/FC PLOT with Treg sig to show downregulation of Treg sig in DKO
+```{r}
+
+#highlight the genes diff expressed in the FCFC
+pdf("FCFC_TregSigWT_vsTregSigKO_DKO_STAT5CA.pdf", width = 10, height = 10)
+
+i = "Treg_vs_TconvInWT"
+df = data.frame( y = c("Treg_vs_TconvInDeltaFoxp3", "Treg_vs_TconvInDeltaFoxp3DeltaFoxp1", "Treg_vs_TconvInDeltaFoxp3STAT5BCA"), comp = c("TregSigInWT_vs_TregSigInFoxp3KO", "TregSigInWT_vs_TregSigInFoxp3KOFoxp1KO", "TregSigInWT_vs_TregSigInFoxp3KOSTAT5CA"))
+
+for (n in 1:nrow(df)) {
+    print(n)
+    vplot = data.frame(SYMBOL = ttl$SYMBOL, fc1 = 2^ttl$log2FC[,i], fc2 = 2^ttl$log2FC[,df$y[n]], pv = ttl$P.Value[,df$comp[n]])
+    sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    vplot$sig2 = NA
+    vplot$sig2[vplot$pv <0.05] = "signif"
+
+    
+    p = FCFCplot(vplot,xlab = i, ylab = df$y[n], ylimits = c(1/5, 5), xlimits = c(1/5, 5))
+    
+    vplot$fcmax = apply(vplot[,c("fc1", "fc2")],1, max)
+    sub2 = vplot %>% arrange(desc(abs(log2(fcmax))))
+    sub = (vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]) | !is.na(vplot$sig)
+    # sub = !is.na(vplot$sig) & vplot$pv <0.05
+    
+    library(ggrepel)
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        #geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+}
+
+dev.off()
+
+
+pdf("FCFC_TregSigDeltaFoxp3_TregSigDKO_STAT5CA_WT.pdf", width = 10, height = 10)
+
+i = "Treg_vs_TconvInDeltaFoxp3"
+df = data.frame( y = c("Treg_vs_TconvInWT", "Treg_vs_TconvInDeltaFoxp3DeltaFoxp1", "Treg_vs_TconvInDeltaFoxp3STAT5BCA"), comp = c("TregSigInFoxp3KO_vs_TregSigInWT", "TregSigInFoxp3KO_vs_TregSigInFoxp3KOFoxp1KO", "TregSigInFoxp3KO_vs_TregSigInFoxp3KOSTAT5CA"))
+
+for (n in 1:nrow(df)) {
+    print(n)
+    vplot = data.frame(SYMBOL = ttl$SYMBOL, fc1 = 2^ttl$log2FC[,i], fc2 = 2^ttl$log2FC[,df$y[n]], pv = ttl$P.Value[,df$comp[n]])
+    sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    vplot$sig2 = NA
+    vplot$sig2[vplot$pv <0.05] = "signif"
+
+    
+    p = FCFCplot(vplot,xlab = i, ylab = df$y[n], ylimits = c(1/5, 5), xlimits = c(1/5, 5))
+    
+    vplot$fcmax = apply(vplot[,c("fc1", "fc2")],1, max)
+    sub2 = vplot %>% arrange(desc(abs(log2(fcmax))))
+    sub = (vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]) | !is.na(vplot$sig)
+    # sub = !is.na(vplot$sig) & vplot$pv <0.05
+    
+    library(ggrepel)
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        #geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+}
+
+dev.off()
+
+
+pdf("FCFC_TregInWT_vsInDeltaFoxp3_DKO_STAT5CA.pdf", width = 10, height = 10)
+
+i = "TregInWT_vs_TregInFoxp3KO"
+df = data.frame( y = c("TregInWT_vs_TregInFoxp3KOFoxp1KO", "TregInWT_vs_TregInFoxp3KOSTAT5CA"), comp = c("TregWTvFoxp3KO_vs_TregWTvFoxp3KOFoxp1KO", "TregWTvFoxp3KO_vs_TregWTvFoxp3KOSTAT5CA"))
+
+for (n in 1:nrow(df)) {
+    print(n)
+    vplot = data.frame(SYMBOL = ttl$SYMBOL, fc1 = 2^ttl$log2FC[,i], fc2 = 2^ttl$log2FC[,df$y[n]], pv = ttl$P.Value[,df$comp[n]])
+    sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    vplot$sig2 = NA
+    vplot$sig2[vplot$pv <0.05] = "signif"
+
+    
+    p = FCFCplot(vplot,xlab = i, ylab = df$y[n], ylimits = c(1/5, 5), xlimits = c(1/5, 5))
+    
+    vplot$fcmax = apply(vplot[,c("fc1", "fc2")],1, max)
+    sub2 = vplot %>% arrange(desc(abs(log2(fcmax))))
+    sub = (vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]) | !is.na(vplot$sig)
+    # sub = !is.na(vplot$sig) & vplot$pv <0.05
+    
+    library(ggrepel)
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+    q = p + 
+        geom_point( data = vplot[vplot$sig %in% c("up", "down"), ], aes(fc1,fc2, color = sig, shape = pv<0.05)) +
+        #geom_text_repel(data = vplot[sub,], aes(x = fc1, y = fc2, label = SYMBOL)) +
+        scale_color_manual(values = c("blue", "red")) +
+        ggtitle(label = sigtoplot)
+    print(q)
+    
+}
+
+dev.off()
+
+
+
+
+
+```
+
+Plot all signatures in TregInDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3: Signature Enrichment Analysis
+
+```{r}
+fc_to_plot = "TregInDeltaFoxp3DeltaFoxp1_vs_TregInDeltaFoxp3"
+vplot = data.frame(SYMBOL = ttl$SYMBOL, fc = 2^ttl$log2FC[,fc_to_plot], pval = ttl$adj.P.Val[,fc_to_plot]+10^-50, log2AveExpr = ttl$log2AveExpr[,fc_to_plot])
+vplot = vplot[vplot$log2AveExpr > summary(vplot$log2AveExpr)[[2]],]
+
+p = Vplot(vplot = vplot, xlab = i, xlimits = c(1/3,3), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+p
+##Calculate signature that are significant
+
+#Calculate p and q for signatures
+pvalsig = c()
+pvalcol = c()
+for (i in 1: length(signaturelist)) {
+    if ((i %% 100) == 0) {print(i)}
+    tryCatch({
+    sig = names(signaturelist)[i]
+    vplot[,sig] = vplot$SYMBOL %in% signaturelist[[i]]
+    a = length(which(vplot$fc < 1))
+    b = length(which(vplot$fc > 1))
+    c = length(which(vplot$fc[vplot[,sig]] < 1))
+    d = length(which(vplot$fc[vplot[,sig]] > 1))
+    cont_table = rbind(total = c(round(a/(a+b)*(c+d)), round(b/(a+b)*(c+d))), geneset = c(c, d))
+    colnames(cont_table) = c("FC<1", "FC>1")
+    c = chisq.test(cont_table)
+    pvalsig[sig] = c$p.value
+    pvalcol[sig] = cont_table[2,2] > cont_table[1,2]  
+    }, error=function(e){})
+}
+
+qs =  p.adjust(pvalsig, method = "BH")
+
+#Plot volcano plots for signi signature
+sigstoplot = names(qs[qs<0.05])
+sigstoplot = unique(gsub("_up$|_down$", "", x = sigstoplot))
+sigstoplot = sigstoplot[!is.na(sigstoplot)]
+length(sigstoplot)
+
+which(unlist(lapply(signaturelist,function(x) any(x %in% "Foxp1"))))
+
+pdf(sprintf("%s_VolcanoSig.pdf", fc_to_plot), width = 8, height = 7)
+for (sigtoplot in sigstoplot[1:50]) {
+    print(sigtoplot)
+    #sigtoplot = "treg"
+    vplot$sig = NA
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+    vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+    # #vplot = vplot[vplot$log2AveExpr > log2(27),]
+    #dim(vplot)
+    
+    p = Vplot(vplot = vplot, xlab = fc_to_plot, xlimits = c(1/7,7), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05 & !(vplot$sig %in% NA)
+    sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+    sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    p = VplotAddSig(p, vplot,y_text = 10^-30 )
+    p + guides(color = F)
+    q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+    print(q + guides(color = F))
+    # q = p + geom_text_repel(data = vplot[vplot$SYMBOL %in% genes_to_plot & vplot$sig %in% c("up","down"),], aes(x = fc, y = pval, label = SYMBOL))
+    # q + guides(color = F)
+}
+
+dev.off()
+
+
+message("Plotting pval histogram...\n")
+pvalsig[which(is.na(pvalsig))] = 1
+pv =  data.frame(p = pvalsig[pvalsig< 0.05], genesets = names(pvalsig)[pvalsig< 0.05], color = pvalcol[pvalsig< 0.05])
+pv$p = -log10(pv$p)
+pv = pv[order(pv$p, decreasing = F),]
+pv$genesets = factor(pv$genesets, levels = pv$genesets)
+cat("Plotting histograms")
+pdf(file = sprintf("%s_histograms_pval_qval.pdf", fc_to_plot), width = 15, height = 30)
+#ggplot(m) + geom_point(aes(x = variable, y = TERM, size = value, color = n_gene)) + theme_bw() + scale_x_discrete(breaks = c(1:length(levels(m$Var1))), labels = levels(m$Var1)) + theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x  = element_text(size=15, angle = 30, vjust = 0.5), axis.text.y  = element_text(size=10))
+pvplot = ggplot(pv, aes(x = genesets, y = p, fill = color)) + scale_fill_manual(values = c("blue", "red")) + geom_bar(stat = "identity") + theme_bw() + coord_flip() + ylab(label = "-log10(p value)") + theme(axis.title.x = element_text(size=20, angle = 0, vjust = 0.5), axis.title.y = element_blank(), axis.text.x  = element_text(size=20, angle = 0, vjust = 0.5), axis.text.y  = element_text(size=5)) #+ ggtitle(i)
+print(pvplot)
+#dev.off()
+  
+  
+message("Calculting q values...\n")
+q =  p.adjust(pvalsig, method = "BH")
+names(q) = names(pvalsig)
+#q = q[4:length(q)]
+q[which(is.na(q))] = 1
+q = data.frame(q = q[q< 0.05], genesets = names(q)[q< 0.05])
+q$color = q$genesets %in% names(which(pvalcol == T))
+
+q$value = -log10(q$q)
+q = q[order(q$value, decreasing = F),]
+q$genesets = factor(q$genesets, levels = q$genesets)
+
+message("Plotting histograms...\n")
+#pdf(file = sprintf("%s_histograms.pdf", fc_to_plot), width = 15, height = 30)
+#ggplot(m) + geom_point(aes(x = variable, y = TERM, size = value, color = n_gene)) + theme_bw() + scale_x_discrete(breaks = c(1:length(levels(m$Var1))), labels = levels(m$Var1)) + theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x  = element_text(size=15, angle = 30, vjust = 0.5), axis.text.y  = element_text(size=10))
+p = ggplot(q, aes(x = genesets, y = value, fill = color)) + scale_fill_manual(values = c("blue", "red")) + geom_bar(stat = "identity") + theme_bw() + coord_flip() + ylab(label = "-log10(q value)") + theme(axis.title.x = element_text(size=20, angle = 0, vjust = 0.5), axis.title.y = element_blank(), axis.text.x  = element_text(size=20, angle = 0, vjust = 0.5), axis.text.y  = element_text(size=5)) #+ ggtitle(i)
+print(p)
+dev.off()
+
+```
+
+########
+
+
+
+```{r, echo=T}
+#Select gene signatures with p < 0.05
+pv = c()
+for (i in 1:length(T_signaturelist)) {
+  print(i)
+  print(names(T_signaturelist)[i])
+  gene_list = T_signaturelist[[i]]
+  pv[i] = tryCatch( {
+    CalculateChiSquare(vplot, gene_list) },
+    error = function(e) {pv[i] = 2} #
+    )
+  }
+
+#Put significant gene signatures in a table
+names(pv) = names(T_signaturelist)
+
+signif_signatures = pv[pv < 0.05] %>% sort()
+signif_signatures_names = names(signif_signatures)
+
+signif_signatures_df <- data.frame(signif_signatures)
+D19_Spleen_signif_T_signatures_GSEA <- signif_signatures_df
+write.csv(D19_Spleen_signif_T_signatures_GSEA, "D19_Spleen_signif_T_signatures_GSEA.csv")
+
+# Consolidate plots but removing "_up and _down" in the name, volcano plots will convey up/down
+tmp = gsub(x = names(T_signaturelist), pattern = "_up", replacement = "")
+tmp = gsub(x = tmp, pattern = "_down", replacement = "")
+signaturestorun = unique(tmp)
+
+vplot = data.frame(SYMBOL = df$genes, fc = 2^df$avg_log2FC, pval = df$p_val_adj+10^-50)
+
+#Create output plot
+pdf("Volcano_plot_D19_spleen_Tsig_GSEA.pdf", width = 8, height = 7)
+
+#Loop over all significant Tcell signatures
+for (i in 1:length(signaturestorun)) {
+  #if (i == 15) next --- skip iteration if you get an error on the Chi-square
+  print(i)
+  sigtoplot = signaturestorun[i]
+  vplot$sig = NA
+  vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_up", sigtoplot)]] ] = "up"
+  vplot$sig[vplot$SYMBOL %in% signaturelist[[sprintf("%s_down", sigtoplot)]] ] = "down"
+
+  p = Vplot(vplot = vplot, xlab = "Scurfy v WT D19", xlimits = c(1/4,4), ylimits = c(10^-50, 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+  sub = (log2(vplot$fc) > 0 | log2(vplot$fc) < -0)  & vplot$pval < 0.05 & !is.na(vplot$sig)
+  sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
+  sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
+  p = VplotAddSig(p, vplot,y_text = 10^-30)
+  #print("Successful Chi Square")
+  #print(p + guides(color = F))
+  q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL))
+  print(q + guides(color = F))
+  #print("Successful plot")
+  
+}
+
+dev.off()
+
+```
+
+
+
+####Only show signatures with significant P values, put in table for each tissue, plot signatures on bar plot/histogram for better visualization
+```{r, echo=T}
+#load D19 spleen data
+D19_Spleen_signif_T_signatures_GSEA <- read.csv("D19_Spleen_signif_T_signatures_GSEA.csv", header = TRUE, sep = ",")
+
+#Load top 50 significant signatures
+top50 <- D19_Spleen_signif_T_signatures[1:50,]
+
+#Bar plot of top 50 significant T cell signatures
+s = ggplot(top50, aes(x = reorder(Gene.Signatures, -P.values), y = -log10(P.values))) + 
+  geom_bar(stat = "identity", fill="steelblue")+
+  geom_text(aes(label=P.values), vjust=-0.3, size=2)+
+  xlab("Gene Signatures")+
+  ggtitle(paste0("Top 50 T Cell Gene Signatures in D19 spleen -- Scurfy")) +
+  theme_minimal()
+
+#Flip it around
+s = s + coord_flip()
+s
+
+#Save bar plot as a pdf
+ggsave("D19 spleen pathway analysis -- T cells.pdf", plot = s, width = 20, height = 10, dpi = "retina", limitsize = TRUE)
+
+```
+
+
+

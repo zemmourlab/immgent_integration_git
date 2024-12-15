@@ -24,9 +24,9 @@ R
 ```
 
 ```{r}
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
-options(Seurat.object.assay.version = 'v5')
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
@@ -391,6 +391,195 @@ pdf(file = "annotation_level1_Organ_Composition_heatmap.pdf", width =10, height 
 pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Organ", na_col = "#FDE725")
 dev.off()
 ```
+
+**PCA/UMAP of samples with annotation level2?**
+
+```{r}
+set.seed(1)
+library(uwot)
+df = readRDS("annotation_level2_PropPerSample_withMetadata.Rds")
+df$organ_simplified = df$organ
+df$organ_simplified[grep(pattern = "lymph node", df$organ)] = "LN"
+df$organ_simplified[grep(pattern = "skin|Skin", df$organ)] = "skin"
+df$organ_simplified[grep(pattern = "colon", df$organ)] = "colon"
+df$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", df$organ)] = "small intestine"
+df$organ_simplified[df$organ_simplified %in% c("CNS", "brain")] = "CNS"
+df$organ_simplified[df$organ_simplified %in% c("lamina propria", "gut")] = "small intestine"
+df$organ_simplified[grep(pattern = "salivary|submandibular", df$organ_simplified)] = "submandibular salivary gland"
+table(df$organ, df$organ_simplified)
+table(df$organ_simplified)
+
+
+props = df[,grepl("prop", colnames(df))]
+
+props_scaled = t(scale(t(props)))
+
+mypca = prcomp(props_scaled, center = F, scale. = F)
+
+explained_variance = mypca$sdev^2
+proportion_variance = explained_variance / sum(explained_variance)
+elbow_df = data.frame(
+  PC = seq_along(proportion_variance),
+  VarianceExplained = proportion_variance
+)
+ggplot(elbow_df, aes(x = PC, y = VarianceExplained)) +
+  geom_point(size = 2) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "Elbow Plot",
+    x = "Principal Component (PC)",
+    y = "Proportion of Variance Explained"
+  )
+
+
+#Find clusters
+library(igraph)
+library(FNN)
+pca_embeddings = mypca$x[, 1:30]
+k = 15  # Number of neighbors for KNN
+knn = get.knn(pca_embeddings, k = k)
+adj_matrix <- matrix(0, nrow = nrow(pca_embeddings), ncol = nrow(pca_embeddings))
+for (i in 1:nrow(knn$nn.index)) {
+  neighbors <- knn$nn.index[i, ]
+  adj_matrix[i, neighbors] <- 1
+}
+g <- graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+louvain_result <- cluster_louvain(g, resolution = 1)
+clusters <- membership(louvain_result)
+table(clusters)
+
+#Make UMAP
+umap_result = umap(mypca$x[, 1:30], n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
+umap_df = as.data.frame(umap_result)
+colnames(umap_df) = c("UMAP_1", "UMAP_2")
+rownames(umap_df) = df$sample_name_new
+umap_df = data.frame(umap_df, df)
+umap_df$clusters = factor(clusters)
+
+
+umap_df %>% group_by(clusters) %>% summarize()
+umap_df %>% filter(clusters == "15") %>% pull(sample_name_new)
+
+umap_df %>% filter(clusters == "12") %>% pull(sample_name_new)
+umap_df %>% filter(clusters == "6") %>% pull(sample_name_new)
+umap_df %>% filter(clusters == "12") %>% pull(sample_name_new)
+
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+        scale_color_manual(values = mypal)+
+  theme_void() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+LabelClusters(p, id = "clusters")
+
+
+
+bkgrd = ggplot(umap_df[,c("UMAP_1", "UMAP_2")],aes(x = UMAP_1, y = UMAP_2)) + geom_point(alpha = 0.1, size = 1, color = "grey50")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters), alpha = 1, size = 2)
+bkgrd + p + facet_wrap(~organ_simplified) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df[umap_df$organ_simplified == "spleen",], aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + facet_wrap(~condition_detailed) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+  scale_color_manual(values = mypal) +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+LabelClusters(p, id = "clusters")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8AB_cl10.prop, size = CD8AB_cl10.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8AB_cl11.prop, size = CD8AB_cl11.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8AB_cl12.prop, size = CD8AB_cl12.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl23.prop, size = CD4_cl23.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl15.prop, size = CD4_cl15.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl18.prop, size = CD4_cl18.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl20.prop, size = CD4_cl20.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+library(tidygate)
+gating <- 
+  umap_df |>
+  mutate(gated = gate(x = UMAP_1, y = UMAP_2))
+
+gating %>% filter(!is.na(gated)) %>% pull(sample_name_new)
+
+saveRDS(umap_df, file = "annotation_level2_UMAP_samples.Rds")
+
+```
+
+**Saturation**
+
+```{r}
+
+igt_vec = unique(umap_df$immgent_IGT_10xlane_id) %>% na.omit()
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+igt_vec = igt_vec[order(extract_numeric(igt_vec))] %>% as.character()
+
+umap_df_melt = melt(umap_df[,grepl("ncells|immgent_IGT_10xlane_id", colnames(umap_df)) ])
+
+umap_df_melt2 = umap_df_melt %>% group_by()
+
+nclust = c()
+for (s in 1:length(igt_vec)) {
+    print(s)
+    umap_df_melt2 = umap_df_melt[umap_df_melt$immgent_IGT_10xlane_id %in% igt_vec[1:s],] %>% group_by(variable) %>% summarize(ncells = sum(value)) %>% as.data.frame()
+    nclust = c(nclust, sum(umap_df_melt2$ncells > 50))
+}
+
+df = data.frame(experiment_number = igt_vec, number_of_clusters = nclust)
+df$experiment_number = factor(df$experiment_number, levels = igt_vec)
+
+pdf("cluster_saturation.pdf", 15, 7,useDingbats = F)
+ggplot(df) + geom_point(aes(experiment_number, number_of_clusters), size = 3) + 
+    geom_line(aes(x = experiment_number, y = number_of_clusters, group = 1)) + 
+    geom_hline(aes(yintercept = 119), linetype="dashed", color = "brown", linewidth = 1) +
+    ylim(c(0,130)) + theme_bw() + theme(axis.text.x=element_text(size=10, angle = 30), axis.text.y=element_text(size=20), legend.text=element_text(size=15), axis.title.x = element_text(size=15) , axis.title.y = element_text(size=15), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+dev.off()
+
+
+```
+
 
 
 

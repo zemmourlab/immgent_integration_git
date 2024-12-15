@@ -75,6 +75,9 @@ names(mypal) = NULL
 
 **clustering V3 20241201**
  cluster_adjustments.Rmd: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_abT_DN_rmIGTsample.sh
+ igt1_96_withtotalvi20241202.Rds
+ annotation_table_20241202.csv
+annotation_table_history_20241202.csv
 
 ```{r}
 prefix = "totalvi_20241201_abT_DN_rmIGTsample"
@@ -97,16 +100,13 @@ MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_hig
 MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
 dev.off()
 
-saveRDS(so, file = "igt1_96_abT_DN_20241201.Rds")
-
-so = readRDS("igt1_96_abT_DN_20241201.Rds")
 outliers = names(which(so[[umap_to_plot]]@cell.embeddings[,2] >5))
 write.table(outliers, file = "outliers_abT_DN.csv", sep = ",", quote = F, row.names = F, col.names = F)
+# outliers = read.table("outliers_abT_DN.csv")[,1]
 
 so$outliers_abT_DN = colnames(so) %in% outliers
-saveRDS(so, file = "igt1_96_abT_DN_20241201.Rds")
-
 so = so[,!colnames(so) %in% outliers]
+saveRDS(so, file = "igt1_96_abT_DN_20241201.Rds")
 
 pdf(sprintf("%s/MDE_clusters_nooutliers.pdf", prefix), 20, 20, useDingbats = F)
 DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
@@ -116,9 +116,22 @@ MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_hig
 MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
 dev.off()
 
+outliers = read.table("outliers_abT_DN.csv")[,1]
+totalvi = read.csv(file = sprintf("%s/latent.csv",dir_with_file), header = T, sep = ",", row.names = 1) 
+totalvi2 = totalvi[!rownames(totalvi) %in% outliers,]
+write.table(totalvi2, file = sprintf("%s/latent_nooutliers.csv",dir_with_file), sep = ",", quote = F, row.names = T, col.names = T)
+
+mde = read.csv(file = sprintf("%s/mde2.csv",dir_with_file), header = T, sep = ",", row.names = 1) 
+mde2 = mde[!rownames(mde) %in% outliers,]
+write.table(mde2, file = sprintf("%s/mde2_nooutliers.csv",dir_with_file), sep = ",", quote = F, row.names = T, col.names = T)
+
+
 ```
 
-**clustering V4 20241202**
+
+
+
+(**clustering V4 20241202** FORGET NOT USEFUL)
 cluster_adjustments.Rmd: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_CD8aa_rmIGTsample.sh
 --> igt1_96_abT_CD8aa_20241202.Rds
 

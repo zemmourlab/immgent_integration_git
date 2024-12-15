@@ -240,18 +240,74 @@ run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, conf
     return(tt_list)
 }
 
+GetGroups <- function(metadata, group1_filter, group2_filter, id_column) {
+    require(dplyr)
+    require(rlang)
+    # Evaluate the filter expressions within the context of metadata
+    group1 <- metadata %>% filter(!! group1_filter)
+    group2 <- metadata %>% filter(!! group2_filter)
+    
+    # Pull the specified identifier column
+    group1_ids <- group1 %>% pull(!! sym(id_column))
+    group2_ids <- group2 %>% pull(!! sym(id_column))
+    
+    # Combine groups and add group identifiers
+    group1$group <- "group1"
+    group2$group <- "group2"
+    combined_groups <- rbind(group1, group2)
+    
+    # Function to perform Chi-squared test
+    test_balanced <- function(var) {
+        obs <- table(combined_groups$group, combined_groups[[var]])
+        test <- tryCatch({
+            chisq.test(obs)
+        }, error = function(e) NA)  # Return NA on error
+        if (!is.na(test$p.value)) {
+            return(test$p.value)
+        } else {
+            return(1)  # Return non-significant p-value if test could not be performed
+        }
+    }
+    
+    # Apply test to each relevant column and suppress warnings
+    results <- suppressWarnings(
+        lapply(colnames(metadata)[!colnames(metadata) %in% c("sample_id", id_column)], test_balanced)
+    )
+    names(results) <- colnames(metadata)[!colnames(metadata) %in% c("sample_id", id_column)]
+    
+    # Check for significant results
+    if (any(na.omit(unlist(results) < 0.05))) {
+        message("WARNING: IMBALANCED GROUPS FOR:")
+        print(names(results)[which(unlist(results) < 0.05)])
+    }
+    
+    return(list(group1_ids = group1_ids, group2_ids = group2_ids, results = results))
+}
 
-Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
-p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
-    scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
-    scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
-    #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
-    annotation_logticks(sides = "b") +
-    xlab(xlab) +
-    theme_bw() +
-    ylab("p value") +
-    theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
-return(p)
+CreateComparisonName <- function(group1_filter, group2_filter) {
+    require(rlang)
+    require(stringr)
+    # Convert the expressions to strings
+    group1_name <- expr_text(group1_filter)
+    group2_name <- expr_text(group2_filter)
+    
+    # Function to extract quoted substrings
+    extract_quoted_parts <- function(name) {
+        str_match_all(name, '"([^"]+)"')[[1]][,2]
+    }
+    
+    # Extract quoted parts for each group
+    group1_parts <- extract_quoted_parts(group1_name)
+    group2_parts <- extract_quoted_parts(group2_name)
+    
+    # Concatenate the extracted parts
+    group1_clean <- paste0(group1_parts, collapse = "")
+    group2_clean <- paste0(group2_parts, collapse = "")
+    
+    # Create the comparison name
+    comparison_name <- paste0(group1_clean, "_vs_", group2_clean)
+    
+    return(comparison_name)
 }
 
 CollapseDiff_limmatrend = function(l) {
@@ -292,6 +348,19 @@ CollapseDiff_limmatrend = function(l) {
     
     return(diff)
     
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+    scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+    scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+    #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "b") +
+    xlab(xlab) +
+    theme_bw() +
+    ylab("p value") +
+    theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+return(p)
 }
 
 VplotAddSig = function(p, vplot, y_text = 10^-100) {

@@ -48,7 +48,7 @@ options(max.print=1000)
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -1550,6 +1550,44 @@ DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T
 # DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
 dev.off()
 ```
+
+**Plots**
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241202.Rds")
+so = so_orig[,so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )]
+prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample"
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241113_not_CD4CD8_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+umap_to_plot = "mde_incremental"
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)  + theme_void() + NoLegend()
+
+pdf("notCD4CD8_plots.pdf", 15, 15, useDingbats = F)
+MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)  + theme_void() + NoLegend()
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "gdT")), highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "nonconv")), highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "abT_CD8aa")), highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "abT_DN")), highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "gdT")), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "nonconv")), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "abT_CD8aa")), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$annotation_level1 == "abT_DN")), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$iNKT == T)), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$nonconv_tcr_recog & !(so$iNKT | so$MAIT))), highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$iNKT == T)), highlight_column = "iNKT", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
+
+dev.off()
+
+MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+
+
+```
+
 
 
 **Integration evaluation: conservation of HVG**
