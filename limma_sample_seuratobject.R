@@ -30,8 +30,7 @@ if (!file.exists(path_to_seurat_object)) {
     stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
 }
 
-
-setwd(output_dir)
+# setwd(output_dir)
 
 message("loading R libraries and custom functions")
 libs = c("Seurat","BPCells", "dplyr") 
@@ -40,9 +39,6 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 # source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 message("Loading Seurat object")
-if (!file.exists(path_to_seurat_object)) {
-    stop("The specified Seurat object file does not exist: ", path_to_seurat_object)
-}
 so_orig = readRDS(file = sprintf("%s", path_to_seurat_object))
 
 message("Sample cells so that no more than 20 cell per cluster per sample")
@@ -57,5 +53,5 @@ if (length(sampled_cells) == 0) {
 cat("Number of sampled cells:", length(sampled_cells), "\n")
 write.table(sampled_cells, file = sprintf("%s/sampledcells_IGTHT_annotationlevel2.csv", "."), row.names = F, col.names = F, sep = ",", quote = F)
 so = so_orig[,sampled_cells]
-saveRDS(so, file = so_file_name)
-message("Saved sampled Seurat object to:", so_file_name)
+saveRDS(so, file = sprintf("%s/%s",output_dir,so_file_name))
+message("Saved sampled Seurat object to:", sprintf("%s/%s",output_dir,so_file_name))

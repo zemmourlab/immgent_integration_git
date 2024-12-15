@@ -56,4 +56,4 @@ message("TMM normalization")
 tmm$E = edgeR::cpm(dge, log = TRUE, prior.count = 0.1)
 
 saveRDS(tmm, file = sprintf("%s/%s",output_dir,tmm_file_name))
-message("Tmm object saved to: ", tmm_file_name)
+message("Tmm object saved to: ", sprintf("%s/%s",output_dir,tmm_file_name))
