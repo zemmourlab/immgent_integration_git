@@ -27,7 +27,7 @@ path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/I
 output_dir=DGE_limma/20241215
 so_file_name=igt1_96_CD4_20241113_sampled_so.Rds
 
-Rscript $SCRIPT_DIR/limma_sample_seuratobject.R $path_to_seurat_object $output_dir $so_file_name
+# Rscript $SCRIPT_DIR/limma_sample_seuratobject.R $path_to_seurat_object $output_dir $so_file_name
 
 path_to_seurat_object=$so_file_name
 tmm_file_name=igt1_96_CD4_20241113_sampled_tmm.Rds
