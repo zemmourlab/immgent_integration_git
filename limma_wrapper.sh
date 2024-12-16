@@ -42,4 +42,6 @@ path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Resting
 Rscript $SCRIPT_DIR/limma_contrasts_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
+limma_contrasts_inResting.R
+
 
