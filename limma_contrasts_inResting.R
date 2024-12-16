@@ -1,14 +1,14 @@
 # David Zemmour
 # R
-# usage: Rscript limma_constrasts_template.R [path_to_seurat_object] [path_to_tmm_object] [path_to_fit_object] [output_dir] [prefix_file_name]
+# usage: Rscript limma_constrasts_custom.R [path_to_seurat_object] [path_to_tmm_object] [path_to_fit_object] [output_dir] [prefix_file_name]
 
 options(max.print=1000)
 options(expressions = 50000)
 
 # Parse arguments
 args = commandArgs(TRUE)
-if (length(args) < 4) {
-    stop("Usage: Rscript limma_fit_level2.IGTHT.R [path_to_seurat_object] [path_to_tmm_object] [output_dir] [fit_file_name]")
+if (length(args) < 5) {
+    stop("Usage: Rscript limma_constrasts_custom.R [path_to_seurat_object] [path_to_tmm_object] [path_to_fit_object] [output_dir] [prefix_file_name]")
 }
 path_to_seurat_object = args[1]
 path_to_tmm_object = args[2]
@@ -149,8 +149,8 @@ metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
-messages("creating constrats")
-metadata = metadata_orig[metadata_orig$level2_parent1 == "resting",]
+message("creating constrats")
+metadata = metadata[metadata$level2_parent1 == "resting",]
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
 
 contrasts = c()
@@ -174,12 +174,12 @@ for (cl in levels(metadata$annotation_level2)) {
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }
 
-messages("contrasts.fit...")
+message("contrasts.fit...")
 cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
 colnames(cont.matrix) = namescontrasts
 # colnames(cont.matrix) = names(contrasts)
 fit2 = contrasts.fit(fit, cont.matrix)
-messages("eBayes...")
+message("eBayes...")
 fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
 
 tt_list = list()
@@ -216,7 +216,6 @@ for (i in 1:length(tmp)) {
     print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
     # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
 }
-
 dev.off()
 message("Plots saved to: ", sprintf("%s/DiffExpression_volcano_%s.pdf", output_dir, prefix_file_name))
 
