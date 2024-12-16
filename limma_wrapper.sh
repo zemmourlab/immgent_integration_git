@@ -3,8 +3,8 @@
 #SBATCH --partition=caslake 
 #SBATCH --nodes=1 
 #SBATCH --mem=96GB
-#SBATCH -J limma              
-#SBATCH -o limma.log
+#SBATCH -J limma$(date +'%Y%m%d_%H%M%S')              
+#SBATCH -o limma$(date +'%Y%m%d_%H%M%S').log
 #SBATCH -t 24:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
