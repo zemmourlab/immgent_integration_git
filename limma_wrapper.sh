@@ -35,7 +35,7 @@ tmm_file_name=igt1_96_CD4_20241113_sampled_tmm.Rds
 
 path_to_tmm_object=$output_dir/$tmm_file_name
 fit_file_name=igt1_96_CD4_20241113_sampled_fit.Rds
-Rscript $SCRIPT_DIR/limma_fit_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
+# Rscript $SCRIPT_DIR/limma_fit_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Resting

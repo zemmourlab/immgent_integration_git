@@ -7,8 +7,8 @@ options(expressions = 50000)
 
 # Parse arguments
 args = commandArgs(TRUE)
-if (length(args) < 4) {
-    stop("Usage: Rscript limma_fit_level2.IGTHT.R [path_to_seurat_object] [path_to_tmm_object] [output_dir] [fit_file_name]")
+if (length(args) < 5) {
+    stop("Usage: Rscript limma_constrasts_custom.R [path_to_seurat_object] [path_to_tmm_object] [path_to_fit_object] [output_dir] [prefix_file_name]")
 }
 path_to_seurat_object = args[1]
 path_to_tmm_object = args[2]
@@ -37,7 +37,7 @@ if (!file.exists(path_to_fit_object)) {
 }
 
 message("loading R libraries and custom functions")
-libs = c("limma", "edgeR", "Seurat","BPCells", "ggplot2", "dplyr", "rlang","reshape2", "RColorBrewer", "pals", "scales")
+libs = c("limma", "edgeR", "Seurat","BPCells", "ggplot2","ggrepel", "dplyr", "rlang","reshape2", "RColorBrewer", "pals", "scales")
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
 GetGroups <- function(metadata, group1_filter, group2_filter, id_column) {
@@ -123,7 +123,6 @@ Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1
     return(p)
 }
 
-
 message("loading seurat object")
 so = readRDS(file = path_to_seurat_object)
 
@@ -150,8 +149,8 @@ metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
-messages("creating constrats")
-metadata = metadata_orig[metadata_orig$level2_parent1 == "resting",]
+message("creating constrats")
+metadata = metadata[metadata$level2_parent1 == "resting",]
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
 
 contrasts = c()
@@ -175,12 +174,12 @@ for (cl in levels(metadata$annotation_level2)) {
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }
 
-messages("contrasts.fit...")
+message("contrasts.fit...")
 cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
 colnames(cont.matrix) = namescontrasts
 # colnames(cont.matrix) = names(contrasts)
 fit2 = contrasts.fit(fit, cont.matrix)
-messages("eBayes...")
+message("eBayes...")
 fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
 
 tt_list = list()
@@ -196,23 +195,28 @@ names(tmp)
 saveRDS(tt_list, file = sprintf("%s/ttlist_%s.Rds", output_dir, prefix_file_name))
 message("Results saved to: ", sprintf("%s/ttlist_%s.pdf", output_dir, prefix_file_name))
 
-pdf(sprintf("%s/DiffExpression_volcano/%s.pdf", output_dir, prefix_file_name), width = 10, height = 10)
+pdf(sprintf("%s/DiffExpression_volcano_%s.pdf", output_dir, prefix_file_name), width = 10, height = 10)
 for (i in 1:length(tmp)) {
     print(i)
-    vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
     p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
-    sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
-    sub = vplot[sub,] %>% arrange(desc(log2(fc)))
-    sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
-    sub2 = sub %>% pull(SYMBOL) %>% tail(25)
-    #sub2 = vplot[sub,] %>% arrange(desc(abs(log2(fc))))
-    #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:50]
-    sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0.5 & pval < 0.05) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
     library(ggrepel)
-    print(p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
-    print(p + geom_text(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL)))
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
 }
 dev.off()
-message("Plots saved to: ", sprintf("%s/DiffExpression_volcano/%s.pdf", output_dir, prefix_file_name))
+message("Plots saved to: ", sprintf("%s/DiffExpression_volcano_%s.pdf", output_dir, prefix_file_name))
 
 

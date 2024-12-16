@@ -758,8 +758,11 @@ for (i in 1:length(tmp)) {
 dev.off()
 
 
-tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
-tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+# tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
+# tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
+
+tt_list = c(tt_list_1)
+saveRDS(tt_list, file = sprintf("%s/%s/ttlist_20241216.Rds", prefix, prefix2))
 
 ```
 
