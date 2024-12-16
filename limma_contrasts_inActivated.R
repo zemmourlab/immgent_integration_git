@@ -158,7 +158,7 @@ namescontrasts = c()
 for (cl in levels(metadata$annotation_level2)) {
     print(cl)
     group1_filter <- expr(annotation_level2 == cl)
-    group2_filter <- expr(!(annotation_level2 %in% cl) & level2_parent1 == "resting")
+    group2_filter <- expr(!(annotation_level2 %in% cl)) #& level2_parent1 == "resting"
     groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
     nmecontrast = sprintf("%s_vs_AllActivated", cl)
     # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
