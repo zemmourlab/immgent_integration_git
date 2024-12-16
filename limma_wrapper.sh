@@ -4,8 +4,8 @@
 #SBATCH --nodes=1 
 #SBATCH --mem=96GB
 time=$(date +'%Y%m%d_%H%M%S')
-#SBATCH -J limma${time}             
-#SBATCH -o limma${time}.log
+#SBATCH -J limma_${time}             
+#SBATCH -o limma_${time}.log
 #SBATCH -t 24:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
