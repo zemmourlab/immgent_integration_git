@@ -40,7 +40,7 @@ so = readRDS(file = path_to_seurat_object)
 
 message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
 tcr_genes = grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
-gm_rik_genes = grepl(x = rownames(so), pattern = "Gm|Rik$") #remove pseudo genes too
+gm_rik_genes = grepl(x = rownames(so), pattern = "Gm|Rik$|\\-ps$")
 ribo_genes = grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")
 mt_genes = grepl(x = rownames(so), pattern = "^mt-")
 genes_not_expressed = rowSums(so[["RNA"]]$counts) == 0
