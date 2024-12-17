@@ -705,7 +705,7 @@ mdata_abT_DN.mod['RNA'].obs['level1'].unique()
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_CD8aa_rmIGTsample.sh
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241202_abT_DN_rmIGTsample.sh
 
-**remove more outliers in abT_CD8aa and update annotation table** WASN'T USEFUL
+**remove more outliers in abT_CD8aa and update annotation table** WASN'T USEFUL -- FORGET
 remove outliers in abT_CD8aa --> annotation_table_20241203.csv
 ```{r}
 # setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
@@ -769,7 +769,46 @@ mdata_abTCD8aa.write(working_dir+'/export_data/igt1_96_20241203_abT_CD8aa.h5mu')
 mdata_abTCD8aa.mod['RNA'].obs['level1'].unique()
 
 ```
-
 sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241203_abT_CD8aa_rmIGTsample.sh
 
+**Merge clusters in CD4 and CD8**
+CD4: merge  cl21/26/27 as cl1
+CD8: merge cl1/3 as cl1
+     merge  cl9/10/21 as cl10
+     merge  cl22/23 as 22
+
+```{r}
+# setwd("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+library(reshape2)
+library(dplyr)
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20241202.csv", header = T, sep = ",")
+dim(annot)
+
+annot$level2[annot$level2 == "CD4_cl26"] = "CD4_cl21"
+annot$level2[annot$level2 == "CD4_cl27"] = "CD4_cl21"
+
+annot$level2[annot$level2 == "CD8AB_cl3"] = "CD8AB_cl1"
+
+annot$level2[annot$level2 == "CD8AB_cl9"] = "CD8AB_cl10"
+annot$level2[annot$level2 == "CD8AB_cl21"] = "CD8AB_cl10"
+
+annot$level2[annot$level2 == "CD8AB_cl23"] = "CD8AB_cl22"
+
+for (i in unique(annot$level1)) {
+    print(i)
+    print(annot %>% filter(level1 == i) %>% pull(level2) %>% unique())
+}
+
+annot$level0 = NULL
+annot$annotation_level2 = NULL
+write.table(x = annot, file = "annotation_table_20241216.csv", row.names = F, quote = F, sep = ",")
+
+annot_table = table(annot$level1, annot$level2) %>% as.data.frame() %>% melt() %>% filter(value != 0)
+annot_table$variable = NULL
+colnames(annot_table) = c("level1", "level2", "n_cells")
+
+write.table(x = annot_table, file = "annotation_table_history_20241216.csv", row.names = F, quote = F, sep = ",")
+
+```
 

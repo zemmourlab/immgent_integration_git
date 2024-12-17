@@ -762,93 +762,9 @@ dev.off()
 # tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
 
 tt_list = c(tt_list_1)
-saveRDS(tt_list, file = sprintf("%s/%s/ttlist_20241216.Rds", prefix, prefix2))
+saveRDS(tt_list, file = sprintf("%s/%s/ttlist_volcano1.Rds", prefix, prefix2))
 
 ```
-
-Merge and save tt_list
-```{r}
-# tt_list = readRDS(sprintf("%s/%s/ttlist_20240615.Rds", prefix, prefix2))
-tt_list = c(tt_list_1)
-saveRDS(tt_list, file = sprintf("%s/%s/ttlist_20241216.Rds", prefix, prefix2))
-```
-
-Collapse tt_list
-```{r}
-tt_list = readRDS(sprintf("%s/%s/ttlist_20240615.Rds", prefix, prefix2))
-tt = CollapseDiff_limmatrend(tt_list)
-#rownames(tt) = do.call(rbind,strsplit(rownames(tt), split = "_"))[,2]
-tt$SYMBOL = rownames(tt)#fData(cds2)$SYMBOL[match(rownames(tt), rownames(cds2))]
-colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
-colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
-#tt[tt$SYMBOL == "FOXP3",]
-
-write.table(x = tt, file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t", quote = F)
-#tt = read.table(file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t")
-
-```
-
-Make and export Gene signatures
-```{r}
-tt2 = read.table(file = sprintf("%s/%s/ttlist_20240615.txt", prefix, prefix2), sep = "\t")
-ttl = list(log2FC = tt2[,grepl("log2FC", colnames(tt2))],
-           log2AveExpr = tt2[,grepl("log2AveExpr", colnames(tt2))],
-           P.Value = tt2[,grepl("P.Value", colnames(tt2))],
-           adj.P.Val = tt2[,grepl("adj.P.Val", colnames(tt2))],
-           AveExpr = tt2[,grepl("^AveExpr", colnames(tt2))], 
-           StdDev = tt2[,grepl("StdDev", colnames(tt2))], 
-           CIMean = tt2[,grepl("CIMean", colnames(tt2))])
-#ttl = lapply(ttl, function(x) cbind(SYMBOL = tt2$SYMBOL, x))
-ttl$SYMBOL = tt2$SYMBOL
-#colnames = gsub(pattern = "^AveExpr_", replacement = "", colnames(ttl$AveExpr))
-for (i in 1:2) { print(colnames(ttl[[i]])) }
-for (i in 1:6) {
-  colnames(ttl[[i]]) = gsub(pattern = "^log2FC_|^log2AveExpr_|^P.Value_|^adj.P.Val_|^AveExpr_|^StdDev_|^CIMean_", replacement = "", colnames(ttl[[i]]))
-}
-
-ttl$log2FC["Foxp3",ttl$adj.P.Val["Foxp3",] < 0.05]
-ttl$log2FC["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
-ttl$adj.P.Val["Rorc",ttl$adj.P.Val["Rorc",] < 0.05]
-
-th = 0.5
-
-# gene_list = list()
-# for (j in colnames(ttl$log2FC)) {
-#     gene_ord = ttl$SYMBOL[order(abs(ttl$log2FC[j]), decreasing=T)]
-#     gene_list[[sprintf("%s_up", j)]] = gene_ord[gene_ord %in% as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] > th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
-#     gene_list[[sprintf("%s_down", j)]] = gene_ord[gene_ord %in%as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] < -th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
-# }
-# which(unlist(lapply(gene_list, function(x) any(x %in% "Ccr7"))))
-# lapply(gene_list, length)
-
-gene_list = list()
-for (j in colnames(ttl$log2FC)) {
-    gene_ord = ttl$SYMBOL[order(abs(ttl$log2FC[j]), decreasing=T)]
-    up = gene_ord[gene_ord %in% as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] > th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
-    down = gene_ord[gene_ord %in%as.character(ttl$SYMBOL[ttl$adj.P.Val[j] < 0.05 & ttl$log2FC[j] < -th & !grepl("^Rpl|^Rps",ttl$SYMBOL)])]
-    gene_list[[sprintf("%s_up", j)]] = data.frame(SYMBOL = up, log2FC = ttl$log2FC[j][up,], P.Value = ttl$P.Value[j][up,], adj.P.Val = ttl$adj.P.Val[j][up,])
-    gene_list[[sprintf("%s_down", j)]] = data.frame(SYMBOL = down, log2FC = ttl$log2FC[j][down,], P.Value = ttl$P.Value[j][down,], adj.P.Val = ttl$adj.P.Val[j][down,])
-}
-
-which(unlist(lapply(gene_list, function(x) any(x$SYMBOL %in% "Ccr7"))))
-lapply(gene_list, dim)
-
-#gene_list_original = gene_list
-
-#dir.create("DiffExpression_signatures")
-for (i in 1:length(gene_list)) {
-    print(i)
-    write.table(gene_list[[i]], sprintf("%s/%s/DiffExpression_signatures/%s.csv", prefix, prefix2, names(gene_list)[i]), sep = ",", quote = F, row.names = F, col.names = T)
-    # write.table(gene_list[[i]], sprintf("./DiffExpression_signatures/%s.txt", names(gene_list)[i]), sep = "\t", quote = F, row.names = F, col.names = F)
-}
-
-unique(so$clustersCCA7RenamedSplit)
-ttl$log2FC["Tbx21",grepl("InHD$", colnames(ttl$log2FC))]
-ttl$log2FC["RORC",grepl("InHD$", colnames(ttl$log2FC))]
-ttl$log2FC["GATA3",grepl("InHD$", colnames(ttl$log2FC))]
-
-```
-
 
 2. Prolif vs all others
 ```{r}
@@ -985,7 +901,7 @@ tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20)
 
 ```
 
-4. Each cl vs all the others in ACTIVATED
+4. Each cl vs all the others in ACTIVATED DONE
 ```{r}
 metadata = metadata_orig[metadata_orig$level2_parent1 == "activated",]
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
@@ -1049,6 +965,47 @@ dev.off()
 tt_list[[i]] %>% arrange(desc(logFC), adj.P.Val) %>% slice_head(n = 20) 
 tt_list[[i]] %>% arrange(logFC, adj.P.Val) %>% slice_head(n = 20) 
 
+tt_list = c(tt_list_1)
+saveRDS(tt_list, file = sprintf("%s/%s/ttlist_volcano4.Rds", prefix, prefix2))
+
+pdf(sprintf("%s/%s/ttlist_volcano4_FCFC.pdf", prefix, prefix2), 8,8, useDingbats = F)
+x = "CD4_cl21_vs_AllActivated"
+y = "CD4_cl26_vs_AllActivated"
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
+
+x = "CD4_cl21_vs_AllActivated"
+y = "CD4_cl27_vs_AllActivated"
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
+
+x = "CD4_cl26_vs_AllActivated"
+y = "CD4_cl27_vs_AllActivated"
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
+
+x = "CD4_cl21_vs_AllActivated"
+y = "CD4_cl20_vs_AllActivated"
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
+
+x = "CD4_cl20_vs_AllActivated"
+y = "CD4_cl18_vs_AllActivated"
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
+
+dev.off()
+
+x = ""
+y = ""
+genes_highlight = abs(tt_list[[x]][["logFC"]]) > 1 | abs(tt_list[[y]][["logFC"]]) > 1
+plot(tt_list[[x]][["logFC"]],tt_list[[y]][["logFC"]], xlab = x, ylab = y)
+text(tt_list[[x]][["logFC"]][genes_highlight], tt_list[[y]][["logFC"]][genes_highlight], labels = tt_list[[1]][["SYMBOL"]][genes_highlight], col = "blue")
 
 ```
 
