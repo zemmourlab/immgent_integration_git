@@ -802,13 +802,32 @@ for (i in unique(annot$level1)) {
 
 annot$level0 = NULL
 annot$annotation_level2 = NULL
+
+#Add resting, activated
+annot$level2_parent1 = "not_applicable"
+annot$level2_parent1[annot$level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","treg_cl1", "treg_cl7")] = "activated"
+annot$level2_parent1[annot$level2 %in% c("CD4_cl1", "CD4_cl12", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD8AB_cl1", "CD8AB_cl2", "CD8AB_cl22", "CD8AB_cl4", "CD8AB_cl5","treg_cl1", "treg_cl7"
+)] = "resting"
+annot$level2_parent1[annot$level2 %in% c("CD4_cl8", "CD8AB_cl19", "treg_cl5", "not_CD4CD8_cl48")] = "proliferating"
+table(annot$level2_parent1, annot$level2)
+table(annot$level2_parent1, annot$level1)
+
+sum(rowSums(apply(annot,2,is.na)))
+
 write.table(x = annot, file = "annotation_table_20241216.csv", row.names = F, quote = F, sep = ",")
 
-annot_table = table(annot$level1, annot$level2) %>% as.data.frame() %>% melt() %>% filter(value != 0)
-annot_table$variable = NULL
-colnames(annot_table) = c("level1", "level2", "n_cells")
+annot_summary <- annot %>%
+  group_by(level2, level1, level2_parent1) %>% 
+  summarize(counts = n(), .groups = "drop") %>%
+  arrange(
+    sub("^.*_cl", "", level2) %>% as.numeric(), # Extract cluster number and convert to numeric
+    level2                                     # Keep cluster prefix order (CD4, treg, etc.)
+  ) %>% 
+    arrange(level1) %>%
+    as.data.frame()
 
-write.table(x = annot_table, file = "annotation_table_history_20241216.csv", row.names = F, quote = F, sep = ",")
+
+write.table(x = annot_summary, file = "annotation_table_history_20241216.csv", row.names = F, quote = F, sep = ",")
 
 ```
 

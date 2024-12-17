@@ -559,10 +559,10 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 }
 
 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
-
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB")
-so = so_orig[,so_orig$annotation_level0 == "CD8AB"]
+so = so_orig[,so_orig$annotation_level1 == "CD8AB"]# so = so_orig[,so_orig$annotation_level0 == "CD8AB"]
 
 table_data = table(so$annotation_level2_oct24, so$annotation_level2)
 # pdf(sprintf("%s/ClustersOct24_Newclusters.pdf", "."), width = 10, height = 10)
@@ -612,20 +612,43 @@ saveRDS(so, file = "igt1_96_CD8AB_20241113.Rds")
 
 prefix = "totalvi_20241113_CD8AB_rmIGTsample"
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/totalvi_20241113_CD8AB_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241113_CD8AB_rmIGTsample", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
-pdf(sprintf("%s/MDEincremental_Clusters.pdf", prefix), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+pdf(sprintf("%s/MDE_AnnotationLevel20241216.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "CD8AB")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = T, print_plot2 = T )
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
 dev.off()
 
-saveRDS(so, file = "igt1_96_CD8AB_20241113.Rds")
+# saveRDS(so, file = "igt1_96_CD8AB_20241113.Rds")
+saveRDS(so, file = "igt1_96_CD8AB_20241216.Rds")
 
 
 
 ```
+
+remove unwanted cell embeddings
+totalvi_20241006 - mde2_totalvi_20241006
+totalvi_20241113_CD8AB_rmIGTsample - mde_incremental
+```{r}
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+saveRDS(so, file = "igt1_96_CD8AB_20241216.Rds")
+
+```
+
 
 **Kaplan's data**
 
