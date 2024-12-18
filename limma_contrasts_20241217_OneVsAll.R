@@ -135,7 +135,8 @@ design = fit$design
 
 message("loading metadata")
 
-metadata = data.frame(so@meta.data[,c("annotation_level2", "annotation_level2.IGTHT", "IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
+metadata = data.frame(so@meta.data[,c("annotation_level2", "IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
+metadata$annotation_level2.IGTHT = paste(metadata$annotation_level2, metadata$IGTHT, sep = ".")
 metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
