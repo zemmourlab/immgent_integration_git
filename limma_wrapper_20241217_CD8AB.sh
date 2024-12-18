@@ -48,4 +48,8 @@ path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=OneVsAll
 Rscript $SCRIPT_DIR/limma_contrasts_20241217_OneVsAll.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
+path_to_fit_object=$output_dir/$fit_file_name
+prefix_file_name=Activated_vs_Resting
+Rscript $SCRIPT_DIR/limma_contrasts_20241217_ActivatedVsResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+
 
