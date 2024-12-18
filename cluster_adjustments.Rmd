@@ -805,7 +805,7 @@ annot$annotation_level2 = NULL
 
 #Add resting, activated
 annot$level2_parent1 = "not_applicable"
-annot$level2_parent1[annot$level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","treg_cl1", "treg_cl7")] = "activated"
+annot$level2_parent1[annot$level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","treg_cl2", "treg_cl3", "treg_cl4", "treg_cl6", "treg_cl8")] = "activated"
 annot$level2_parent1[annot$level2 %in% c("CD4_cl1", "CD4_cl12", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD8AB_cl1", "CD8AB_cl2", "CD8AB_cl22", "CD8AB_cl4", "CD8AB_cl5","treg_cl1", "treg_cl7"
 )] = "resting"
 annot$level2_parent1[annot$level2 %in% c("CD4_cl8", "CD8AB_cl19", "treg_cl5", "not_CD4CD8_cl48")] = "proliferating"

@@ -17,6 +17,12 @@ path_to_fit_object = args[3]
 output_dir = args[4] 
 prefix_file_name = args[5]
 
+# path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds"
+# path_to_tmm_object = "DGE_limma/20241217/igt1_96_Treg_20241216_tmm.Rds"
+# path_to_fit_object = "DGE_limma/20241217/igt1_96_Treg_20241216_fit.Rds"
+# output_dir = "DGE_limma"
+# prefix_file_name = "in_Activated"
+
 # Validate inputs
 if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
@@ -141,15 +147,15 @@ dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
 message("creating constrats") ##EDIT
-metadata = metadata[metadata$level2_parent1 %in% c("activated", "resting"),]
-metadata$level2_parent1 = factor(metadata$level2_parent1, levels = c("activated", "resting"))
+metadata = metadata[metadata$annotation_level2_parent1 %in% c("activated", "resting"),]
+metadata$annotation_level2_parent1 = factor(metadata$annotation_level2_parent1, levels = c("activated", "resting"))
 
 contrasts = c()
 namescontrasts = c()
-for (cl in levels(metadata$level2_parent1)[1]) {
+for (cl in levels(metadata$annotation_level2_parent1)[1]) {
     print(cl)
-    group1_filter <- expr(level2_parent1 == cl) ##EDIT
-    group2_filter <- expr(!(level2_parent1 %in% cl) ) #& level2_parent1 == "resting" ##EDIT
+    group1_filter <- expr(annotation_level2_parent1 == cl) ##EDIT
+    group2_filter <- expr(!(annotation_level2_parent1 %in% cl) ) #& level2_parent1 == "resting" ##EDIT
     groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
     nmecontrast = "Activated_vs_Resting" ##EDIT
     # nmecontrast = sprintf("%s_vs_AllResting", cl) ##EDIT

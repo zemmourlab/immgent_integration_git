@@ -16,6 +16,12 @@ path_to_fit_object = args[3]
 output_dir = args[4] 
 prefix_file_name = args[5]
 
+# path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds"
+# path_to_tmm_object = "DGE_limma/20241217/igt1_96_Treg_20241216_tmm.Rds"
+# path_to_fit_object = "DGE_limma/20241217/igt1_96_Treg_20241216_fit.Rds"
+# output_dir = "DGE_limma" 
+# prefix_file_name = "in_Activated"
+
 # Validate inputs
 if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)

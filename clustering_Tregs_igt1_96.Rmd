@@ -531,7 +531,7 @@ Plots
 ```{r}
 
 pdf(sprintf("%s/MDE_AnnotationLevel20241216.pdf", "."), 10, 10, useDingbats = F)
-MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "treg")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = T, print_plot2 = T )
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "treg")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = T, print_plot2 = T, labelclusters = T )
 DimPlot(so, reduction = "mde_totalvi_20241014_Treg_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = "mde_totalvi_20241014_Treg_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
 DimPlot(so, reduction = "mde_totalvi_20241014_Treg_rmIGTsample", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
