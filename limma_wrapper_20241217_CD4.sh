@@ -45,5 +45,8 @@ path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Activated
 Rscript $SCRIPT_DIR/limma_contrasts_20241217_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
+path_to_fit_object=$output_dir/$fit_file_name
+prefix_file_name=OneVsAll
+Rscript $SCRIPT_DIR/limma_contrasts_20241217_OneVsAll.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 
