@@ -1615,6 +1615,150 @@ MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_2024100
 
 ```
 
+**Plot for each IGT, all samples in overall MDE, and cell type specific MDE**
+
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+
+so_all = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so_cd4 = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/igt1_96_CD4_20241216.Rds")
+so_cd8 = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/igt1_96_CD8AB_20241216.Rds")
+so_treg = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds")
+so_gdT = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/igt1_96_gdT_20241201.Rds")
+so_nonconv = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv/igt1_96_nonconv_20241201.Rds")
+so_abTDN = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN/igt1_96_abT_DN_20241201.Rds")
+so_abTCD8aa = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa/igt1_96_abT_CD8aa_20241201.Rds")
+
+so_all = so_all[, !so_all$annotation_level1 %in% c("nonT", "remove")]
+
+MyDimPlotHighlight <- function(seurat_object = so, 
+                               umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
+                               cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
+                               highlight_column_name = "nonconv_tcr_recog", 
+                               title = "", 
+                               labelclusters = T, 
+                               pixels = c(512, 512), 
+                               highlight_size = 1, 
+                               highlight_alpha = 1, 
+                               color_mapping = highlight_colors, 
+                               print_plot1 = TRUE, 
+                               print_plot2 = TRUE) {
+    
+    # UMAP embeddings
+    dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]
+    dim2 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 2]
+    tmp <- data.frame(seurat_object@meta.data, dim1 = dim1, dim2 = dim2)
+    
+    # Subset for highlighted cells
+    tmp2 <- tmp[cells_to_highlight, ]
+    
+    # Filter unique cluster labels present in cells_to_highlight
+    highlight_values <- unique(tmp2[[highlight_column_name]])
+    
+    # Background plot
+    bkrg <- ggplot(tmp) + 
+        geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels)
+    
+    # Highlighted points
+    p2 <- geom_point(data = tmp2, 
+                     aes(dim1, dim2, color = !!sym(highlight_column_name)), 
+                     size = highlight_size, 
+                     alpha = highlight_alpha)
+    
+    # Plots with consistent colors
+    plot1 <- bkrg + p2 + 
+        scale_color_manual(values = color_mapping) + 
+        ggtitle(title) + 
+        theme_minimal()
+    
+    plot2 <- bkrg + p2 + 
+        scale_color_manual(values = color_mapping) + 
+        theme_void() + NoLegend()
+    
+    # Add cluster labels dynamically for only the present values
+    if (labelclusters) {
+        tmp_labels <- tmp2 %>%
+            filter(!!sym(highlight_column_name) %in% highlight_values) %>%
+            group_by(!!sym(highlight_column_name)) %>%
+            summarise(dim1 = mean(dim1), dim2 = mean(dim2))
+        
+        plot3 <- plot2 + 
+            geom_text(data = tmp_labels, 
+                      aes(x = dim1, y = dim2, label = !!sym(highlight_column_name), 
+                          color = !!sym(highlight_column_name)),
+                      size = 4, show.legend = FALSE) +
+            scale_color_manual(values = color_mapping) +
+            ggtitle(title)
+    } else {
+        plot3 <- NULL
+    }
+    
+    # Print plots
+    if (print_plot1) print(plot1)
+    if (print_plot2) print(plot2)
+    if (labelclusters && !is.null(plot3)) print(plot3)
+    
+    # Prevent implicit return
+    invisible(NULL)
+}
+
+highlight_colors = setNames(mypal, unique(so_all$annotation_level2))
+
+# Predefine a consistent color mapping so that it doesn;t change when some clusters are not present in a sample
+highlight_colors = setNames(mypal, unique(so_all$annotation_level2))
+
+for (IGT in unique(so_all$IGT)) {
+    so <- so_all[, so_all$IGT == IGT]
+    pdf(sprintf("%s_MDE_overall.pdf", IGT), 10, 10, useDingbats = FALSE)
+    for (s in unique(so$sample_name)) {
+        tryCatch({
+            print(s)
+            print(MyDimPlotHighlightV3(
+                seurat_object = so_all, 
+                umap_to_plot = "mde2_totalvi_20241006", 
+                cells_to_highlight = colnames(so_all)[which(so_all$IGT == IGT & so_all$sample_name == s)], 
+                highlight_column_name = "annotation_level2", 
+                labelclusters = T,
+                title = sprintf("%s %s",IGT, s), 
+                highlight_size = 1, 
+                highlight_alpha = 1, 
+                pixels = c(512, 512), 
+                color_mapping = highlight_colors, # Consistent colors
+                print_plot1 = F, 
+                print_plot2 = F
+            ))
+        }, error = function(e) {
+            # Print error message and skip to the next iteration
+            message(sprintf("Error in plotting for IGT = '%s', sample_name = '%s': %s", IGT, s, e$message))
+        })
+    }
+    dev.off()
+    rm(so)
+}
+
+
+
+######
+
+
+so_list = list(so_all,so_cd4,  so_cd8, so_treg, so_gdT, so_nonconv, so_abTDN, so_abTCD8aa)
+names(so_list) = c("All", "CD4",  "CD8AB", "Treg", "gdT", "nonconv", "abT_DN", "abT_CD8aa")
+for (IGT in unique(so_all$IGT)) {
+    for (ct in names(so_list)) {
+        pdf(spintf("%s_%s.pdf", IGT, ct), 10, 10, useDingbats = F)
+        MyDimPlotHighlight(seurat_object = so_list[[ct]], umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+    }
+    
+}
+
+pdf(spintf("IGT%s_%s.pdf", 8, 8, useDingbats = F)
+MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
+
+
+
+```
+
+
 
 
 **Integration evaluation: conservation of HVG**
