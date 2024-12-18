@@ -1,6 +1,7 @@
 # David Zemmour
 # R
 # usage: Rscript limma_constrasts_custom.R [path_to_seurat_object] [path_to_tmm_object] [path_to_fit_object] [output_dir] [prefix_file_name]
+# LOOK FOR EDIT to find where to edit the script! Essentially in loading metadata and in making contrasts
 
 options(max.print=1000)
 options(expressions = 50000)
@@ -133,23 +134,13 @@ message("loading fit object")
 fit = readRDS(path_to_fit_object)
 design = fit$design
 
-message("loading metadata")
-
-metadata = data.frame(so@meta.data[,c("annotation_level2","IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
-metadata$level2_parent1 = NA
-metadata$level2_parent1[metadata$annotation_level2 %in% c("CD4_cl1", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD4_cl12")] = "resting"
-metadata$level2_parent1[metadata$annotation_level2 %in% c("CD4_cl9", "CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl26","CD4_cl27")] = "activated"
-metadata$level2_parent1[metadata$annotation_level2 %in% c("CD4_cl8")] = "proliferating"
-table(metadata$level2_parent1, metadata$annotation_level2)
-annotation_level2_order = gsub("CD4_cl","", unique(metadata$annotation_level2)) %>% as.numeric() %>% sort() %>% sprintf("CD4_cl%s",.)
-metadata$annotation_level2 = factor(metadata$annotation_level2, levels = annotation_level2_order)
-
-metadata$annotation_level2.IGTHT = paste(metadata$annotation_level2, metadata$IGTHT, sep = ".")
+message("loading metadata") ##EDIT
+metadata = data.frame(so@meta.data[,c("annotation_level2","annotation_level2_parent1", "annotation_level2.IGTHT", "IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
 metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
-message("creating constrats")
+message("creating constrats") ##EDIT
 metadata = metadata[metadata$level2_parent1 == "resting",]
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
 
@@ -157,10 +148,10 @@ contrasts = c()
 namescontrasts = c()
 for (cl in levels(metadata$annotation_level2)) {
     print(cl)
-    group1_filter <- expr(annotation_level2 == cl)
-    group2_filter <- expr(!(annotation_level2 %in% cl) & level2_parent1 == "resting")
+    group1_filter <- expr(annotation_level2 == cl) ##EDIT
+    group2_filter <- expr(!(annotation_level2 %in% cl) ) #& level2_parent1 == "resting" ##EDIT
     groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-    nmecontrast = sprintf("%s_vs_AllResting", cl)
+    nmecontrast = sprintf("%s_vs_AllResting", cl) ##EDIT
     # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
     
     # contrasts = c()

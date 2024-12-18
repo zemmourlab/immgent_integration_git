@@ -141,7 +141,6 @@ dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
 message("creating constrats")
-metadata = metadata[metadata$annotation_level2_parent1 == "resting",]
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
 
 contrasts = c()
@@ -151,7 +150,7 @@ for (cl in levels(metadata$annotation_level2)) {
     group1_filter <- expr(annotation_level2 == cl)
     group2_filter <- expr(!(annotation_level2 %in% cl))
     groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-    nmecontrast = sprintf("%s_vs_AllResting", cl)
+    nmecontrast = sprintf("%s_vs_All", cl)
     # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
     
     # contrasts = c()

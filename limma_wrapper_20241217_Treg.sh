@@ -24,11 +24,12 @@ path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg
 cd $path_to_wd
 
 # no need to sample Tregs
-path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds
-output_dir=DGE_limma/20241217
+# path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds
+# output_dir=DGE_limma/20241217
 # so_file_name=igt1_96_Treg_20241216_sampled_so.Rds
 # Rscript $SCRIPT_DIR/limma_sample_seuratobject_20241217.R $path_to_seurat_object $output_dir $so_file_name
 
+output_dir=DGE_limma/20241217
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds
 tmm_file_name=igt1_96_Treg_20241216_tmm.Rds
 Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
@@ -45,5 +46,8 @@ path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Activated
 Rscript $SCRIPT_DIR/limma_contrasts_20241217_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
+path_to_fit_object=$output_dir/$fit_file_name
+prefix_file_name=OneVsAll
+Rscript $SCRIPT_DIR/limma_contrasts_20241217_OneVsAll.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 
