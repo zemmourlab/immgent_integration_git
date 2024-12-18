@@ -162,7 +162,7 @@ Add not_CD4CD8 totalvi
 ```{r}
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241113_not_CD4CD8_rmIGTsample"
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
 
 ```
 
