@@ -26,23 +26,22 @@ cd $path_to_wd
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/igt1_96_CD8AB_20241216.Rds
 output_dir=DGE_limma/20241217
 so_file_name=igt1_96_CD8AB_20241216_sampled_so.Rds
-
-Rscript $SCRIPT_DIR/limma_sample_seuratobject_20241217.R $path_to_seurat_object $output_dir $so_file_name
+# Rscript $SCRIPT_DIR/limma_sample_seuratobject_20241217.R $path_to_seurat_object $output_dir $so_file_name
 
 path_to_seurat_object=$output_dir/$so_file_name
 tmm_file_name=igt1_96_CD8AB_20241216_sampled_tmm.Rds
-Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
+# Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 path_to_tmm_object=$output_dir/$tmm_file_name
 fit_file_name=igt1_96_CD8AB_20241216_sampled_fit.Rds
-Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
+# Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Resting
-Rscript $SCRIPT_DIR/limma_contrasts_20241217_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+# Rscript $SCRIPT_DIR/limma_contrasts_20241217_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 prefix_file_name=in_Activated
-Rscript $SCRIPT_DIR/limma_contrasts_20241217_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+# Rscript $SCRIPT_DIR/limma_contrasts_20241217_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=OneVsAll
