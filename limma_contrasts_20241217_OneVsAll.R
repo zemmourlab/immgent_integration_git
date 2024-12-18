@@ -134,9 +134,12 @@ fit = readRDS(path_to_fit_object)
 design = fit$design
 
 message("loading metadata")
-
 metadata = data.frame(so@meta.data[,c("annotation_level2", "IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
-metadata$annotation_level2.IGTHT = paste(metadata$annotation_level2, metadata$IGTHT, sep = ".")
+if (!is.null(so$annotation_level2.IGTHT)) {
+    metadata$annotation_level2.IGTHT = so$annotation_level2.IGTHT
+} else {
+    metadata$annotation_level2.IGTHT = paste(metadata$annotation_level2, metadata$IGTHT, sep = ".")
+}
 metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT

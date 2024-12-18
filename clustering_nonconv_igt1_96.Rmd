@@ -100,3 +100,113 @@ saveRDS(so, file = "igt1_96_nonconv_20241201.Rds")
 
 ```
 
+**Update Seurat object 20241216**
+same clusters, adding level1, level2_parent1 etc
+
+```{r}
+AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
+    totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
+    # pattern = "(IGT\\S*)_(\\d+)"
+    # rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
+    colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+    #all(rownames(totalvi) == colnames(so))
+    totalvi = as.matrix(totalvi)
+    pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+    matches = grepl(pattern, rownames(totalvi))
+    if (!all(matches)) {
+        print("updating cell names in csv file, assuming same order as seurat object" )
+        #rownames(totalvi) = gsub(pattern = "(\\S*)_(\\d+)", replacement = "\\1", rownames(totalvi))
+        rownames(totalvi) = colnames(so)
+    }
+    totalvi = totalvi[colnames(so),]
+    if (all(colnames(so) == rownames(totalvi))) {
+        print("all cells ARE in the latent_file")
+        so[[prefix]] = CreateDimReducObject(embeddings = totalvi, key = prefix, assay = "RNA") #sprintf("totalvi_%s", prefix2)
+        if (calculate_umap == T) {
+            so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = prefix, n.components = 2, reduction.name = sprintf("umap_%s", prefix))
+        }
+        return(so)
+    } else {
+        print("all cells ARE NOT in the latent_file")
+        return(so)
+    }
+}
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv")
+so = so_orig[,so_orig$annotation_level1 == "nonconv"] # so = so_orig[,so_orig$annotation_level0 == "CD4"]
+
+table_data = table(so$annotation_level2, so$annotation_level1)
+# pdf(sprintf("%s/ClustersOct24_Newclusters.pdf", "."), width = 10, height = 10)
+# 
+# # Convert the table to a data frame for better readability in the PDF
+# table_df <- as.data.frame(table_data)
+# 
+# # Create the table in the PDF
+# grid.table(table_df)
+# 
+# # Close the PDF device
+# dev.off()
+
+```
+
+Add general totalvi
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241006", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde2_totalvi_20241006", calculate_umap = F)
+
+```
+
+Add not_CD4CD8 totalvi
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241113_not_CD4CD8_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
+
+```
+
+Add nonconv specific MDE
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv/totalvi_20241201_nonconv_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
+
+```
+
+Plots
+```{r}
+
+pdf(sprintf("%s/MDE_AnnotationLevel20241216.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "nonconv")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = , print_plot2 = F, labelclusters = T )
+# MyDimPlotHighlight(so, umap_to_plot = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", cells_to_highlight = names(which(so$annotation_level1 == "nonconv")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = , print_plot2 = F, labelclusters = T )
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = F) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
+# DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
+dev.off()
+
+saveRDS(so, file = "igt1_96_nonconv_20241216.Rds")
+
+```
+
+remove unwanted cell embeddings
+totalvi_20241006 - mde2_totalvi_20241006
+totalvi_20241113_CD4_rmIGTsample - mde_incremental
+```{r}
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+saveRDS(so, file = "igt1_96_nonconv_20241216.Rds")
+```
+
+
