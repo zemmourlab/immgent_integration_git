@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/limma_wrapper_20241217_Treg.sh
+#run as: sbatch $SCRIPT_DIR/limma_wrapper_20241217_gdT.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -19,38 +19,26 @@ conda activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg
+path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
 
 cd $path_to_wd
 
-# no need to sample Tregs
-# path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds
+# no need to sample gdT
+# path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/igt1_96_gdT_20241201.Rds
 # output_dir=DGE_limma/20241217
-# so_file_name=igt1_96_Treg_20241216_sampled_so.Rds
+# so_file_name=igt1_96_gdT_20241201_sampled_so.Rds
 # Rscript $SCRIPT_DIR/limma_sample_seuratobject_20241217.R $path_to_seurat_object $output_dir $so_file_name
 
 output_dir=DGE_limma/20241217
-path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20241216.Rds
-tmm_file_name=igt1_96_Treg_20241216_tmm.Rds
+path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/igt1_96_gdT_20241201.Rds
+tmm_file_name=igt1_96_gdT_20241201_tmm.Rds
 Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 path_to_tmm_object=$output_dir/$tmm_file_name
-fit_file_name=igt1_96_Treg_20241216_fit.Rds
+fit_file_name=igt1_96_gdT_20241201_fit.Rds
 Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
-
-path_to_fit_object=$output_dir/$fit_file_name
-prefix_file_name=in_Resting
-Rscript $SCRIPT_DIR/limma_contrasts_20241217_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
-
-path_to_fit_object=$output_dir/$fit_file_name
-prefix_file_name=in_Activated
-Rscript $SCRIPT_DIR/limma_contrasts_20241217_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=OneVsAll
 Rscript $SCRIPT_DIR/limma_contrasts_20241217_OneVsAll.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
-
-path_to_fit_object=$output_dir/$fit_file_name
-prefix_file_name=Activated_vs_Resting
-Rscript $SCRIPT_DIR/limma_contrasts_20241217_ActivatedVsResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
