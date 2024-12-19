@@ -1679,9 +1679,6 @@ for (IGT in unique(so_all$IGT)) {
     
 }
 
-pdf(spintf("IGT%s_%s.pdf", 8, 8, useDingbats = F)
-MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
-
 
 
 ```

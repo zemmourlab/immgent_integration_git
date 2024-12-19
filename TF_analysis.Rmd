@@ -1,0 +1,440 @@
+---
+title: "TF_analysis"
+output: html_document
+date: "2024-12-19"
+---
+
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315 #for R and old scvi
+module load openblas/0.3.13 #load again or error
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis
+
+R
+options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis")
+
+
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = viridis(100)
+ColorRamp = rev(cividis(100))
+ColorRamp = magma(100)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+```
+
+**load Seurat**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+```
+
+**Get TF list**
+```{r}
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+tf = tf[tf %in% rownames(so)]
+
+##
+# library(org.Hs.eg.db)
+# hs = org.Hs.eg.db
+# go2eg = as.list(org.Hs.egGO2ALLEGS)
+# symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+# cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+# cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+# #is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+# tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+# secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+```
+
+**TF analysis across clusters level1**
+
+```{r}
+so = so_orig[,!so_orig$annotation_level1 %in% c("remove", "prolif", "nonT")]
+so = so_orig[,!so_orig$annotation_level1 %in% c("remove", "prolif", "nonT", "miniverse", "unclear", "thymocyte")]
+
+# so = NormalizeData(so, assay = "RNA", normalization.method = "RC", scale.factor = 10000)
+
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level1",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+# barplot(pseudobulk[["RNA"]]$data["Foxp3",])
+# barplot(pseudobulk[["RNA"]]$data["Fezf2",])
+colSums(exp(pseudobulk[["RNA"]]$data)-1) #check log1p CP10K transform
+# colSums(pseudobulk[["RNA"]]$data)
+
+tf_level1 = pseudobulk[["RNA"]]$data[tf,]
+tf_level1_norm = tf_level1 / rowSums(tf_level1)
+
+#filter tf to those expressed at at least 0.5 in at least 1 clusters
+tf_filt_expr = rownames(tf_level1)[rowSums(tf_level1 > 0.5)>=1]
+tf_level1_norm_filt = tf_level1_norm[tf_filt_expr,]
+
+tf_sub = na.omit(rownames(tf_level1_norm_filt)[rowSums(tf_level1_norm_filt > 0.7) == 1])
+
+pdf("annotation_level1_analysis_2.pdf", 7, 7, useDingbats = F)
+pheatmap(tf_level1_norm_filt[tf_sub,],cluster_cols = F, cluster_rows = F, color = ColorRamp, breaks = seq(0,1,length.out = length(ColorRamp)+1), legend_breaks = seq(0, 1, by = 0.2),  legend_labels = seq(0, 1, by = 0.2), main = "rows sum to 1" )
+pheatmap(tf_level1[tf_sub,],cluster_cols = F, cluster_rows = F, color = ColorRamp)
+
+gene_to_plot = "Foxp3"
+data = data.frame(
+  Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+  Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+)
+data$Cluster = gsub("\\-", "_", data$Cluster)
+
+# Create the barplot
+ggplot(data, aes(x = Cluster, y = Expression, fill = Cluster)) +
+  geom_bar(stat = "identity") +
+  labs(title = sprintf("%s Expression in Clusters log1p CPK10K", gene_to_plot), x = "Cluster", y = "Expression") +
+    scale_fill_manual(values = mypal_level1) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+
+dev.off()
+
+```
+
+**TF analysis across clusters level2**
+```{r}
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level2",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+write.table(pseudobulk[["RNA"]]$data, file = "igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.csv", sep = ",", quote = F)
+# save(pseudobulk, file = "igt1_96_pseudobulk_byclusterannotationlevel2_20241219.Rds")
+barplot(pseudobulk[["RNA"]]$data["Foxp3",])
+# barplot(pseudobulk[["RNA"]]$data["Fezf2",])
+colSums(exp(pseudobulk[["RNA"]]$data)-1) #check log1p CP10K transform
+# colSums(pseudobulk[["RNA"]]$data)
+
+tf_level2 = pseudobulk[["RNA"]]$data[tf,]
+tf_level2_norm = tf_level2 / rowSums(tf_level2)
+
+#filter tf to those expressed at at least 0.5 in at least 1 clusters
+tf_filt_expr = rownames(tf_level2)[rowSums(tf_level2 > 0.5)>=1]
+tf_level2_norm_filt = tf_level2_norm[tf_filt_expr,]
+
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(ggrepel)
+
+# Prepare the data
+# Assuming 'tf_level2_norm' is the data frame/matrix containing your expression data
+data_long <- as.data.frame(tf_level2_norm_filt) %>%
+  rownames_to_column(var = "Gene") %>% 
+  pivot_longer(cols = -Gene, names_to = "Cluster", values_to = "Expression") %>%
+  group_by(Gene) %>%
+  arrange(desc(Expression), .by_group = TRUE) %>%
+  mutate(CumulativeExpression = cumsum(Expression), Rank = row_number())
+
+# Plot for each gene
+# ggplot(data_long %>% filter(Gene == "Foxp3"), aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene)) +
+#   geom_line(size = 1) +
+#   labs(
+#     title = "Cumulative Expression of Genes",
+#     x = "Ranked Clusters by Expression",
+#     y = "Cumulative Expression"
+#   ) +
+#   theme_minimal() +
+#   theme(legend.position = "bottom")
+
+data_long %>% filter(CumulativeExpression > 0.8 & Rank < 15) %>% as.data.frame()
+top_tf = data_long %>% filter(CumulativeExpression > 0.5 & Rank < 8) %>% pull(Gene) %>% unique()
+
+pdf("annotation_level2_cum_curves.pdf", 7, 7, useDingbats = F)
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p1 + labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") + theme_minimal() 
+
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p2 = geom_line(data = data_long[data_long$Gene %in% c("Foxp3"),], mapping = aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene), size = 1, alpha = 1) 
+p1 + p2 +
+    scale_color_manual(values = c(mypal)) + 
+    labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") +
+    theme_minimal() + NoLegend()
+
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p2 = geom_line(data = data_long[data_long$Gene %in% c(top_tf),], mapping = aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene), size = 1, alpha = 1) 
+p3 = geom_label_repel(
+    data = data_long %>%
+        filter(Gene %in% c(top_tf)) %>%
+        group_by(Gene) %>%
+        slice_sample(n = 1),
+        # slice_min(order_by = Rank, n = 1), # Choose the point with max expression for labeling
+    aes(x = Rank, y = CumulativeExpression, label = Gene, color = Gene),
+    size = 4,
+    segment.size = 0.2,
+    segment.color = "grey",
+    max.overlaps = 50
+)
+p1 + p2 + p3 +
+    scale_color_manual(values = c(mypal)) + 
+    labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") +
+    theme_minimal() + NoLegend()
+dev.off()
+
+##Barplot
+
+pdf("annotation_level2_barplots.pdf", 12, 7, useDingbats = F)
+for (g in top_tf) {
+    print(g)
+    gene_to_plot = g
+    data = data.frame(
+        Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+        Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+    )
+    data$Cluster = gsub("\\-", "_", data$Cluster)
+    data$Cluster = factor(data$Cluster, levels = levels(so$annotation_level2))
+    data$level1 = so$annotation_level1[match(data$Cluster, so$annotation_level2)]
+    
+    
+    # Create the barplot
+    p = ggplot(data, aes(x = Cluster, y = Expression, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p)
+    
+}
+dev.off()
+
+pdf("annotation_level2_heatmap.pdf", 12, 7, useDingbats = F)
+tmp = tf_level2_norm[top_tf,]
+tmp[tmp>0.10] = 0.1
+uplim = round(max(tmp)*1.1,1)
+pheatmap(tmp, breaks = seq(0,uplim,length.out = length(ColorRamp)+1), legend_breaks = seq(0, uplim, by = 0.1),  legend_labels = seq(0, uplim, by = 0.1), main = "rows sum to 1" )
+pheatmap(tf_level2[top_tf,], main = "expression log1p CP10K")
+pheatmap(tf_level2[top_tf,], cluster_cols = F, main = "expression log1p CP10K") 
+dev.off()
+
+
+
+
+
+```
+
+**TF analysis across clusters level2 in CD4 only**
+```{r}
+so = so_orig[,so_orig$annotation_level1 %in% c("CD4")]
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level2",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+barplot(pseudobulk[["RNA"]]$data["Foxp3",])
+# barplot(pseudobulk[["RNA"]]$data["Fezf2",])
+colSums(exp(pseudobulk[["RNA"]]$data)-1) #check log1p CP10K transform
+# colSums(pseudobulk[["RNA"]]$data)
+
+tf_level2 = pseudobulk[["RNA"]]$data[tf,]
+tf_level2_norm = tf_level2 / rowSums(tf_level2)
+
+#filter tf to those expressed at at least 0.5 in at least 1 clusters
+tf_filt_expr = rownames(tf_level2)[rowSums(tf_level2 > 0.5)>=1]
+tf_level2_norm_filt = tf_level2_norm[tf_filt_expr,]
+
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(ggrepel)
+
+# Prepare the data
+# Assuming 'tf_level2_norm' is the data frame/matrix containing your expression data
+data_long <- as.data.frame(tf_level2_norm_filt) %>%
+  rownames_to_column(var = "Gene") %>% 
+  pivot_longer(cols = -Gene, names_to = "Cluster", values_to = "Expression") %>%
+  group_by(Gene) %>%
+  arrange(desc(Expression), .by_group = TRUE) %>%
+  mutate(CumulativeExpression = cumsum(Expression), Rank = row_number())
+
+# Plot for each gene
+ggplot(data_long %>% filter(Gene == "Tbx21"), aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Cumulative Expression of Genes",
+    x = "Ranked Clusters by Expression",
+    y = "Cumulative Expression"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# data_long %>% filter(CumulativeExpression > 0.8 & Rank < 15) %>% as.data.frame()
+top_tf = data_long %>% filter(CumulativeExpression > 0.5 & Rank < 3) %>% pull(Gene) %>% unique()
+top_tf
+
+pdf("annotation_level2_cum_curves_CD4.pdf", 7, 7, useDingbats = F)
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p1 + labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") + theme_minimal() 
+
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p2 = geom_line(data = data_long[data_long$Gene %in% c("Rorc"),], mapping = aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene), size = 1, alpha = 1) 
+p1 + p2 +
+    scale_color_manual(values = c(mypal)) + 
+    labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") +
+    theme_minimal() + NoLegend()
+
+p1 = ggplot(data_long, aes(x = Rank, y = CumulativeExpression, group = Gene)) + geom_line(size = 0.5, alpha = 0.1)
+p2 = geom_line(data = data_long[data_long$Gene %in% c(top_tf),], mapping = aes(x = Rank, y = CumulativeExpression, group = Gene, color = Gene), size = 1, alpha = 1) 
+p3 = geom_label_repel(
+    data = data_long %>%
+        filter(Gene %in% c(top_tf)) %>%
+        group_by(Gene) %>%
+        slice_sample(n = 1),
+        # slice_min(order_by = Rank, n = 1), # Choose the point with max expression for labeling
+    aes(x = Rank, y = CumulativeExpression, label = Gene, color = Gene),
+    size = 4,
+    segment.size = 0.2,
+    segment.color = "grey",
+    max.overlaps = 50
+)
+p1 + p2 + p3 +
+    scale_color_manual(values = c(mypal)) + 
+    labs(title = "Cumulative Expression of Genes", x = "Ranked Clusters by Expression", y = "Cumulative Expression") +
+    theme_minimal() + NoLegend()
+dev.off()
+
+##Barplot
+
+pdf("annotation_level2_barplots_CD4.pdf", 12, 7, useDingbats = F)
+for (g in top_tf) {
+    print(g)
+    gene_to_plot = g
+    data = data.frame(
+        Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+        Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+    )
+    data$Cluster = gsub("\\-", "_", data$Cluster)
+    data$Cluster = factor(data$Cluster, levels = levels(so$annotation_level2))
+    data$level1 = so$annotation_level1[match(data$Cluster, so$annotation_level2)]
+    
+    
+    # Create the barplot
+    p = ggplot(data, aes(x = Cluster, y = Expression, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p)
+    
+}
+dev.off()
+
+pdf("annotation_level2_heatmap_CD4.pdf", 12, 3, useDingbats = F)
+tmp = tf_level2_norm[top_tf,]
+tmp[tmp>0.10] = 0.1
+uplim = round(max(tmp)*1.1,1)
+pheatmap(tmp, breaks = seq(0,uplim,length.out = length(ColorRamp)+1), legend_breaks = seq(0, uplim, by = 0.1),  legend_labels = seq(0, uplim, by = 0.1), main = "rows sum to 1" )
+pheatmap(tf_level2[top_tf,], main = "expression log1p CP10K")
+pheatmap(tf_level2[top_tf,], cluster_cols = F, main = "expression log1p CP10K") 
+dev.off()
+
+
+
+
+
+```
+
