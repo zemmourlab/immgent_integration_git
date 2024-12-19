@@ -83,102 +83,6 @@ MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.em
     
 }
 
-# MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column_name ="nonconv_tcr_recog", pixels = c(512, 512), highlight_size = 1, highlight_alpha = 1, mycols = "red", print_plot1 = T, print_plot2 = T) {
-#     so = seurat_object
-#     dim1 = so[[umap_to_plot]]@cell.embeddings[,1]
-#     dim2 = so[[umap_to_plot]]@cell.embeddings[,2]
-#     tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
-#     # tmp[[highlight_col]] = factor(tmp[[highlight_col]])
-#     tmp2 = tmp[cells_to_highlight,]
-#     bkrg = ggplot(tmp) + geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels) 
-#     p2 = geom_point(data = tmp2, aes(dim1, dim2, color = !!sym(highlight_column_name)),size = highlight_size, alpha = I(highlight_alpha)) 
-#     
-#     plot1 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_minimal()
-#     plot2 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_void() + NoLegend()
-#     if (print_plot1 == T) {
-#         print(plot1)
-#     }
-#     if (print_plot2 == T) {
-#         print(plot2)
-#     }
-# }
-
-MyDimPlotHighlight <- function(seurat_object = so, 
-                               umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
-                               cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
-                               highlight_column_name = "nonconv_tcr_recog", 
-                               title = "", 
-                               labelclusters = T, 
-                               pixels = c(512, 512), 
-                               highlight_size = 1, 
-                               highlight_alpha = 1, 
-                               color_mapping = highlight_colors, 
-                               print_plot1 = TRUE, 
-                               print_plot2 = TRUE) {
-    
-    require(scattermore)
-    require(ggplot2)
-    
-    
-    # UMAP embeddings
-    dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]
-    dim2 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 2]
-    tmp <- data.frame(seurat_object@meta.data, dim1 = dim1, dim2 = dim2)
-    
-    # Subset for highlighted cells
-    tmp2 <- tmp[cells_to_highlight, ]
-    
-    # Filter unique cluster labels present in cells_to_highlight
-    highlight_values <- unique(tmp2[[highlight_column_name]])
-    
-    # Background plot
-    bkrg <- ggplot(tmp) + 
-        geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels)
-    
-    # Highlighted points
-    p2 <- geom_point(data = tmp2, 
-                     aes(dim1, dim2, color = !!sym(highlight_column_name)), 
-                     size = highlight_size, 
-                     alpha = highlight_alpha)
-    
-    # Plots with consistent colors
-    plot1 <- bkrg + p2 + 
-        scale_color_manual(values = color_mapping) + 
-        ggtitle(title) + 
-        theme_minimal()
-    
-    plot2 <- bkrg + p2 + 
-        scale_color_manual(values = color_mapping) + 
-        theme_void() + NoLegend()
-    
-    # Add cluster labels dynamically for only the present values
-    if (labelclusters) {
-        tmp_labels <- tmp2 %>%
-            filter(!!sym(highlight_column_name) %in% highlight_values) %>%
-            group_by(!!sym(highlight_column_name)) %>%
-            summarise(dim1 = mean(dim1), dim2 = mean(dim2))
-        
-        plot3 <- plot2 + 
-            geom_text(data = tmp_labels, 
-                      aes(x = dim1, y = dim2, label = !!sym(highlight_column_name), 
-                          color = !!sym(highlight_column_name)),
-                      size = 4, show.legend = FALSE) +
-            scale_color_manual(values = color_mapping) +
-            ggtitle(title)
-    } else {
-        plot3 <- NULL
-    }
-    
-    # Print plots
-    if (print_plot1) print(plot1)
-    if (print_plot2) print(plot2)
-    if (labelclusters && !is.null(plot3)) print(plot3)
-    
-    # Prevent implicit return
-    invisible(NULL)
-}
-
-
 MyDimPlotHighlight <- function(seurat_object = so, 
                                umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
                                cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
@@ -617,6 +521,102 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 }
 
 
+#DELETE IF ALL GOES WELL
+
+# MyDimPlotHighlight = function(seurat_object = so, umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column_name ="nonconv_tcr_recog", pixels = c(512, 512), highlight_size = 1, highlight_alpha = 1, mycols = "red", print_plot1 = T, print_plot2 = T) {
+#     so = seurat_object
+#     dim1 = so[[umap_to_plot]]@cell.embeddings[,1]
+#     dim2 = so[[umap_to_plot]]@cell.embeddings[,2]
+#     tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+#     # tmp[[highlight_col]] = factor(tmp[[highlight_col]])
+#     tmp2 = tmp[cells_to_highlight,]
+#     bkrg = ggplot(tmp) + geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels) 
+#     p2 = geom_point(data = tmp2, aes(dim1, dim2, color = !!sym(highlight_column_name)),size = highlight_size, alpha = I(highlight_alpha)) 
+#     
+#     plot1 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_minimal()
+#     plot2 = bkrg+p2 + scale_color_manual(values = mycols)  + theme_void() + NoLegend()
+#     if (print_plot1 == T) {
+#         print(plot1)
+#     }
+#     if (print_plot2 == T) {
+#         print(plot2)
+#     }
+# }
+
+# MyDimPlotHighlight <- function(seurat_object = so, 
+#                                umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
+#                                cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
+#                                highlight_column_name = "nonconv_tcr_recog", 
+#                                title = "", 
+#                                labelclusters = T, 
+#                                pixels = c(512, 512), 
+#                                highlight_size = 1, 
+#                                highlight_alpha = 1, 
+#                                color_mapping = highlight_colors, 
+#                                print_plot1 = TRUE, 
+#                                print_plot2 = TRUE) {
+#     
+#     require(scattermore)
+#     require(ggplot2)
+#     
+#     
+#     # UMAP embeddings
+#     dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]
+#     dim2 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 2]
+#     tmp <- data.frame(seurat_object@meta.data, dim1 = dim1, dim2 = dim2)
+#     
+#     # Subset for highlighted cells
+#     tmp2 <- tmp[cells_to_highlight, ]
+#     
+#     # Filter unique cluster labels present in cells_to_highlight
+#     highlight_values <- unique(tmp2[[highlight_column_name]])
+#     
+#     # Background plot
+#     bkrg <- ggplot(tmp) + 
+#         geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels)
+#     
+#     # Highlighted points
+#     p2 <- geom_point(data = tmp2, 
+#                      aes(dim1, dim2, color = !!sym(highlight_column_name)), 
+#                      size = highlight_size, 
+#                      alpha = highlight_alpha)
+#     
+#     # Plots with consistent colors
+#     plot1 <- bkrg + p2 + 
+#         scale_color_manual(values = color_mapping) + 
+#         ggtitle(title) + 
+#         theme_minimal()
+#     
+#     plot2 <- bkrg + p2 + 
+#         scale_color_manual(values = color_mapping) + 
+#         theme_void() + NoLegend()
+#     
+#     # Add cluster labels dynamically for only the present values
+#     if (labelclusters) {
+#         tmp_labels <- tmp2 %>%
+#             filter(!!sym(highlight_column_name) %in% highlight_values) %>%
+#             group_by(!!sym(highlight_column_name)) %>%
+#             summarise(dim1 = mean(dim1), dim2 = mean(dim2))
+#         
+#         plot3 <- plot2 + 
+#             geom_text(data = tmp_labels, 
+#                       aes(x = dim1, y = dim2, label = !!sym(highlight_column_name), 
+#                           color = !!sym(highlight_column_name)),
+#                       size = 4, show.legend = FALSE) +
+#             scale_color_manual(values = color_mapping) +
+#             ggtitle(title)
+#     } else {
+#         plot3 <- NULL
+#     }
+#     
+#     # Print plots
+#     if (print_plot1) print(plot1)
+#     if (print_plot2) print(plot2)
+#     if (labelclusters && !is.null(plot3)) print(plot3)
+#     
+#     # Prevent implicit return
+#     invisible(NULL)
+# }
 
 
 

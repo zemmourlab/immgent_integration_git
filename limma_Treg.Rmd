@@ -85,5 +85,77 @@ activated vs resting
 
 ```
 
+Make table and signatures (now in each contrast script too)
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/DGE_limma/20241217")
+
+file_list = list.files(pattern = "^ttlist.*\\.Rds$")
+for (i in 1:length(file_list)) {
+    print(file_list[i])
+    dir = gsub(pattern = "ttlist_|\\.Rds", replacement = "", x = file_list[i])
+    
+    
+    #make big table
+    tt_list = readRDS(file_list[i])
+    if (length(tt_list) > 1) {
+        tt = CollapseDiff_limmatrend(tt_list)
+    } else {
+        tt = tt_list[[1]]
+    }
+    tt$SYMBOL = rownames(tt)
+    colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+    colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+    tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+    # tt = tt %>% arrange(desc(log2FC)) %>% select(SYMBOL,log2FC, P.Value,adj.P.Val,log2AveExpr)
+    write.table(x = tt, file = gsub(pattern = "Rds", replacement = "txt", x = file_list[i]), sep = "\t", quote = F, row.names = F)
+    
+    output_dir = "."
+    prefix_file_name =  gsub(pattern = "ttlist_|\\.Rds", replacement = "", x = file_list[i])
+    message("Saving signature abs(log2FC) > 1 & BH adj.P.Val < 0.05")
+    
+    # Create the directory if it does not exist
+        sig_dir = sprintf("%s/%s", output_dir, prefix_file_name)
+    if (!dir.exists(sig_dir)) {
+        dir.create(sig_dir, recursive = TRUE)
+        message("Directory created: ", sig_dir)
+    } else {
+        message("Directory already exists: ", sig_dir)
+    }
+    
+    # Loop through the list and apply filters, with error handling
+    for (j in seq_along(tt_list)) {
+        tryCatch({
+            print(names(tt_list)[j])
+            tt = tt_list[[j]]
+            
+            # Update column names
+            colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+            colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+            
+            # Filter for upregulated genes and save
+            tt %>% 
+                filter(log2FC > 0.5 & adj.P.Val < 0.05) %>% 
+                arrange(desc(log2FC)) %>% 
+                select(SYMBOL, log2FC, log2AveExpr, P.Value, adj.P.Val) %>% 
+                write.table(file = sprintf("%s/%s_up.txt", sig_dir, names(tt_list)[j]), sep = "\t", quote = FALSE, row.names = F)
+            
+            # Filter for downregulated genes and save
+            tt %>% 
+                filter(log2FC < -0.5 & adj.P.Val < 0.05) %>% 
+                arrange(log2FC) %>% 
+                select(SYMBOL, log2FC, log2AveExpr, P.Value, adj.P.Val) %>% 
+                write.table(file = sprintf("%s/%s_down.txt", sig_dir, names(tt_list)[j]), sep = "\t", quote = FALSE, row.names = F)
+        }, error = function(e) {
+            message("Error processing: ", names(tt_list)[j], " - ", e$message)
+        })
+    }
+    
+    
+}
+
+
+```
+
+
 
 

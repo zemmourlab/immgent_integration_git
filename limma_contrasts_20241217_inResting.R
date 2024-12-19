@@ -110,6 +110,46 @@ CreateComparisonName <- function(group1_filter, group2_filter) {
     return(comparison_name)
 }
 
+CollapseDiff_limmatrend = function(l) {
+    l = lapply(l, function(x) x = data.frame(x, rownames = rownames(x)))
+    
+    fc = data.frame(l[[1]][,c("rownames", "logFC")])
+    for (i in 2:length(l)) { fc = merge(x = fc, y = l[[i]][,c("rownames", "logFC")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    mean = data.frame(l[[1]][,c("rownames", "AveExpr")])
+    for (i in 2:length(l)) { mean = merge(x = mean, y = l[[i]][,c("rownames", "AveExpr")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    pv = data.frame(l[[1]][,c("rownames", "P.Value")])
+    for (i in 2:length(l)) { pv = merge(x = pv, y = l[[i]][,c("rownames", "P.Value")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    qcl = data.frame(l[[1]][,c("rownames", "adj.P.Val")])
+    for (i in 2:length(l)) { qcl = merge(x = qcl, y = l[[i]][,c("rownames", "adj.P.Val")], by.x = "rownames", by.y = "rownames", all = T) }
+    
+    rownames(fc) = fc[,1]
+    rownames(mean) = fc[,1]
+    rownames(pv) = pv[,1]
+    rownames(qcl) = qcl[,1]
+    fc = fc[,-1]
+    mean = mean[,-1]
+    pv = pv[,-1]
+    qcl = qcl[,-1]
+    colnames(fc) = paste("logFC", names(l), sep = "_")
+    colnames(mean) = paste("AveExpr", names(l), sep = "_")
+    colnames(pv) = paste("P.Value", names(l), sep = "_")
+    colnames(qcl) = paste("adj.P.Val", names(l), sep = "_")
+    all(rownames(fc) == rownames(pv))
+    all(rownames(fc) == rownames(mean))
+    all(rownames(fc) == rownames(qcl))
+    fc[is.na(fc)] = 0
+    pv[is.na(pv)] = 1
+    qcl[is.na(qcl)] = 1
+    diff = data.frame(fc, mean, pv, qcl)
+    which(is.na(diff))
+    
+    return(diff)
+    
+}
+
 Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
     p = ggplot(data = vplot) + geom_point(aes(x = fc, y = pval), colour = "black", alpha = I(1), size = I(0.5)) +
         scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
@@ -184,7 +224,7 @@ tmp = tt_list
 names(tmp)
 
 saveRDS(tt_list, file = sprintf("%s/ttlist_%s.Rds", output_dir, prefix_file_name))
-message("Results saved to: ", sprintf("%s/ttlist_%s.pdf", output_dir, prefix_file_name))
+message("Results saved to: ", sprintf("%s/ttlist_%s.Rds", output_dir, prefix_file_name))
 
 pdf(sprintf("%s/DiffExpression_volcano_%s.pdf", output_dir, prefix_file_name), width = 10, height = 10)
 for (i in 1:length(tmp)) {
@@ -210,4 +250,53 @@ for (i in 1:length(tmp)) {
 dev.off()
 message("Plots saved to: ", sprintf("%s/DiffExpression_volcano_%s.pdf", output_dir, prefix_file_name))
 
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/ttlist_%s.txt", output_dir, prefix_file_name), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/ttlist_%s.txt", output_dir, prefix_file_name))
+
+message("Saving signature abs(log2FC) > 0.5 & BH adj.P.Val < 0.05")
+# Create the directory if it does not exist
+sig_dir = sprintf("%s/%s", output_dir, prefix_file_name)
+if (!dir.exists(sig_dir)) {
+    dir.create(sig_dir, recursive = TRUE)
+    message("Directory created: ", sig_dir)
+} else {
+    message("Directory already exists: ", sig_dir)
+}
+
+# Loop through the list and apply filters, with error handling
+for (j in seq_along(tt_list)) {
+    tryCatch({
+        print(names(tt_list)[j])
+        tt = tt_list[[j]]
+        
+        # Update column names
+        colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+        colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+        
+        # Filter for upregulated genes and save
+        tt %>% 
+            filter(log2FC > 0.5 & adj.P.Val < 0.05) %>% 
+            arrange(desc(log2FC)) %>% 
+            select(SYMBOL, log2FC, log2AveExpr, P.Value, adj.P.Val) %>% 
+            write.table(file = sprintf("%s/%s_up.txt", sig_dir, names(tt_list)[j]), sep = "\t", quote = FALSE, row.names = F)
+        
+        # Filter for downregulated genes and save
+        tt %>% 
+            filter(log2FC < -0.5 & adj.P.Val < 0.05) %>% 
+            arrange(log2FC) %>% 
+            select(SYMBOL, log2FC, log2AveExpr, P.Value, adj.P.Val) %>% 
+            write.table(file = sprintf("%s/%s_down.txt", sig_dir, names(tt_list)[j]), sep = "\t", quote = FALSE, row.names = F)
+    }, error = function(e) {
+        message("Error processing: ", names(tt_list)[j], " - ", e$message)
+    })
+}
 
