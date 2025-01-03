@@ -1,4 +1,41 @@
 
+**remove environments**
+```{bash}
+
+conda remove --prefix /project/zemmour/david/envs/scarches_20240424 --all
+conda remove --prefix /project/zemmour/david/envs/scarches --all
+conda remove --prefix /project/zemmour/david/envs/scarches_test --all
+conda remove --prefix /project/zemmour/david/envs/scarches_test2 --all
+conda remove --prefix /project/zemmour/david/envs/scarches_test3 --all
+conda remove --prefix /project/zemmour/david/envs/scarches_test4 --all
+conda remove --prefix /project/zemmour/david/envs/scarches_test8 --all
+conda remove --prefix /project/zemmour/david/envs/scarches --all
+
+conda remove --prefix /project/zemmour/david/envs/mrvi_test3 --all
+conda remove --prefix /project/zemmour/david/envs/mrvi_test4 --all
+conda remove --prefix /project/zemmour/david/envs/mrvi_test5 --all
+
+conda remove --prefix /project/zemmour/david/envs/mrvi_test6 --all
+conda remove --prefix /project/zemmour/david/envs/mrvi_test7 --all
+conda remove --prefix /project/zemmour/david/envs/mrvi_test8 --all
+conda remove --prefix /project/zemmour/david/envs/scvi120_test1 --all
+
+conda remove --prefix /project/zemmour/david/envs/scvi120_test2 --all
+conda remove --prefix /project/zemmour/david/envs/scvi120_test3 --all
+to do:
+conda remove --prefix /project/zemmour/david/envs/scvi120_20241003 --all
+conda remove --prefix /project/zemmour/david/envs/scvi113_20240525 --all
+
+scvi120_test1
+scvi120_test2
+scvi120_test3
+scvi120_20241003
+scvi113_20240525
+
+
+
+```
+
 
 **Install SCVI --> /project/jfkfloor2/zemmourlab/david/envs/scvi**
 ```{bash}
@@ -278,7 +315,7 @@ python3 setup.py install --prefix=/project/zemmour/david/envs/scarches_test3/sca
 
 ```
 
-Trial 7
+Trial 7: nope
 ```{bash}
 module load python/anaconda-2021.05
 module load cuda/11.2
@@ -329,32 +366,10 @@ torch.cuda.is_available()
 
 ```
 
-Trial 9:
-```{bash}
-cd /project/zemmour/david/envs/
-module load python/anaconda-2022.05 
-conda create -p /project/zemmour/david/envs/scarches_test9 python=3.9
-
-source activate /project/zemmour/david/envs/scarches_test9
-
-pip3 install torch torchvision
-
-sinteractive --time=00:10:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=32GB
-
-source activate /project/zemmour/david/envs/scarches_test9
-
-pip install -U scarches
-
-python
-import torch
-torch.cuda.is_available()
-
-```
-
 **Install mrVI**
 
 Create a new environment in Midway3 for mrVI
-
+none working
 ```{bash}
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others

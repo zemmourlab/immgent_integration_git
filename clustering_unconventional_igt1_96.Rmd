@@ -1,7 +1,7 @@
 ---
-title: "clustering_unconventional"
+title: "clustering_nonconv"
 output: html_document
-date: "2024-10-17"
+date: "2024-12-01"
 editor_options: 
   chunk_output_type: console
 ---
@@ -26,7 +26,7 @@ module load openblas/0.3.13
 source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13 #load again or error
 
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv
 #cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
 
 R
@@ -38,10 +38,10 @@ R
 
 ```{r}
 options(max.print=1000)
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
-
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+""
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -73,483 +73,36 @@ names(mypal) = NULL
 
 ```
 
-OUTPUT FILES:
-Seurat object with the results: igt1_96_unconventional_20241017.Rds
-annotation: annotation_level2_unconventional.csv
+**clustering V3 20241201**
+ cluster_adjustments.Rmd: sbatch $SCRIPT_DIR/run_totalvi_wrapper_20241201_nonconv_rmIGTsample.sh
 
 ```{r}
+prefix = "totalvi_20241201_nonconv_rmIGTsample"
 
-so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/igt1_96_unconventional_20241017.Rds")
-so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
-so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv")
+so = so_orig[,so_orig$annotation_level1 == "nonconv"]
 
-```
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv/totalvi_20241201_nonconv_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
 
-**Load seurat expression data**
---> igt1_96_treg_20241017.Rds
-```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
-
-so = so_orig[,so_orig$annotation_level1 == "unconventional"]
-so[['mde_totalvi_20241006']] = NULL
-so[['umap2_totalvi_20241006']] = NULL
-so[['mdeumap_totalvi_20241006']] = NULL
-so[['mde_totalvi_20241008_rmIGTsample']] = NULL
-so[['mdeumap_totalvi_20241008_rmIGTsample']] = NULL
-
-```
-
-Add latent spaces, umaps
-```{r}
-# sprintf("%s_X_SCVI_%s.csv", prefix, prefix2)
-
-AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
-    totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
-    # pattern = "(IGT\\S*)_(\\d+)"
-    # rownames(totalvi) = gsub(pattern, "\\1", rownames(totalvi))
-    colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
-    #all(rownames(totalvi) == colnames(so))
-    totalvi = as.matrix(totalvi)
-    pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
-    matches = grepl(pattern, rownames(totalvi))
-    if (!all(matches)) {
-        print("updating cell names in csv file, assuming same order as seurat object" )
-        #rownames(totalvi) = gsub(pattern = "(\\S*)_(\\d+)", replacement = "\\1", rownames(totalvi))
-        rownames(totalvi) = colnames(so)
-    }
-    totalvi = totalvi[colnames(so),]
-    if (all(colnames(so) == rownames(totalvi))) {
-        print("all cells ARE in the latent_file")
-        so[[prefix]] = CreateDimReducObject(embeddings = totalvi, key = prefix, assay = "RNA") #sprintf("totalvi_%s", prefix2)
-        if (calculate_umap == T) {
-            so = RunUMAP(so, dims = 1:ncol(totalvi), reduction = prefix, n.components = 2, reduction.name = sprintf("umap_%s", prefix))
-        }
-        return(so)
-    } else {
-        print("all cells ARE NOT in the latent_file")
-        return(so)
-    }
-}
-
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241014_unconventional"
-so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241014_unconventional", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241014_unconventional", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_unconventional", calculate_umap = F)
-#write.table(so[['umap_totalvi_20241006']]@cell.embeddings, file = sprintf("%s/umap.csv",dir_with_file), quote = F, sep = ",", row.names = T, col.names = T)
-
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241014_unconventional_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
-
-```
-
-```{r}
-prefix = "totalvi_20241014_unconventional_rmIGTsample"
-#setwd(prefix)
-reduc = "mde_totalvi_20241014_unconventional_rmIGTsample"
-reduc = "umap_totalvi_20241014_unconventional_rmIGTsample"
-```
-
-```{r}
-RenameCluster = function(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl") {
-    cl = as.numeric(cluster.vector)
-    ordered = order(unique(cl))
-    cl = sprintf("%s%s", cluster.prefix, cl )
-    renamed.vector = factor(cl, levels = unique(cl)[ordered])
-    return(renamed.vector)
-}
-
-n_latent = ncol(so[[prefix]]@cell.embeddings)
-so = FindNeighbors(so, dims = 1:n_latent, reduction = prefix)
-so = FindClusters(so, resolution = 0.25, cluster.name = sprintf("Cluster_%s_Res0.25",prefix))
-so = FindClusters(so, resolution = 0.5, cluster.name = sprintf("Cluster_%s_Res0.5",prefix))
-so = FindClusters(so, resolution = 0.75, cluster.name = sprintf("Cluster_%s_Res0.75",prefix))
-so = FindClusters(so, resolution = 1, cluster.name = sprintf("Cluster_%s_Res1",prefix))
-so = FindClusters(so, resolution = 1.5, cluster.name = sprintf("Cluster_%s_Res1.5",prefix))
-so = FindClusters(so, resolution = 2, cluster.name = sprintf("Cluster_%s_Res2",prefix))
-so = FindClusters(so, resolution = 3, cluster.name = sprintf("Cluster_%s_Res3",prefix))
-so = FindClusters(so, resolution = 4, cluster.name = sprintf("Cluster_%s_Res4",prefix))
-so = FindClusters(so, resolution = 5, cluster.name = sprintf("Cluster_%s_Res5",prefix))
-so = FindClusters(so, resolution = 6, cluster.name = sprintf("Cluster_%s_Res6",prefix))
-
-cluster.name = sprintf("Cluster_%s_Res0.25",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res0.5",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res0.75",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res1",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res1.5",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res2",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res3",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res4",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res5",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-cluster.name = sprintf("Cluster_%s_Res6",prefix)
-so[[cluster.name]][,1] = RenameCluster(cluster.vector = so[[cluster.name]][,1], cluster.prefix = "cl")
-
-write.table(data.frame(colnames(so), so@meta.data[,grepl("Cluster_totalvi_20241014_unconventional_rmIGTsample_Res", colnames(so@meta.data))]), file = sprintf("%s/Cluster_totalvi_20241014_unconventional_rmIGTsample_Res.csv", prefix), sep = ",", quote = F, row.names = F, col.names = F)
-
-```
-
-UMAP/MDE with clusters
-```{r}
-# pdf(sprintf("%s/UMAP_Clusters.pdf", prefix), 20, 20, useDingbats = F)
-# for (i in c(0.25,0.5,0.75,1,1.5,2,3,4)) {
-#     MyPlots(seurat_object = so, 
-#         dim1 = so[[reduc]]@cell.embeddings[,1], 
-#         dim2 = so[[reduc]]@cell.embeddings[,2], 
-#         color_by = sprintf("Cluster_%s_Res%s",prefix,i), 
-#         split_by1 = "organ_simplified",
-#         split_by2 =  NULL, 
-#         genes = NULL, 
-#         cluster_key = NULL, mypal = mypal) #glasbey()
-# }
-# dev.off()
-
-# pdf(sprintf("%s/UMAP_Clusters.pdf", prefix), 20, 20, useDingbats = F)
-pdf(sprintf("%s/MDE_Clusters.pdf", prefix), 30, 30, useDingbats = F)
-for (i in c(0.25,0.5,0.75,1,1.5,2,3,4,5,6)) {
-    print(i)
-    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal))
-    print(DimPlot(so, reduction = reduc, group.by = sprintf("Cluster_%s_Res%s",prefix,i), split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal))
-}
+umap_to_plot = "mde_totalvi_20241201_nonconv_rmIGTsample"
+pdf(sprintf("%s/MDE_clusters.pdf", prefix), 20, 20, useDingbats = F)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), highlight_column = "nonconv_tcr_recog", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$iNKT == T)), highlight_column = "iNKT", pixels = c(512, 512), mycols = "red")
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = umap_to_plot, cells_to_highlight = names(which(so$MAIT == T)), highlight_column = "MAIT", pixels = c(512, 512), mycols = "red")
 dev.off()
 
-pdf(sprintf("%s/iNKT_MAIT.pdf", prefix), 30, 30, useDingbats = F)
-DimPlot(so, reduction = reduc, group.by = "iNKT", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = c("grey", "red"))
-DimPlot(so, reduction = reduc, group.by = "MAIT", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = c("grey", "red"))
-dev.off()
-
+saveRDS(so, file = "igt1_96_nonconv_20241201.Rds")
 
 ```
 
-UMAP/MDE with genes
-```{r}
-# pdf(sprintf("%s/UMAP_genes2.pdf", prefix), 20,20, useDingbats = F)
-pdf(sprintf("%s/MDE_genes.pdf", prefix), 40,40, useDingbats = F)
-DefaultAssay(so) = "RNA"
-FeaturePlot(so, slot = "data", reduction = reduc, features = c("Trbc1", "Trbc2", "Trac", "Trgc1", "Trdc", "Cd4", "Cd8a", "Cd8b1", "Trav11", "Trav1", "Klrb1c", "Klrg1", "Cd44", "Cd69", "Pdcd1", "Lag3", "Il15ra", "Il2rb", "Il18r1", "Itgae", "Ifng","Il4", "Il17a", "Il10","Il22", "Gzmb", "Prf1", "Areg", "Zbtb16", "Tbx21", "Rorc", "Foxp3", "Nr4a1",  "Mki67"),  ncol = 6, order = T, raster = T, raster.dpi = c(1024,1024))
-dev.off()
+**Update Seurat object 20241216**
+same clusters, adding level1, level2_parent1 etc
 
-# pdf(sprintf("%s/UMAP_proteins.pdf", prefix), 20,20, useDingbats = F)
-pdf(sprintf("%s/MDE_proteins.pdf", prefix), 30,30, useDingbats = F)
-DefaultAssay(so) = "ADT"
-FeaturePlot(so[,so$cite_seq == T], reduction = reduc,slot = "data", features = c("CD3", "THY1.2", "TCRB", "TCRGD", "TCRVG1.1", "TCRVG2", "TCRVG3", "CD4","CD8A","CD8B", "CD62L", "CD44", "IL2RB.CD122", "CD69", "CD103", "GITR.CD357", "LAG3.CD223", "HAVCR2", "TIGIT", "IL2RA.CD25","IL7RA.CD127"), ncol = 5, order = T, raster = T, raster.dpi = c(1024,1024)) #pt.size = 2
-dev.off()
-
-```
-
---> annotation_level2_unconventional.csv
-```{r}
-library(cluster)
-cluster.name = sprintf("Cluster_%s_Res0.25",prefix)
-cluster.names = sprintf("Cluster_%s_Res%s",prefix,c(0.25, 0.5, 0.75, 1,2,3,4,5,6))
-#cluster.name = sprintf("Cluster_%s_Res0.75",prefix)
-
-#1 in all the data
-so_sub = so[,sample(colnames(so), 50000,replace = F)]
-reduc.dist = dist(so_sub[[prefix]]@cell.embeddings)
-
-pdf(sprintf("%s/Cluster_silhouettes.pdf", prefix), 10, 10, useDingbats = F)
-for (cluster.name in cluster.names) {
-    print(cluster.name)
-    cl = as.integer(so_sub[[cluster.name]][,1])
-    sil = silhouette(cl, dist = reduc.dist)
-    clust.col = mypal
-    sil.cols = clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
-    sil.cols = sil.cols[order(-sil[,1], sil[,3])]
-    plot(sil,
-         main = sprintf("Silhouette in %s", cluster.name),
-         border = sil.cols,
-         col = sil.cols,
-         do.col.sort = FALSE)
-}
-dev.off()
-
-so$unconventional_clusters = as.character(so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3)
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl1", "cl12")] = "cl1"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl2", "cl49")] = "cl2"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl13", "cl45")] = "cl13"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl35", "cl42")] = "cl35"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl20", "cl29", "cl50", "cl52")] = "cl20"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl5" & so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res4 == "cl22"] = "cl58"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl6" & so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res4 == "cl25"] = "cl59"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl8" & so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res5 == "cl52"] = "cl60"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl9" & so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res5 == "cl51"] = "cl61"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl30" & so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res5 == "cl69"] = "cl62"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl17", "cl23", "cl33", "cl36", "cl40", "cl37", "cl51")] = "cl63"
-so$unconventional_clusters[so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 == "cl27"] = "cl64" #"nonT"
-
-table(so$unconventional_clusters, so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3)
-extract_numeric = function(x) {
-  as.numeric(gsub("\\D", "", x))
-}
-ordered_vector = unique(so$unconventional_clusters)[order(extract_numeric(unique(so$unconventional_clusters)))] %>% as.character()
-new_cluster_names = paste0("unconv_cl", seq_along(ordered_vector))
-names(new_cluster_names) = ordered_vector
-so$unconventional_clusters_renamed = as.character(new_cluster_names[so$unconventional_clusters])
-
-ordered_vector = unique(so$unconventional_clusters_renamed)[order(extract_numeric(unique(so$unconventional_clusters_renamed)))] %>% as.character()
-so$unconventional_clusters = factor(so$unconventional_clusters_renamed, levels = ordered_vector)
-so$unconventional_clusters_renamed = NULL
-
-so$unconventional_clusters_annot1 = "unknown"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl48")] = "prolif"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl49")] = "nonT"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl7", "unconv_cl32")] = "Tgd_DN_vg3"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl4", "unconv_cl11", "unconv_cl2", "unconv_cl35", "unconv_cl28", "unconv_cl12", "unconv_cl42")] = "Tgd_CD8AA_vg1.1"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl16", "unconv_cl40", "unconv_cl20", "unconv_cl1")] = "Tab_CD8AA"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl41", "unconv_cl3", "unconv_cl39", "unconv_cl29", "unconv_cl31", "unconv_cl34", "unconv_cl47", "unconv_cl37", "unconv_cl18", "unconv_cl36")] = "Tab_DN"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl23", "unconv_cl33")] = "Tgd_DN"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl19", "unconv_cl30", "unconv_cl38", "unconv_cl14", "unconv_cl15")] = "Tab_CD4"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl22")] = "Tab_CD8AB"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl13", "unconv_cl21", "unconv_cl27", "unconv_cl24")] = "Tab_CD4_iNKT"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl17", "unconv_cl25")] = "Tab_DP"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl44", "unconv_cl6")] = "Tab_CD8AB"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl46", "unconv_cl9", "unconv_cl26")] = "Tgd_DN_vg2"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl10", "unconv_cl43", "unconv_cl5")] = "Tgd_DN"
-so$unconventional_clusters_annot1[so$unconventional_clusters %in% c("unconv_cl8", "unconv_cl45")] = "Tab_DN_MAIT_iNKT"
-table(so$unconventional_clusters_annot1, so$unconventional_clusters )
-
-so$unconventional_clusters_annot_TabTgd = so$unconventional_clusters_annot1
-so$unconventional_clusters_annot_TabTgd[grepl("Tgd", so$unconventional_clusters_annot1)] = "Tgd"
-so$unconventional_clusters_annot_TabTgd[grepl("Tab", so$unconventional_clusters_annot1)] = "Tab"
-
-so$unconventional_clusters_annot_CD4CD8chain = so$unconventional_clusters_annot1
-so$unconventional_clusters_annot_CD4CD8chain[grepl("DP", so$unconventional_clusters_annot1)] = "DP"
-so$unconventional_clusters_annot_CD4CD8chain[grepl("DN", so$unconventional_clusters_annot1)] = "DN"
-so$unconventional_clusters_annot_CD4CD8chain[grepl("CD4", so$unconventional_clusters_annot1)] = "CD4"
-so$unconventional_clusters_annot_CD4CD8chain[grepl("CD8AB", so$unconventional_clusters_annot1)] = "CD8AB"
-so$unconventional_clusters_annot_CD4CD8chain[grepl("CD8AA", so$unconventional_clusters_annot1)] = "CD8AA"
-
-# so$test = as.character(so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3)
-# so$test[!so$Cluster_totalvi_20241014_unconventional_rmIGTsample_Res3 %in% c("cl42", "cl45", "cl49")] = "other"
-# so$test = factor(so$test)
-# pdf(sprintf("%s/MDE_Clusters_test.pdf", prefix), 10, 10, useDingbats = F)
-# DimPlot(so, reduction = reduc, group.by = "test", split.by = "test", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-# DimPlot(so, reduction = reduc, group.by = "test", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-# dev.off()
-
-# so$test = so$CD8AB_clusters %in% "unknown"
-# DimPlot(so, reduction = reduc, group.by = "test", raster = F, order = T) + scale_color_manual(values = mypal)
-
-# pdf(sprintf("%s/UMAP_Clusters_Final.pdf", prefix), 20, 20, useDingbats = F)
-pdf(sprintf("%s/MDE_Clusters_Final.pdf", prefix), 20, 20, useDingbats = F)
-DimPlot(so, reduction = reduc, group.by = "unconventional_clusters", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241014_unconventional", group.by = "unconventional_clusters", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = reduc, group.by = "unconventional_clusters", split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512, 512), label = F, pt.size = 1) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = reduc, group.by = "unconventional_clusters_annot1", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = reduc, group.by = "unconventional_clusters_annot_TabTgd", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = reduc, group.by = "unconventional_clusters_annot_CD4CD8chain", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = reduc, group.by = "iNKT", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = c("grey", "red"))
-DimPlot(so, reduction = reduc, group.by = "MAIT", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = c("grey", "red"))
-dev.off()
-
-so_sub = so[,colnames(so_sub)]
-cluster.name =  "unconventional_clusters"
-pdf(sprintf("%s/%s_silhouette.pdf", prefix, cluster.name), 10, 20, useDingbats = F)
-cl = as.integer(as.factor(so_sub[[cluster.name]][,1]))
-sil = silhouette(cl, dist = reduc.dist)
-clust.col = mypal
-sil.cols = clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
-sil.cols = sil.cols[order(-sil[,1], sil[,3])]
-plot(sil,
-     main = sprintf("Silhouette in %s", cluster.name),
-     border = sil.cols,
-     col = sil.cols,
-     do.col.sort = FALSE)
-dev.off()
-
-write.table(data.frame(colnames(so), so$unconventional_clusters, so$unconventional_clusters_annot1, so$unconventional_clusters_annot_TabTgd, so$unconventional_clusters_annot_CD4CD8chain), file = "../annotation_level2_unconventional.csv", sep = ",", quote = F, row.names = F, col.names = F)
-
-
-
-```
-
-Robustness of clusters with silhouette analysis for cluster.name at all resolution + deeper analysis for resolution 0.75 and 0.5 (the optimum)
-in all dataset
-in each organ
-in each IGT
-```{r}
-SilhouetteSummaryPlots = function(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name) {
-    message("plot silhouettes")
-    for (i in categories) {
-        print(i)
-        sil = sil_list[[i]]
-        if (length(sil) >1) {
-            # prepare colours:
-            clust.col <- mypal#scater:::.get_palette("tableau10medium") # hidden scater colours
-            sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
-            sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
-            plot(sil,
-                 main = sprintf("Silhouette in %s in %s:%s", cluster.name, i, column_name),
-                 border = sil.cols,
-                 col = sil.cols,
-                 do.col.sort = FALSE)
-        }
-        
-    }
-    
-    message("Plot Boxplot")
-    sil_summary_list = list()
-    for (i in categories) {
-        sil = sil_list[[i]]
-        if (length(sil) >1) {
-            sil_summary_list[[i]] = as.data.frame(sil) %>% 
-                group_by(cluster) %>% 
-                summarise(mean_sil_width = mean(sil_width),
-                          total = n(),  # Count total observations in each cluster
-                          positive_count = sum(sil_width > 0),  # Count negative silhouette widths
-                          percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
-                as.data.frame()
-            sil_summary_list[[i]][,column_name] = i
-        }
-    }
-    sil_summary = Reduce(rbind,sil_summary_list)
-    
-    #sil_summary[sample(size = 20, x = 1:nrow(sil_summary),replace = F),]
-    
-    averaged_data <- sil_summary %>%
-        group_by(cluster, column_name = sil_summary[,column_name]) %>%
-        summarise(ncells = mean(total), mean_of_means = mean(mean_sil_width, na.rm = TRUE), mean_of_percentage_positive = mean(percentage_positive, na.rm = TRUE), .groups = 'drop') %>% data.frame()
-    
-    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_means)) +
-        geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.7, color = "black") +  # Draw boxplots
-        geom_point(aes(color = column_name, size = ncells > 10), position = position_jitter(width = 0.2, height = 0), alpha = 0.6) +  # Add jittered points
-        scale_color_manual(values=mypal) +  # Color scheme for points
-        labs(title = "Boxplot of Average Mean Silhouette Width per Cluster",
-             x = "Cluster",
-             y = "Average of Mean Silhouette Width",
-             color = column_name) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Improve x-axis label readability
-              legend.position = "right")  # Adjust the legend position
-    print(p)
-    
-    message("Plot Individual")
-    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_means,group = column_name, color = column_name)) +
-        geom_line() +  # Add lines to connect points
-        #geom_point(size = 3, alpha = 0.8) +  # Add points
-        geom_point(alpha = 0.8, aes(size = ncells >10)) +
-        scale_color_manual(values=mypal) +  # Use a distinguishable color palette
-        labs(title = "Line Plot of Average Mean Silhouette Width per Cluster",
-             x = "Cluster",
-             y = "Average of Mean Silhouette Width",
-             color = column_name) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),
-              legend.position = "right") 
-        
-    print(p)
-    print(p + facet_wrap(~column_name))
-    
-     p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_percentage_positive)) +
-        geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.7, color = "black") +  # Draw boxplots
-        geom_point(aes(color = column_name, size = ncells >10), position = position_jitter(width = 0.2, height = 0), alpha = 0.6) +  # Add jittered points
-        scale_color_manual(values=mypal) +  # Color scheme for points
-        labs(title = "Boxplot of Average Percentage of Cells with Positive Width per Cluster",
-             x = "Cluster",
-             y = "Average of Percentage of Cells with Positive Width",
-             color = column_name) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Improve x-axis label readability
-              legend.position = "right")  # Adjust the legend position
-    print(p)
-    
-    message("Plot Individual")
-    p = ggplot(data = averaged_data, aes(x = as.factor(cluster), y = mean_of_percentage_positive, group = column_name, color = column_name)) +
-        geom_line() +  # Add lines to connect points
-        #geom_point(size = 3, alpha = 0.8) +  # Add points
-        geom_point(alpha = 0.8, aes(size = ncells >10)) +
-        scale_color_manual(values=mypal) +  # Use a distinguishable color palette
-        labs(title = "Line Plot of Average Percentage of Cells with Positive per Cluster",
-             x = "Cluster",
-             y = "Average of Percentage of Cells with Positive Width",
-             color = column_name) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),
-              legend.position = "right") 
-        
-    print(p)
-    print(p + facet_wrap(~column_name))
-}
-
-#2 in each organ_simplified: how much does it fit each organ?
-so2 = so[,!is.na(so$organ_simplified)]
-
-sil_list = list()
-column_name = "organ_simplified"
-categories = unique(so2[[column_name]][,1]) %>% na.omit() %>% as.character()
-cluster.name =  "unconventional_clusters"
-
-sil_list = list()
-for (i in categories) {
-    print(i)
-    reduc.dist = dist(so2[[prefix]]@cell.embeddings[so2[[column_name]] == i,])
-    cl = as.integer(so2[[cluster.name]][so2[[column_name]] == i,1])
-    #cl = as.integer(so2[[cluster.name]][so2[[column_name]] == i,1])
-    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
-}
-
-pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 20, 20, useDingbats = F)
-SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
-dev.off()
-
-#3. By IGT
-sil_list = list()
-column_name = "IGT"
-categories = levels(so[[column_name]][,1])
-cluster.name =  "unconventional_clusters"
-
-for (i in categories) {
-    print(i)
-    reduc.dist = dist(so[[prefix]]@cell.embeddings[so[[column_name]] == i,])
-    cl = as.integer(so[[cluster.name]][so[[column_name]] == i,1])
-    sil_list[[i]] = silhouette(cl, dist = reduc.dist)
-}
-
-pdf(sprintf("%s/%s_silhouettes_by%s.pdf", prefix, cluster.name, column_name), 40, 40, useDingbats = F)
-SilhouetteSummaryPlots(sil_list = sil_list, column_name = column_name, categories = categories, cluster.name = cluster.name)
-dev.off()
-
-```
-
-```{r}
-DefaultAssay(so) = "ADT"
-so[['RNA']]$data = NULL
-DefaultAssay(so) = "RNA"
-so[['ADT']]$data = NULL
-
-saveRDS(so, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/igt1_96_unconventional_20241017.Rds")
-
-```
-
-**Compare mde_totalvi_20241014_Treg_rmIGTsample and mde_totalvi_20241008_rmIGTsample_Treg (MDE from totalvi_20241008_rmIGTsample on all cells, then subset Tregs to calculate MDE)**
-```{r}
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
-so = readRDS("igt1_96_unconventional_20241017.Rds")
-
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/mde_totalvi_20241008_rmIGTsample_inunconventional.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample_inunconventional", calculate_umap = F)
-
-pdf(sprintf("%s/MDE_Clusters_ComparingMDEs.pdf", "."), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_totalvi_20241014_unconventional_rmIGTsample", group.by = "unconventional_clusters", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_inunconventional", group.by = "unconventional_clusters", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
-dev.off()
-
-```
-
-**clustering V2, post Oct 2024 workshop**
-
-mde_totalvi_20241008_rmIGTsample_innot_CD4CD8: MDE from totalvi_20241008_rmIGT in not_CD4CD8 cells only
 ```{r}
 AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
     totalvi = read.csv(file = latent_file, header = T, sep = ",", row.names = 1)
@@ -579,12 +132,11 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
     }
 }
 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv")
+so = so_orig[,so_orig$annotation_level1 == "nonconv"] # so = so_orig[,so_orig$annotation_level0 == "CD4"]
 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
-so = so_orig[,so_orig$annotation_level0 == "not_CD4CD8"]
-
-table_data = table(so$annotation_level2_oct24, so$annotation_level2)
+table_data = table(so$annotation_level2, so$annotation_level1)
 # pdf(sprintf("%s/ClustersOct24_Newclusters.pdf", "."), width = 10, height = 10)
 # 
 # # Convert the table to a data frame for better readability in the PDF
@@ -596,64 +148,65 @@ table_data = table(so$annotation_level2_oct24, so$annotation_level2)
 # # Close the PDF device
 # dev.off()
 
+```
 
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/mde_totalvi_20241008_rmIGTsample_innot_CD4CD8.csv",dir_with_file), prefix = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", calculate_umap = F)
-
-pdf(sprintf("%s/MDE_totalvi_20241008_rmIGTsample_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "iNKT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample_innot_CD4CD8", group.by = "MAIT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
-dev.off()
+Add general totalvi
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241006"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241006", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde2_totalvi_20241006", calculate_umap = F)
 
 ```
 
-mde_totalvi_20241008_rmIGTsample_innot_CD4CD8: MDE from new calculated totalvi_20241113_rmIGT in not_CD4CD8 cells only
+Add not_CD4CD8 totalvi
 ```{r}
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional")
-prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample"
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241113_not_CD4CD8_rmIGTsample"
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
-
-pdf(sprintf("%s/MDE_Clusters.pdf", prefix), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "iNKT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "MAIT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-dev.off()
-
-saveRDS(so, file = "igt1_96_notCD4CD8_20241113.Rds")
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", calculate_umap = F)
 
 ```
 
+Add nonconv specific MDE
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv/totalvi_20241201_nonconv_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241201_nonconv_rmIGTsample", calculate_umap = F)
+
+```
+
+Plots
 ```{r}
 
-prefix = "totalvi_20241113_not_CD4CD8_rmIGTsample"
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241113_not_CD4CD8_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
-
-pdf(sprintf("%s/MDEincremental_Clusters.pdf", prefix), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(2048,2048), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
-DimPlot(so, reduction = "mde_incremental", group.by = "nonconv_tcr_recog", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "iNKT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "MAIT", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-
+pdf(sprintf("%s/MDE_AnnotationLevel20241216.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "nonconv")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = , print_plot2 = F, labelclusters = T )
+# MyDimPlotHighlight(so, umap_to_plot = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", cells_to_highlight = names(which(so$annotation_level1 == "nonconv")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = , print_plot2 = F, labelclusters = T )
+DimPlot(so, reduction = "mde_totalvi_20241113_not_CD4CD8_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = F) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
+# DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# DimPlot(so, reduction = "mde_totalvi_20241201_nonconv_rmIGTsample", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + theme_void() + NoLegend() 
 dev.off()
 
-saveRDS(so, file = "igt1_96_notCD4CD8_20241113.Rds")
+saveRDS(so, file = "igt1_96_nonconv_20241216.Rds")
 
 ```
 
-**clustering V3 20241201**
-see cluster_adjustments.Rmd and clustering_gdT_igt1_96.Rmd, clustering_abT_DN_igt1_96.Rmd, clustering_abT_CD8aa_igt1_96.Rmd, clustering_nonconv_igt1_96.Rmd
+remove unwanted cell embeddings
+totalvi_20241006 - mde2_totalvi_20241006
+totalvi_20241113_CD4_rmIGTsample - mde_incremental
+```{r}
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+saveRDS(so, file = "igt1_96_nonconv_20241216.Rds")
+```
+
+

@@ -1,0 +1,535 @@
+---
+title: "TCR_analysis"
+output: html_document
+date: "2024-12-29"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315 #for R and old scvi
+module load openblas/0.3.13 #load again or error
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR
+
+R
+options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR")
+
+
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "tidyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = viridis(100)
+ColorRamp = rev(cividis(100))
+ColorRamp = magma(100)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_odhran = setNames(mypal, unique(so$odhran))
+mypal_tg = setNames(mypal, unique(so$transgenic))
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+```
+
+**Prepare Seurat objects**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so = so_orig[,!so_orig$annotation_level1 %in% c("nonT","remove")]
+so$annotation_level1 = factor(so$annotation_level1)
+
+tgcells = read.table("allTGcells.csv", header = T, sep = ",", row.names = 2)
+table(tgcells$TG)
+
+so$transgenic = tgcells[colnames(so),"TG"]
+so$transgenic[is.na(so$transgenic)] = "not_tg"
+
+tg = unique(so$transgenic)
+tg = tg[tg != "not_tg"]
+
+so2 = so[,!so$organ %in% "thymus"]
+```
+
+
+
+**Check transgenic cells**
+
+```{r}
+tgcells = read.table("allTGcells.csv", header = T, sep = ",", row.names = 2)
+table(tgcells$TG)
+
+so$transgenic = tgcells[colnames(so),"TG"]
+so$transgenic[is.na(so$transgenic)] = "not_tg"
+
+tg = unique(so$transgenic)
+tg = tg[tg != "not_tg"]
+
+pdf("TG_MDE.pdf", 10,10, useDingbats = F)
+print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[!so$transgenic %in% "not_tg"], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$transgenic %in% i], highlight_column_name = "transgenic", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$transgenic %in% i], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = "", pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$transgenic %in% i], highlight_column_name = "annotation_level2", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+dev.off()
+
+so2 = so[,!so$organ %in% "thymus"]
+pdf("TG_MDE_nothymus.pdf", 10,10, useDingbats = F)
+print(MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[!so2$transgenic %in% "not_tg"], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$transgenic %in% i], highlight_column_name = "transgenic", labelclusters = T,
+                title = "", pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$transgenic %in% i], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$transgenic %in% i], highlight_column_name = "annotation_level2", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+dev.off()
+
+pdf("TG_MDE_thymus.pdf", 10,10, useDingbats = F)
+print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$organ == "thymus" & !so$transgenic %in% "not_tg"], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = "", pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$organ == "thymus" & so$transgenic %in% i], highlight_column_name = "transgenic", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$organ == "thymus" & so$transgenic %in% i], highlight_column_name = "annotation_level1", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+for (i in tg) {
+    print(i)
+    print(MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$organ == "thymus" & so$transgenic %in% i], highlight_column_name = "annotation_level2", labelclusters = T,
+                title = i, pixels = c(512, 512), highlight_size = 1, 
+                highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                print_plot2 = F))
+}
+dev.off()
+
+
+```
+
+```{r}
+# so2 = so[,!so$organ %in% "thymus"]
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+so2 = NormalizeData(so2,assay = "ADT", normalization.method = "CLR", verbose = T)
+
+# tmp = so2[,so2$transgenic == "OT1"]
+pdf("TG_CD4CD8.pdf", 20,20, useDingbats = F)
+FeatureScatter(so[,so$transgenic != "not_tg"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_level1)+ 
+    geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+dev.off()
+
+# tmp = so2[,so2$transgenic == "OT1"]
+pdf("TG_CD4CD8_nothymus.pdf", 20,20, useDingbats = F)
+FeatureScatter(so2[,so2$transgenic != "not_tg"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, raster = F, pt.size = 2, plot.cor = F) + scale_color_manual(values = mypal_level1) + 
+    geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+# FeatureScatter(so[,so$transgenic != "not_tg" & so$organ == "thymus"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, pt.size = 2, raster = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_level1) + 
+#     geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+#     geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+dev.off()
+
+pdf("TG_CD4CD8_thymus.pdf", 10,5, useDingbats = F)
+FeatureScatter(so[,so$transgenic != "not_tg" & so$organ == "thymus"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_level1) + 
+    geom_hline(aes(yintercept = 2.2), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.5), linetype="dashed", color = "brown")
+dev.off()
+
+pdf("TG_CD4CD8_nothymus.pdf", 20,20, useDingbats = F)
+FeatureScatter(so2[,so2$transgenic != "not_tg"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, raster = F, pt.size = 2, plot.cor = F) + scale_color_manual(values = mypal_level1) + 
+    geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+# FeatureScatter(so[,so$transgenic != "not_tg" & so$organ == "thymus"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", split.by = "transgenic", ncol = 3, pt.size = 2, raster = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_level1) + 
+#     geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+#     geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+dev.off()
+
+pdf("TG_CD4CD8_nothymus_singleplots.pdf", 7,7, useDingbats = F)
+for (i in tg) {
+    print(i)
+    p = FeatureScatter(so2[,so2$transgenic %in% i], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", raster = F, pt.size = 2, plot.cor = F) + 
+        scale_color_manual(values = mypal_level1) + 
+        ggtitle(i) +
+        xlim(c(0,6)) + 
+        ylim(c(0,4)) +
+        geom_hline(aes(yintercept = 1.8), linetype="dashed", color = "brown") +
+        geom_vline(aes(xintercept = 1.3), linetype="dashed", color = "brown")
+    print(p)
+}
+dev.off()
+
+pdf("TG_CD4CD8_thymus_singleplots.pdf", 7,7, useDingbats = F)
+for (i in c("OT1", "OT2")) {
+    print(i)
+    p = FeatureScatter(so[,so$transgenic == i & so$organ == "thymus"], feature1 = "CD4", feature2 = "CD8B", group.by = "annotation_level1", raster = F, pt.size = 2, plot.cor = F) + 
+        scale_color_manual(values = mypal_level1) + 
+        ggtitle(i) +
+        xlim(c(0,4)) + 
+        ylim(c(0,6)) +
+        geom_hline(aes(yintercept = 2.2), linetype="dashed", color = "brown") +
+        geom_vline(aes(xintercept = 1.5), linetype="dashed", color = "brown")
+    print(p)
+}
+dev.off()
+
+
+```
+
+table for each TG
+```{r}
+
+tg_table_lists = list()
+
+for (i in tg) {
+    print(i)
+    res0 = so@meta.data %>%
+        filter(transgenic == i) %>%
+        group_by(IGTHT, sample_name) %>% summarize(ncell = n())
+    
+    res1 = so@meta.data %>%
+        filter(transgenic == i) %>%
+        group_by(IGTHT, annotation_level1) %>%
+        summarize(ncell = n())
+    res1 = dcast(res1, IGTHT ~ annotation_level1, drop = F)
+    
+    res2 = so@meta.data %>%
+        filter(transgenic == i) %>%
+        group_by(IGTHT, annotation_level2) %>%
+        summarize(ncell = n())
+    res2 = dcast(res2, IGTHT ~ annotation_level2, drop = F)
+    
+    final_result = res0 %>%
+        left_join(res1, by = "IGTHT") %>%
+        left_join(res2, by = "IGTHT")
+    
+    final_result[is.na(final_result)] = 0
+    
+    if(!is.null(final_result[["thymocyte.y"]])) {
+        final_result = final_result %>% select(-thymocyte.y,-thymocyte.x)
+        colnames(final_result)[colnames(final_result) == "thymocyte.x"] = "thymocyte"
+        }
+
+    tg_table_lists[[i]] = final_result
+    
+    # write.table(final_result, file = sprintf("%s_tablebycluster.csv",i), quote = F, sep = ",", row.names = F, col.names = T)
+}
+
+```
+
+**Summary for each TG in each sample**
+```{r}
+
+tg_table_lists = list()
+
+for (i in tg) {
+    print(i)
+    res0 = so@meta.data %>%
+        filter(transgenic == i) %>%
+        group_by(IGTHT, sample_name, organ) %>% summarize(ncell = n())
+    
+    res1 = so@meta.data %>%
+        filter(transgenic == i) %>%
+        group_by(IGTHT, annotation_level1) %>%
+        summarize(ncell = n())
+    res1 = dcast(res1, IGTHT ~ annotation_level1, drop = F)
+    
+    final_result = res0 %>%
+        left_join(res1, by = "IGTHT")
+    
+    final_result[is.na(final_result)] = 0
+
+    tg_table_lists[[i]] = final_result
+    
+}
+
+# pdf("TG_plot_sampledist_nothymus.pdf", width = 10,7, useDingbats = F)
+pdf("TG_plot_sampledist_thymus.pdf", width = 10,7, useDingbats = F)
+for (i in names(tg_table_lists)) {
+    print(i)
+    tmp = tg_table_lists[[i]] %>% as.data.frame()
+    
+    tmp_modified = tmp %>%
+        filter(organ == "thymus") %>%
+        mutate(
+            ncell_adjusted = ncell - miniverse, # Subtract miniverse from ncell
+            abT_CD8aa_ratio = abT_CD8aa / ncell_adjusted,
+            abT_DN_ratio = abT_DN / ncell_adjusted,
+            abT_DP_ratio = abT_DP / ncell_adjusted,
+            CD4_ratio = CD4 / ncell_adjusted,
+            CD8AB_ratio = CD8AB / ncell_adjusted,
+            gdT_ratio = gdT / ncell_adjusted,
+            nonconv_ratio = nonconv / ncell_adjusted,
+            # prolif_ratio = prolif / ncell_adjusted,
+            thymocyte_ratio = thymocyte / ncell_adjusted,
+            treg_ratio = treg / ncell_adjusted,
+            unclear_ratio = unclear / ncell_adjusted
+        )
+    
+    tmp_modified
+    
+    tmp_long <- tmp_modified %>%
+        select(
+            IGTHT, ncell_adjusted, 
+            CD4, CD8AB, abT_CD8aa, abT_DN, abT_DP, gdT, nonconv, thymocyte, treg, unclear,
+            CD4_ratio, CD8AB_ratio, abT_CD8aa_ratio, abT_DN_ratio, abT_DP_ratio, gdT_ratio, nonconv_ratio, thymocyte_ratio, treg_ratio, unclear_ratio
+        ) %>%
+        pivot_longer(
+            cols = ends_with("ratio"),
+            names_to = "Category",
+            values_to = "Ratio"
+        ) %>%
+        mutate(
+            NCell = case_when(
+                Category == "CD4_ratio" ~ CD4,
+                Category == "CD8AB_ratio" ~ CD8AB,
+                Category == "treg_ratio" ~ treg,
+                Category == "abT_CD8aa_ratio" ~ abT_CD8aa,
+                Category == "abT_DN_ratio" ~ abT_DN,
+                Category == "abT_DP_ratio" ~ abT_DP,
+                Category == "gdT_ratio" ~ gdT,
+                Category == "nonconv_ratio" ~ nonconv,
+                Category == "thymocyte_ratio" ~ thymocyte,
+                Category == "unclear_ratio" ~ unclear,
+                TRUE ~ NA_real_
+            )
+        ) %>%
+        select(IGTHT, ncell_adjusted, Category, Ratio, NCell)
+    
+    tmp_long$Category = gsub(pattern = "_ratio",replacement = "", x = tmp_long$Category)
+    
+    write.table(tmp_long, file = sprintf("%s_table_annotation_level1_thymus.csv",i), quote = F, sep = ",", row.names = F, col.names = T)
+    # write.table(tmp_long, file = sprintf("%s_table_annotation_level1_nothymus.csv",i), quote = F, sep = ",", row.names = F, col.names = T)
+    
+    p = ggplot(tmp_long, aes(x = IGTHT, y = Ratio, color = Category, size = NCell)) +
+        geom_point() +
+        scale_color_manual(values = mypal_level1) +
+        # scale_size_manual(values = c(`TRUE` = 3, `FALSE` = 1)) +
+        # scale_y_continuous(
+        #     limits = c(0.001,1),
+        #     trans = log_trans(),
+        #     breaks = c(0, 0.01, 0.05, seq(0.1,1, by = 0.1)),
+        #     labels = c("0", "0.01", "0.05", as.character(seq(0.1,1, by = 0.1)))
+        # ) +
+        scale_y_continuous(
+            limits = c(0,1),
+            breaks = c(seq(0,1, by = 0.1)),
+            labels = c( as.character(seq(0,1, by = 0.1)))
+        ) +
+        labs(
+            title = i,
+            x = "IGTHT",
+            y = "Proportion",
+            color = "Category",
+            size = "ncells"
+        ) +
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            legend.position = "right"
+        )
+    
+    # print(p)
+    
+}
+dev.off()
+
+
+
+
+```
+
+**Summary table and plots across all samples**
+```{r}
+
+res0 = so@meta.data %>%
+    filter(transgenic != "not_tg" & organ != "thymus") %>%
+    group_by(transgenic) %>% summarize(ncell = n())
+
+res1 = so@meta.data %>%
+    filter(transgenic != "not_transgenic" & organ != "thymus") %>%
+    group_by(transgenic, annotation_level1) %>% summarize(ncell = n())
+res1 = dcast(res1, transgenic ~ annotation_level1, drop = F)
+
+final_result = res0 %>%
+    left_join(res1, by = "transgenic") 
+
+final_result[is.na(final_result)] = 0
+
+
+tmp_modified = final_result %>%
+    mutate(
+        ncell_adjusted = ncell - miniverse, # Subtract miniverse from ncell
+        abT_CD8aa_ratio = abT_CD8aa / ncell_adjusted,
+        abT_DN_ratio = abT_DN / ncell_adjusted,
+        abT_DP_ratio = abT_DP / ncell_adjusted,
+        CD4_ratio = CD4 / ncell_adjusted,
+        CD8AB_ratio = CD8AB / ncell_adjusted,
+        gdT_ratio = gdT / ncell_adjusted,
+        nonconv_ratio = nonconv / ncell_adjusted,
+        thymocyte_ratio = thymocyte / ncell_adjusted,
+        treg_ratio = treg / ncell_adjusted,
+        unclear_ratio = unclear / ncell_adjusted
+    )
+
+tmp_modified
+
+# write.table(tmp_modified, file = "TG_table_annotation_level1_thymus.csv", quote = F, sep = ",", row.names = F, col.names = T)
+# write.table(tmp_modified, file = "TG_table_annotation_level1_nothymus.csv", quote = F, sep = ",", row.names = F, col.names = T)
+
+tmp_long <- tmp_modified %>%
+    select(
+        transgenic, ncell_adjusted, 
+        CD4, CD8AB, abT_CD8aa, abT_DN, abT_DP, gdT, nonconv, thymocyte, treg, unclear,
+        CD4_ratio, CD8AB_ratio, abT_CD8aa_ratio, abT_DN_ratio, abT_DP_ratio, gdT_ratio, nonconv_ratio, thymocyte_ratio, treg_ratio, unclear_ratio
+    ) %>%
+    pivot_longer(
+        cols = ends_with("ratio"),
+        names_to = "Category",
+        values_to = "Ratio"
+    ) %>%
+    mutate(
+        NCell = case_when(
+            Category == "CD4_ratio" ~ CD4,
+            Category == "CD8AB_ratio" ~ CD8AB,
+            Category == "treg_ratio" ~ treg,
+            Category == "abT_CD8aa_ratio" ~ abT_CD8aa,
+            Category == "abT_DN_ratio" ~ abT_DN,
+            Category == "abT_DP_ratio" ~ abT_DP,
+            Category == "gdT_ratio" ~ gdT,
+            Category == "nonconv_ratio" ~ nonconv,
+            Category == "thymocyte_ratio" ~ thymocyte,
+            Category == "unclear_ratio" ~ unclear,
+            TRUE ~ NA_real_
+        )
+    ) %>%
+    select(transgenic, ncell_adjusted, Category, Ratio, NCell)
+
+tmp_long$Category = gsub(pattern = "_ratio",replacement = "", x = tmp_long$Category)
+
+# pdf("TG_plot_nothymus.pdf", width = 10,7, useDingbats = F)
+pdf("TG_plot_thymus.pdf", width = 5,7, useDingbats = F)
+p = ggplot(tmp_long, aes(x = transgenic, y = Ratio, color = Category, size = NCell)) +
+    geom_point() +
+    scale_color_manual(values = mypal_level1) +
+    scale_y_continuous(
+        limits = c(0,1),
+        breaks = c(seq(0,1, by = 0.1)),
+        labels = c( as.character(seq(0,1, by = 0.1)))
+    ) +
+    labs(
+        title = "",
+        x = "transgenic",
+        y = "Proportion",
+        color = "Category",
+        size = "ncells"
+    ) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        legend.position = "right"
+    )
+
+print(p)
+
+dev.off()
+
+
+```
+
+
