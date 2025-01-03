@@ -886,7 +886,7 @@ so$cd8_inCD4 = colnames(so) %in% cd8_inCD4
 
 ```
 
-add cd8_inCD4 in mudata to calculate new TOTALVI for each subgroup of unconventional
+add cd8_inCD4 in mudata to calculate new TOTALVI
 ```{python}
 import warnings; warnings.simplefilter('ignore')
 import scvi
@@ -923,7 +923,8 @@ mdata_CD8AB.write(working_dir+'/export_data/igt1_96_20250103_CD8AB.h5mu')
 
 ```
 
-sbatch $SCRIPT_DIR/run_totalvi_wrapper_20250103_cd8_rmIGTsample.sh
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20250103_cd8_rmIGTsample.sh 
+--> check in clustering_CD8AB.Rmd
 
 
 
