@@ -91,7 +91,9 @@ MyDimPlotHighlight <- function(seurat_object = so,
                                labelclusters = T, 
                                pixels = c(512, 512), 
                                highlight_size = 1, 
-                               highlight_alpha = 1, 
+                               highlight_alpha = 1,
+                               xlim = NULL,
+                               ylim = NULL,
                                mycols = mypal, 
                                print_plot1 = TRUE, 
                                print_plot2 = TRUE) {
@@ -125,11 +127,15 @@ MyDimPlotHighlight <- function(seurat_object = so,
     # Plots with consistent colors
     plot1 <- bkrg + p2 + 
         scale_color_manual(values = color_mapping) + 
+        scale_x_continuous(limits = xlim) +
+        scale_y_continuous(limits = ylim) +
         ggtitle(title) + 
         theme_minimal()
     
     plot2 <- bkrg + p2 + 
         scale_color_manual(values = color_mapping) + 
+        scale_x_continuous(limits = xlim) +
+        scale_y_continuous(limits = ylim) +
         theme_void() + NoLegend()
     
     # Add cluster labels dynamically for only the present values
@@ -145,6 +151,8 @@ MyDimPlotHighlight <- function(seurat_object = so,
                           color = !!sym(highlight_column_name)),
                       size = 4, show.legend = FALSE) +
             scale_color_manual(values = color_mapping) +
+            scale_x_continuous(limits = xlim) +
+            scale_y_continuous(limits = ylim) +
             ggtitle(title)
     } else {
         plot3 <- NULL

@@ -68,6 +68,9 @@ mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
 
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
 
@@ -652,39 +655,57 @@ saveRDS(so, file = "igt1_96_CD8AB_20241216.Rds")
 **Test reintegrating the CD8B+ cells from the CD4**
 totalvi_20250103_cd8_rmIGTsample - mde_incremental and mde_totalvi_20250103_cd8_rmIGTsample
 ```{r}
-# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so = so_orig
+discordant = read.table("../DiscordantCD4_david.csv", header = F, sep = ",")[,1]
+so_orig$new_level1 = so_orig$annotation_level1
+so_orig$new_level1[colnames(so_orig) %in% discordant] = "CD8AB"
+table(so$new_level1,so$annotation_level1 )
 
-discordant = read.table("DiscordantCD4_David.csv", header = F, sep = ",", row.names = F)
-so$new_level1 = so$annotation_level1
-so$new_level1[colnames(so) %in% discordant] == "CD8AB"
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB")
-so = so_orig[,so_orig$annotation_level1 == "CD8AB"]# so = so_orig[,so_orig$annotation_level0 == "CD8AB"]
+
+so = so[,so$new_level1 == "CD8AB"]# so = so_orig[,so_orig$annotation_level0 == "CD8AB"]
 
 
-prefix = "totalvi_20250103_cd8_rmIGTsample"
-dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/totalvi_20250103_cd8_rmIGTsample"
-so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20250103_cd8_rmIGTsample", calculate_umap = F)
-so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20250103_cd8_rmIGTsample", calculate_umap = F)
+prefix = "totalvi_20250103_CD8AB_rmIGTsample"
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB/totalvi_20250103_CD8AB_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20250103_CD8AB_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20250103_CD8AB_rmIGTsample", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
 pdf(sprintf("%s/MDE_20250103_test.pdf", "."), 10, 10, useDingbats = F)
-MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "CD8AB")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal, print_plot1 = T, print_plot2 = T )
-p = DimPlot(so, reduction = "mde_totalvi_20250103_cd8_rmIGTsample", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
-p = DimPlot(so, reduction = "mde_totalvi_20250103_cd8_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
-p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
-p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
-p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
-p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-p + theme_void() + NoLegend() 
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name ="annotation_level1", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level1, print_plot1 = T, print_plot2 = T )
+
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T )
+
+MyDimPlotHighlight(so, umap_to_plot = "mde_totalvi_20250103_CD8AB_rmIGTsample", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name = "annotation_level1", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level1, print_plot1 = T, print_plot2 = T ) 
+
+MyDimPlotHighlight(so, umap_to_plot = "mde_totalvi_20250103_CD8AB_rmIGTsample", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name = "annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T )
+
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name = "annotation_level1", highlight_size = 0.5, highlight_alpha = 0.5, xlim = c(-2.5,2.5), pixels = c(512, 512), mycols = mypal_level1, print_plot1 = T, print_plot2 = T )
+
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$annotation_level1 == "CD4")), highlight_column_name = "annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, xlim = c(-2.5,2.5), pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T )
+
+# p = DimPlot(so, reduction = "mde_totalvi_20250103_CD8AB_rmIGTsample", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# p
+# p + theme_void() + NoLegend() 
+# p = DimPlot(so, reduction = "mde_totalvi_20250103_CD8AB_rmIGTsample", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) 
+# p
+# p + theme_void() + NoLegend() 
+# p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = F, raster.dpi = c(512,512), label = F, order = T) + scale_color_manual(values = mypal) + scale_x_continuous(limit = c(-3,3))
+# p 
+# p + theme_void() + NoLegend() 
+# p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# p
+# p + theme_void() + NoLegend() 
+# p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# p
+# p + theme_void() + NoLegend() 
+# p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# p
+# p + theme_void() + NoLegend() 
 dev.off()
 
-saveRDS(so, file = "igt1_96_CD8AB_20250103_test.Rds")
+# saveRDS(so, file = "igt1_96_CD8AB_20250103_test.Rds")
 
 ```
 

@@ -85,7 +85,7 @@ setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
 
 ```{r}
 options(max.print=1000)
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
+# setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
@@ -114,6 +114,10 @@ mypal1 = mypal1[-4]
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
+
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+mypal_odhran = setNames(mypal, unique(so$odhran))
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 ```
@@ -831,7 +835,7 @@ write.table(x = annot_summary, file = "annotation_table_history_20241216.csv", r
 
 ```
 
-**Level1 adjustment based on CITEseq CD4, CD8B, CD8A**
+**TEST Level1 adjustment based on CITEseq discordant CD4**
 ```{r}
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_odhran = setNames(mypal, unique(so$odhran))
@@ -841,6 +845,170 @@ so = so_orig[,!so_orig$annotation_level1 %in% c("nonT","remove")]
 so$annotation_level1 = factor(so$annotation_level1)
 
 discordantCD4 = read.table("DiscordantCD4.csv", header = T, sep = ",", row.names = 1)
+discordantCD8ab = read.table("DiscordantCD8ab.csv", header = T, sep = ",", row.names = 1)
+discordant = data.frame(odhran = c(discordantCD4$X3, discordantCD8ab$DBlabel))
+rownames(discordant) = c(rownames(discordantCD4), rownames(discordantCD8ab))
+so$odhran = discordant[colnames(so),"odhran"]
+so$odhran[is.na(so$odhran)] = "same"
+
+so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
+
+pdf("Discordant_CD4CD8.pdf", 10,10, useDingbats = F)
+FeatureScatter(so[,so$odhran != "same"], feature1 = "CD4", feature2 = "CD8B", group.by = "odhran", split.by = "annotation_level1", ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_odhran) + 
+    geom_hline(aes(yintercept = 2.2), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.5), linetype="dashed", color = "brown")
+FeatureScatter(so[,so$odhran != "same"], feature1 = "CD4", feature2 = "CD8A", group.by = "odhran", split.by = "annotation_level1", ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_odhran) + 
+    geom_hline(aes(yintercept = 2.2), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.5), linetype="dashed", color = "brown")
+
+for (i in c("CD4+", "CD8AA+", "CD8AB+")) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$odhran %in% i], highlight_column_name = "annotation_level1", labelclusters = T,
+                           title = i, pixels = c(512, 512), highlight_size = 1, 
+                           highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+                           print_plot2 = F)
+    print(p)
+}
+
+dev.off()
+
+
+cd8_inCD4 = names(which(so[["ADT"]]$data["CD8B",so$annotation_level1 == "CD4"] > 2 & so[["ADT"]]$data["CD4",so$annotation_level1 == "CD4"] < 1))
+length(which(so[["ADT"]]$data["CD8B",so$annotation_level1 == "CD4"] > 2 & so[["ADT"]]$data["CD4",so$annotation_level1 == "CD4"] < 1))
+
+so$cd8_inCD4 = colnames(so) %in% cd8_inCD4
+
+# FeatureScatter(so, feature1 = "CD4", feature2 = "CD8B", split.by = NULL) + scale_color_manual(values = mypal_level1)  + scale_color_manual(values = mypal_odhran) + 
+    geom_hline(aes(yintercept = 2.2), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1.5), linetype="dashed", color = "brown")
+
+
+# MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$cd8_inCD4], highlight_column_name = "annotation_level1", labelclusters = T,
+#                            title = "", pixels = c(512, 512), highlight_size = 1, 
+#                            highlight_alpha = 1, mycols = mypal,print_plot1 = F, 
+#                            print_plot2 = F)
+
+```
+
+add cd8_inCD4 in mudata to calculate new TOTALVI
+```{python}
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+
+mdata = mu.read(path_to_mudata) 
+
+annotationl1 = pd.read_csv(working_dir+"/annotation_table_20241216.csv", index_col = 0, header = 0)
+set(annotationl1.index) == set(mdata.mod['RNA'].obs.index)
+mdata.mod['RNA'].obs['level1'] = annotationl1['level1']
+mdata.mod['RNA'].obs['level1'].isna().sum()
+
+discordant = pd.read_csv(working_dir+"/DiscordantCD4_david.csv", header = None)
+discordant.columns = ['cell_id']
+mdata.mod['RNA'].obs.loc[discordant.cell_id, 'level1'] = "CD8AB"
+mdata.mod['RNA'].obs['level1'].unique()
+
+mdata_CD8AB = mdata[mdata.mod['RNA'].obs['level1'] == 'CD8AB'] 
+mdata_CD8AB
+mdata_CD8AB.write(working_dir+'/export_data/igt1_96_20250103_CD8AB.h5mu')
+
+```
+
+sbatch $SCRIPT_DIR/run_totalvi_wrapper_20250103_cd8_rmIGTsample.sh 
+--> check in clustering_CD8AB.Rmd
+
+**Level1 adjustment based on CITEseq CD4, CD8B, CD8A, TCRGD, TCRB TEST**
+```{r}
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so = so_orig[,!so_orig$annotation_level1 %in% c("nonT","remove")]
+so$annotation_level1 = factor(so$annotation_level1)
+
+iNKT = read.table("nonconv/inktInDec24Freeze.csv", header = T, sep = ",")[,1]
+so$iNKT2 = colnames(so) %in% iNKT
+MAIT = read.table("nonconv/maitInDec24Freeze.csv", header = T, sep = ",")[,1]
+so$MAIT2 = colnames(so) %in% MAIT
+gdTwithTCRab = read.table("gdT/gdtWithProductiveABtcr.csv", header = T, sep = ",")[,1]
+so$gdTwithTCRab = colnames(so) %in% gdTwithTCRab
+gdT_CITEseq = read.table("gating_Leon_20241116/TCRGD_manual_gating_byIGT.csv", header = T, sep = ",")[,1]
+so$gdT_CITEseq = colnames(so) %in% gdT_CITEseq
+
+pdf("MDE_NKT_MAIT.pdf", 10,10, useDingbats = F)
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$iNKT2 == T], highlight_column_name = "annotation_level1", labelclusters = T,
+                       title = "iNKT", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$iNKT2 == T], highlight_column_name = "annotation_level2", labelclusters = T,
+                       title = "iNKT", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level2,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$MAIT2 == T], highlight_column_name = "annotation_level1", labelclusters = T,
+                       title = "MAIT", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$MAIT2 == T], highlight_column_name = "annotation_level2", labelclusters = T,
+                       title = "MAIT", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level2,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$gdTwithTCRab == T], highlight_column_name = "annotation_level1", labelclusters = T,
+                       title = "gdTwithTCRab", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$gdTwithTCRab == T], highlight_column_name = "annotation_level2", labelclusters = T,
+                       title = "gdTwithTCRab", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level2,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "gdT"], highlight_column_name = "annotation_level1", labelclusters = T,
+                       title = "gdT in annotation level 1", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level2,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$gdT_CITEseq == T], highlight_column_name = "annotation_level1", labelclusters = T,
+                       title = "gdT by CITEseq", pixels = c(512, 512), highlight_size = 1, 
+                       highlight_alpha = 1, mycols = mypal_level2,print_plot1 = T, 
+                       print_plot2 = T)
+print(p)
+
+dev.off()
+
+
+# MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$iNKT == T], highlight_column_name = "annotation_level1", labelclusters = T,
+#                        title = "MAIT", pixels = c(512, 512), highlight_size = 1, 
+#                        highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+#                        print_plot2 = T)
+
+FeatureScatter(so[,so$gdTwithTCRab == T], feature1 = "TCRgd", feature2 = "TCRB", group.by = "annoat", split.by = NULL, ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$gdTwithTCRab == T], feature1 = "CD4", feature2 = "CD8B", group.by = "gdT_CITEseq", split.by = NULL, ncol = 2, pt.size = 2, raster = F, plot.cor = F) 
+
+
 discordantCD8ab = read.table("DiscordantCD8ab.csv", header = T, sep = ",", row.names = 1)
 discordant = data.frame(odhran = c(discordantCD4$X3, discordantCD8ab$DBlabel))
 rownames(discordant) = c(rownames(discordantCD4), rownames(discordantCD8ab))
