@@ -933,7 +933,7 @@ sbatch $SCRIPT_DIR/run_totalvi_wrapper_20250103_cd8_rmIGTsample.sh
 
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
-so = so_orig[,!so_orig$annotation_level1 %in% c("nonT","remove")]
+# so = so_orig[,!so_orig$annotation_level1 %in% c("nonT","remove")]
 so$annotation_level1 = factor(so$annotation_level1)
 
 so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
@@ -1147,7 +1147,7 @@ dev.off()
 
 ```
 
-Adjust clusters:
+**Adjust clusters TRIAL 1**
 
 ```{r}
 so = so_orig
@@ -1390,8 +1390,10 @@ dev.off()
 *Adjust clusters trial 2 using additional manual cutoffs, also splitting prolif, miniverse*
 level1: gdT, CD4, CD8AB, abT_CD8aa, nonconv, abT_DN, abT_DP, Treg
 level2_parent: resting, activated, prolif, miniverse, preT
-    
+
 ```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+
 so = so_orig
 so = NormalizeData(so,assay = "ADT", normalization.method = "CLR", verbose = T)
 so$level1 = so$annotation_level1
@@ -1431,7 +1433,7 @@ so$level2_parent[so$annotation_level1 == "miniverse"] = "miniverse"
 
 so$level2_parent[so$annotation_level1 == "prolif"] = "prolif"
 
-so$level2_parent[so$annotation_level2 %in% c("CD8AB_cl19", "CD4_cl8", "treg_cl5")] = "prolif"
+so$level2_parent[so$annotation_level2 %in% c("CD8AB_cl19", "CD4_cl8", "treg_cl5", "miniverse_cl13")] = "prolif"
 
 table(so$annotation_level1, so$level2_parent)
 
@@ -1447,8 +1449,11 @@ so$iNKT2 = colnames(so) %in% iNKT
 MAIT = read.table("nonconv/maitInDec24Freeze.csv", header = T, sep = ",")[,1]
 so$MAIT2 = colnames(so) %in% MAIT
 
-so$level1[so$iNKT2 & so$annotation_level1 %in% c("CD4","CD8AB","Treg","abT_CD8aa","abT_DN","abT_DP","nonconv")] = "nonconv"
-so$level1[so$MAIT2 & so$annotation_level1 %in% c("CD4","CD8AB","Treg","abT_CD8aa","abT_DN","abT_DP","nonconv")] = "nonconv"
+# so$level1[so$iNKT2 & so$annotation_level1 %in% c("CD4","CD8AB","Treg","abT_CD8aa","abT_DN","abT_DP","nonconv")] = "nonconv"
+# so$level1[so$MAIT2 & so$annotation_level1 %in% c("CD4","CD8AB","Treg","abT_CD8aa","abT_DN","abT_DP","nonconv")] = "nonconv"
+so$level1[so$iNKT2 & !so$annotation_level1 %in% c("remove", "nonT")] = "nonconv"
+so$level1[so$MAIT2 & !so$annotation_level1 %in% c("remove", "nonT")] = "nonconv"
+
 so$level1[so$annotation_level1 == "nonconv" & so$gated_pop == "gdT_gated" & !so$MAIT2 & !so$iNKT2] = "gdT"
 table(so$level1, so$annotation_level1)
 
@@ -1465,40 +1470,57 @@ so$level1[so$annotation_level1 == "CD4" & so$gated_pop == "CD8AA_gated"] = "abT_
 so$level1[so$annotation_level1 == "CD4" & so$gated_pop == "gdT_gated"] = "gdT"
 so$level1[so$level1 == "CD4" & so[["ADT"]]@data["CD8B",] > 2 & so[["ADT"]]@data["CD4",] < 1 ] = "CD8AB"
 so$level1[so$level1 == "CD4" & so[["ADT"]]@data["CD8B",] > 2 & so[["ADT"]]@data["CD4",] > 1 ] = "abT_DP"
+so$level1[so$level1 == "CD4" & so[["ADT"]]@data["CD8B",] < 2 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8A",] > 2] = "abT_CD8aa"
 
-FeatureScatter(so[,so$level1 == "CD4"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
-MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$level1 == "CD4"], highlight_column_name = "level1", labelclusters = T,
+FeatureScatter(so[,so$annotation_level1 == "CD4"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "CD4"], highlight_column_name = "level1", labelclusters = T,
                    title = "", pixels = c(512, 512), highlight_size = 1, 
-                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
-                   print_plot2 = T)
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = F, 
+                   print_plot2 = F)
 
 table(so$level1, so$annotation_level1)
 ```
 
-4. cleaning CD8AB
+3. cleaning CD8AB
 CD8AB_cl19 --> prolif
 CD8AB in annotation_level1 & CD4_gated --> CD4
 CD8AB in annotation_level1 & CD8AA_gated --> CD8AA
 CD8AB in annotation_level1 & gdT_gated --> gdT
 ```{r}
-so$level1[so$annotation_level2 %in% c("CD8AB_cl19")] = "prolif"
+so$level1[so$annotation_level1 == "CD8AB"] = "CD8AB"
 so$level1[so$annotation_level1 == "CD8AB" & so$gated_pop == "CD4_gated"] = "CD4"
 so$level1[so$annotation_level1 == "CD8AB" & so$gated_pop == "CD8AA_gated"] = "abT_CD8aa"
 so$level1[so$annotation_level1 == "CD8AB" & so$gated_pop == "gdT_gated"] = "gdT"
 so$level1[so$level1 == "CD8AB" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] < 1 ] = "CD4"
 so$level1[so$level1 == "CD8AB" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] > 2 ] = "abT_DP"
+# so$level1[so$level1 == "CD8AB" & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8A",] > 2] = "abT_CD8aa"
+# so$level1[so$level1 == "CD8AB" & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8A",] < 1] = "abT_DN" #DOES NOT WORK CAN'T HAVE ALL NEG, JUST FALSE NEG HERE
+
+FeatureScatter(so[,so$annotation_level1 == "CD8AB"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = "level1", ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "CD8AB"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
 
 table(so$level1, so$annotation_level1)
 ```
 
-5. cleaning treg
+5. Cleaning treg
 treg in annotation_level1 & gdT_gated --> gdT
 ```{r}
-so$level1[so$annotation_level2 %in% c("treg_cl5")] = "prolif"
+so$level1[so$annotation_level1 == "treg"] = "treg"
 so$level1[so$annotation_level1 == "treg" & so$gated_pop == "gdT_gated"] = "gdT"
 so$level1[so$annotation_level1 == "treg" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
-so$level1[so$level1 == "treg" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] > 2 ] = "abT_DP"
+so$level1[so$level1 == "treg" & so[["ADT"]]@data["CD4",] > 1 & so[["ADT"]]@data["CD8B",] > 2 ] = "abT_DP"
 so$level1[so$level1 == "treg" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 2 ] = "CD8AB"
+
+FeatureScatter(so[,so$annotation_level1 == "treg" & so$organ != "thymus"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "treg"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "treg"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
+
 table(so$level1, so$annotation_level1)
 ```
 
@@ -1512,9 +1534,13 @@ so$level1[so$annotation_level1 == "gdT" & so$gated_pop == "CD4_gated"] = "CD4"
 so$level1[so$annotation_level1 == "gdT" & so$gated_pop == "CD8AA_gated"] = "abT_CD8aa"
 so$level1[so$annotation_level1 == "gdT" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
 
-
 FeatureScatter(so[,so$level1 == "gdT"], feature1 = "TCRB", feature2 = "TCRGD", group.by = "gated_pop", split.by = NULL, ncol = 2, pt.size = 2, raster = T, plot.cor = F) + geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") 
 so$level1[so$level1 == "gdT" & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["TCRGD",] < 1 & !so$gated_pop %in% c("CD4_gated", "CD8AA_gated", "CD8AB_gated")] = "abT_DN"
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "gdT"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
+
 
 table(so$level1, so$annotation_level1)
 
@@ -1529,13 +1555,19 @@ so$level1[so$annotation_level1 == "abT_CD8aa" & so$gated_pop == "CD4_gated"] = "
 so$level1[so$annotation_level1 == "abT_CD8aa" & so$gated_pop == "gdT_gated"] = "gdT"
 so$level1[so$annotation_level1 == "abT_CD8aa" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
 so$level1[so$level1 == "abT_CD8aa" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] < 1 ] = "CD4"
+so$level1[so$level1 == "abT_CD8aa" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] > 2 ] = "abT_DP"
+
+FeatureScatter(so[,so$annotation_level1 == "abT_CD8aa"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "abT_CD8aa"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
 
 table(so$level1, so$annotation_level1)
 ```
 
 8. cleaning abT_DN
 ```{r}
-
 so$level1[so$annotation_level1 == "abT_DN" & so$gated_pop == "CD4_gated"] = "CD4"
 so$level1[so$annotation_level1 == "abT_DN" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
 so$level1[so$annotation_level1 == "abT_DN" & so$gated_pop == "CD8AA_gated"] = "abT_CD8aa"
@@ -1544,27 +1576,42 @@ so$level1[so$level1 == "abT_DN" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@dat
 so$level1[so$level1 == "abT_DN" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 2 ] = "CD8AB"
 so$level1[so$level1 == "abT_DN" & so[["ADT"]]@data["CD4",] > 1 & so[["ADT"]]@data["CD8B",] > 2 ] = "abT_DP"
 
+FeatureScatter(so[,so$annotation_level1 == "abT_DN"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = NULL, ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "abT_DN"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
+
 table(so$level1, so$annotation_level1)
 
 ```
 
 9. cleaning abT_DP
 ```{r}
+so$level1[so$annotation_level1 == "abT_DP"] = "abT_DP"
 so$level1[so$annotation_level1 == "abT_DP" & so$gated_pop == "CD4_gated"] = "CD4"
 so$level1[so$annotation_level1 == "abT_DP" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
 so$level1[so$annotation_level1 == "abT_DP" & so$gated_pop == "CD8AA_gated"] = "abT_CD8aa"
 so$level1[so$annotation_level1 == "abT_DP" & so$gated_pop == "gdT_gated"] = "gdT"
 so$level1[so$level1 == "abT_DP" & so[["ADT"]]@data["CD4",] > 2 & so[["ADT"]]@data["CD8B",] < 1 ] = "CD4"
 so$level1[so$level1 == "abT_DP" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 2 ] = "CD8AB"
-so$level1[so$level1 == "abT_DP" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 2 ] = "abT_DN"
+so$level1[so$level1 == "abT_DP" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD8A",] > 2] = "abT_CD8aa2"
+so$level1[so$level1 == "abT_DP" & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD8A",] < 1] = "abT_DN"
+
+FeatureScatter(so[,so$annotation_level1 == "abT_DP"], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = "level1", ncol = 4, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "abT_DP"], highlight_column_name = "level1", labelclusters = F,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = F)
+
+
 
 table(so$level1, so$annotation_level1)
 table(so$level1, so$organ == "thymus")
 
 ```
 
-10. cleaning preT
-bring back preT that are not in the thymus
+10. splitting preT that are not in the thymus
 ```{r}
 ##some plots before
 so$is_thymus = as.character(so$organ %in% "thymus")
@@ -1602,7 +1649,7 @@ so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so
 so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 2  ] = "CD8AB"
 so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD8A",] > 2 & so[["ADT"]]@data["CD8B",] < 2  ] = "abT_CD8aa"
 so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] > 1.5 & so[["ADT"]]@data["CD8B",] > 2  ] = "abT_DP"
-so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] < 1.5 & so[["ADT"]]@data["CD8B",] < 2  ] = "abT_DN"
+so$level1[so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] < 1.5 & so[["ADT"]]@data["CD8B",] < 2  ] = "abT_DN" #need so[["ADT"]]@data["TCRB",] > 0 to make sure to not misgate IGT without CITEseq?
 
 pdf("gating_Leon_20241116/FeatureScatter_preT_nonthymus_manual_gate.pdf", width = 7,7, useDingbats = F)
 FeatureScatter(so[,so$annotation_level1 == "thymocyte" & so$organ != "thymus" &  is.na(so$gated_pop) ], feature1 = "TCRB", feature2 = "TCRGD", group.by = "level1", split.by = NULL, ncol = 2, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
@@ -1626,6 +1673,104 @@ FeatureScatter(so[,so$annotation_level1 == "thymocyte" & so$organ != "thymus" ],
 dev.off()
 
 ```
+
+11. Miniverse
+miniverse_cl13 to prolif!
+```{r}
+
+so$level2_parent[so$annotation_level2 %in% "miniverse_cl13"] = "prolif"
+# so$level1[so$annotation_level1 == "miniverse"] = "miniverse"
+so$level1[so$annotation_level2 %in% "miniverse_cl1"] = "CD4"
+so$level1[so$annotation_level2 %in% "miniverse_cl2"] = "CD4"
+so$level1[so$annotation_level2 %in% "miniverse_cl3"] = "treg"
+so$level1[so$annotation_level2 %in% "miniverse_cl4"] = "treg"
+so$level1[so$annotation_level2 %in% "miniverse_cl5"] = "CD8AB"
+so$level1[so$annotation_level2 %in% "miniverse_cl6"] = "CD8AB"
+so$level1[so$annotation_level2 %in% "miniverse_cl7"] = "CD8AB"
+so$level1[so$annotation_level2 %in% "miniverse_cl8"] = "CD8AB"
+so$level1[so$annotation_level2 %in% "miniverse_cl9"] = "nonconv"
+so$level1[so$annotation_level2 %in% "miniverse_cl10"] = "gdT"
+so$level1[so$annotation_level2 %in% "miniverse_cl11"] = "abT_DN"
+so$level1[so$annotation_level2 %in% "miniverse_cl12"] = "gdT"
+so$level1[so$annotation_level2 %in% "miniverse_cl14"] = "abT_DP"
+so$level1[so$annotation_level2 %in% "miniverse_cl15"] = "CD4" #really CD8AB and CD4 and will gate out CD8AB, easier to gate out
+so$level1[so$annotation_level2 %in% "miniverse_cl16"] = "nonconv"
+so$level1[so$annotation_level2 %in% "miniverse_cl17"] = "abT_DP"
+so$level1[so$annotation_level2 %in% "miniverse_cl13"] = "prolif"
+
+#Reassign
+so$level1[so$annotation_level1 == "miniverse" & so$MAIT2] = "nonconv" #& so$organ != "thymus" 
+so$level1[so$annotation_level1 == "miniverse" & so$iNKT2] = "nonconv"
+so$level1[so$annotation_level1 == "miniverse" & so$gated_pop == "CD4_gated"] = "CD4"
+so$level1[so$annotation_level1 == "miniverse" & so$gated_pop == "CD8AB_gated"] = "CD8AB"
+so$level1[so$annotation_level1 == "miniverse" & so$gated_pop == "CD8AA_gated"] = "abT_CD8aa"
+so$level1[so$annotation_level1 == "miniverse"& so$gated_pop == "gdT_gated"] = "gdT"
+
+#check
+pdf("gating_Leon_20241116/FeatureScatter_miniverse_nonthymus_tofindgates.pdf", width = 7,7, useDingbats = F)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "TCRB", feature2 = "TCRGD", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "CD8B", feature2 = "CD8A", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" & is.na(so$gated_pop)], feature1 = "TCRB", feature2 = "TCRGD", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" & is.na(so$gated_pop)], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" & is.na(so$gated_pop)], feature1 = "CD8B", feature2 = "CD8A", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 1, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+dev.off()
+
+#Manual gating of cells not gated before
+# NO NEED HERE: so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] > 2 & so[["ADT"]]@data["TCRB",] < 0.6 ] = "gdT"
+#CD4
+so$level1[so$annotation_level1 == "miniverse" & so$level1 %in% c( "abt_DN", "CD4", "CD8AB","prolif", "treg") & so$organ != "thymus" &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] > 1 & so[["ADT"]]@data["CD8B",] > 2  ] = "abT_DP"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("abt_DN", "abT_DP", "CD8AB", "prolif") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] > 1.5 & so[["ADT"]]@data["CD8B",] < 2  ] = "CD4"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("abt_DN", "abT_DP", "CD4", "prolif", "treg") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 1.5  ] = "CD8AB"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("abt_DN", "abT_DP",  "CD4", "CD8AB", "prolif", "treg") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 2 & so[["ADT"]]@data["CD8A",] > 2   ] = "abT_CD8aa"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("prolif") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 2 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD8A",] < 1   ] = "abT_DN"
+
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("gdT") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 1 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD4",] > 1 & so[["ADT"]]@data["CD8B",] > 2  ] = "abT_DP"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("gdT") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 1 & so[["ADT"]]@data["TCRB",] > 1& so[["ADT"]]@data["CD4",] > 1.5 & so[["ADT"]]@data["CD8B",] < 2  ] = "CD4"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("gdT") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 1 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] > 1.5  ] = "CD8AB"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("gdT") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 1 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD8A",] > 2 & so[["ADT"]]@data["CD8B",] < 2  ] = "abT_CD8aa"
+so$level1[so$annotation_level1 == "miniverse" & so$organ != "thymus" & so$level1 %in% c("gdT", "abT_DP") &  is.na(so$gated_pop) & so[["ADT"]]@data["TCRGD",] < 1 & so[["ADT"]]@data["TCRB",] > 1 & so[["ADT"]]@data["CD4",] < 1 & so[["ADT"]]@data["CD8B",] < 1 & so[["ADT"]]@data["CD8A",] < 1    ] = "abT_DN"
+
+table(so$level1, so$annotation_level1)
+table(so$level1[so$annotation_level1 == "miniverse"], so$annotation_level2[so$annotation_level1 == "miniverse"])
+#310 prolif cells that are unclear --> label as unclear
+so$level1[so$level1 == "prolif"] = "unclear"
+
+pdf("gating_Leon_20241116/FeatureScatter_miniverse_nonthymus_manual_gate.pdf", width = 7,7, useDingbats = F)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "TCRB", feature2 = "TCRGD", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "CD4", feature2 = "CD8B", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+FeatureScatter(so[,so$annotation_level1 == "miniverse" & so$organ != "thymus" ], feature1 = "CD8B", feature2 = "CD8A", group.by = "level1", split.by = "level1", ncol = 3, pt.size = 2, raster = F, plot.cor = F) + scale_color_manual(values = mypal_level1)
+dev.off()
+
+# FeaturePlot(so[,so$annotation_level1 == "miniverse"], reduction = "mde2_totalvi_20241006", slot = "counts", features = "Foxp3", raster = F, pt.size = 2, order = T)
+# MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "miniverse" & so$organ != "thymus"], highlight_column_name = "level1", labelclusters = F,
+#                    title = "", pixels = c(512, 512), highlight_size = 1, 
+#                    highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+#                    print_plot2 = T)
+
+
+pdf("gating_Leon_20241116/MDE_miniverse_newannotation.pdf", width = 7,7, useDingbats = F)
+MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so)[so$annotation_level1 == "miniverse" & so$organ != "thymus"], highlight_column_name = "level1", labelclusters = ,
+                   title = "", pixels = c(512, 512), highlight_size = 1, 
+                   highlight_alpha = 1, mycols = mypal_level1,print_plot1 = T, 
+                   print_plot2 = T)
+dev.off()
+
+
+```
+
+12. Prolif of gdT, abT_CD8aa, abT_DN, abT_DP
+```{r}
+
+cl_unconv = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/unconventional/totalvi_20241014_unconventional_rmIGTsample/Cluster_totalvi_20241014_unconventional_rmIGTsample_Res.csv", header = F, sep = ",", row.names = 1)
+colnames(cl_unconv) = c("res0.25", "res0.5", "res0.75","res1", "res1.5", "res2", "res3", "res4", "res5", "res6")
+so$prolif_clusters = NA
+so$prolif_clusters = cl_unconv[colnames(so),"res4"]
+so$prolif_clusters[colnames(so) %in% rownames(cl_unconv)] = cl_unconv[match(colnames(so),rownames(cl_unconv)),"res4"]
+
+
+```
+
 
 
 Final MDE and FeatureScatter
