@@ -101,7 +101,11 @@ MyDimPlotHighlight <- function(seurat_object = so,
     require(scattermore)
     require(ggplot2)
     
-    color_mapping = setNames(mycols, unique(so@meta.data[,highlight_column_name]))
+    missing_names = setdiff(unique(so@meta.data[,highlight_column_name]), names(mycols))
+    new_colors = mycols[which(is.na(names(mycols)))[1:length(missing_names)]]
+    names(new_colors) = missing_names
+    color_mapping = c(mycols[!is.na(names(mycols))], new_colors)
+    # color_mapping = setNames(mycols, unique(so@meta.data[,highlight_column_name]))
     
     # UMAP embeddings
     dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]
