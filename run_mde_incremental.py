@@ -93,7 +93,7 @@ rownames = mde_ref_embedding.index.tolist()  # Convert index to list
 index_positions = [totalvi_integrated.index.get_loc(item) for item in rownames if item in totalvi_integrated.index]
 len(index_positions)
 len(mde_ref_embedding.index)
-rownames_tensor = torch.tensor(index_positions)
+rownames_tensor = torch.tensor(index_positions, device='cuda:0')
 
 print("pymde.Anchored")
 anchor_constraint = pymde.Anchored(
