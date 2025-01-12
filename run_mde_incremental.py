@@ -98,6 +98,7 @@ rownames_tensor = torch.tensor(index_positions)
 print("pymde.Anchored")
 anchor_constraint = pymde.Anchored(
     anchors=rownames_tensor,
+    device='cuda:0',
     values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32,device='cuda:0'), #device='cpu' 'cuda:0'
 )
 
