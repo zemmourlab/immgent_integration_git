@@ -95,19 +95,21 @@ len(index_positions)
 len(mde_ref_embedding.index)
 rownames_tensor = torch.tensor(index_positions)
 
+print("pymde.Anchored")
 anchor_constraint = pymde.Anchored(
     anchors=rownames_tensor,
-    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32), #device='cpu' 'cuda:0'
+    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32,device='cuda:0'), #device='cpu' 'cuda:0'
 )
 
+print("pymde.preserve_neighbors")
 incremental_mde = pymde.preserve_neighbors(
-    torch.tensor(totalvi_integrated.values, dtype=torch.float32), #device='cpu'
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'), #device='cpu'
     embedding_dim=2,
     constraint=anchor_constraint,
     repulsive_fraction=0.7,
     n_neighbors = 15,
     verbose=True,
-    device='cuda'#,device = 'cpu'
+    device='cuda:0'#,device = 'cpu'
 )
 
 # incremental_mde = pymde.preserve_neighbors(
@@ -116,7 +118,8 @@ incremental_mde = pymde.preserve_neighbors(
 #     init='random',
 #     verbose=True #,device = 'cpu'
 #     )
-    
+
+print("incremental_mde.embed")
 incremental_mde.embed(eps=1e-6, verbose=True)
 
 pymde.plot(mde_ref_embedding.values)

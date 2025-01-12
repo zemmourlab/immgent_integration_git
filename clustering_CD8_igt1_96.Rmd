@@ -745,10 +745,12 @@ so$level2_new[so$annotation_level2_parent1 == "preT"] = "CD8AB_preT"
 table(so$level2_new, so$annotation_level1)
 table(so$level2_new, so$annotation_level2_parent1)
 
-so$is_ref = so$annotation_level1 == "CD8AB" & so$annotation_level1_20241216 == "CD8AB"
-so$is_ref[so$annotation_level2_parent1 %in% c("miniverse", "proliferating", "preT")] = NA
-cell_embeddings_ref = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref,]
-cell_embeddings_query = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[!so$is_ref,]
+so$is_ref = "other"
+so$is_ref[so$annotation_level1 == "CD8AB" & so$annotation_level1_20241216 == "CD8AB"] = "ref"
+so$is_ref[so$annotation_level1 == "CD8AB" & so$annotation_level1_20241216 != "CD8AB"] = "query"
+so$is_ref[so$annotation_level2_parent1 %in% c("miniverse", "proliferating", "preT")] = "other"
+cell_embeddings_ref = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "ref",]
+cell_embeddings_query = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "query",]
 
 # Use the Annoy algorithm to find nearest neighbors between query (3k) and ref (10K) datasets
 n_neighbors = 30  # Number of nearest neighbors to find k =30
@@ -770,7 +772,7 @@ nn_indices <- t(sapply(1:nrow(cell_embeddings_query), function(i) {
 dim(nn_indices)
 head(nn_indices)
 
-labels_ref = as.character(so$annotation_level2_20241216[so$is_ref])
+labels_ref = as.character(so$annotation_level2_20241216[so$is_ref == "ref"])
 # Transfer labels based on majority vote from nearest neighbors
 transfer_labels <- apply(nn_indices, 1, function(neighbors) {
   # Get labels for the nearest neighbors
@@ -782,10 +784,9 @@ transfer_labels <- apply(nn_indices, 1, function(neighbors) {
 })
 
 # Now, transfer_labels contains the predicted labels for the 3k PBMC dataset
-so$level2_new[!so$is_ref] = transfer_labels
+so$level2_new[so$is_ref == "query"] = transfer_labels
 head(transfer_labels)
 table(transfer_labels)
-so$level2_new
 
 table(so$annotation_level2_parent1, so$level2_new)
 table(so$annotation_level1, so$level2_new)
