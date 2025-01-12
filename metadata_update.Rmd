@@ -254,6 +254,49 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 
 ```
 
+add annotation_table_20250109.csv
+```{r}
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so_orig = so
+so$annotation_level1_20241216 = so$annotation_level1
+so$annotation_level1 = NULL
+so$annotation_level2_20241216 = so$annotation_level2
+so$annotation_level2 = NULL
+so$annotation_level2_parent1_20241216 = so$annotation_level2_parent1
+so$annotation_level2_parent1 = NULL
+so$annotation_level2.IGTHT = NULL
+
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109_withlevel220241216.csv",header = T, sep = ",", row.names = 1)
+all(rownames(annotl1) == colnames(so))
+colnames(annotl1)
+so$annotation_level1 = annotl1[colnames(so),"level1"]
+so$annotation_level2 = annotl1[colnames(so),"level2"]
+so$annotation_level2_parent1 = annotl1[colnames(so),"level2_parent1"]
+
+# annotation_level2_order = so@meta.data %>% 
+#     select(annotation_level2, annotation_level1, annotation_level2_parent1) %>%
+#     group_by(annotation_level2, annotation_level1, annotation_level2_parent1) %>% 
+#     arrange(
+#         sub("^.*_cl", "", annotation_level2) %>% as.numeric(), # Extract cluster number and convert to numeric
+#         annotation_level2                                     # Keep cluster prefix order (CD4, treg, etc.)
+#     ) %>% 
+#     arrange(annotation_level1) %>%
+#     pull(annotation_level2) %>% 
+#     unique() %>%
+#     as.character()
+# 
+# so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+# any(is.na(so$annotation_level2))
+# 
+# so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
+
+```
+
+
+
 
 (add annotation_table_20241203.csv FORGET! )
 ```{r}

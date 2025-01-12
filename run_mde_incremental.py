@@ -106,7 +106,8 @@ incremental_mde = pymde.preserve_neighbors(
     constraint=anchor_constraint,
     repulsive_fraction=0.7,
     n_neighbors = 15,
-    verbose=True #,device = 'cpu'opp
+    verbose=True,
+    device='cuda'#,device = 'cpu'
 )
 
 # incremental_mde = pymde.preserve_neighbors(
