@@ -792,6 +792,12 @@ table(so$annotation_level2_parent1, so$level2_new)
 table(so$annotation_level1, so$level2_new)
 table(so$annotation_level2_20241216, so$level2_new)
 
+if (all(colnames(so_orig)[so_orig$annotation_level1 == "CD8AB"] == colnames(so))) {
+    print("True")
+    so_orig$annotation_level2[so_orig$annotation_level1 == "CD8AB"] = so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "CD8AB"]]
+}
+
+
 ```
 
 

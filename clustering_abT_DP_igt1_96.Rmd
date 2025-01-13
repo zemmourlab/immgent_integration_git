@@ -1,0 +1,166 @@
+---
+title: "clustering_abT_DP"
+output: html_document
+date: "2025-01-09"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DP
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DP")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+
+```
+
+**Annotation 20250109**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DP")
+so = so_orig[,so_orig$annotation_level1 == "abT_DP"]
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DP/20250109_abT_DP"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+
+pdf(sprintf("%s/MDE_totalvi_20241008_rmIGTsample_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
+
+```
+
+
+Transfer labels
+
+```{r}
+library(RcppAnnoy)
+
+so$level2_new = as.character(so$annotation_level2_20241216)
+so$level2_new[so$annotation_level2_parent1 == "proliferating"] = "abT_DP_prolif"
+so$level2_new[so$annotation_level2_parent1 == "miniverse"] = "abT_DP_miniverse"
+so$level2_new[so$annotation_level2_parent1 == "preT"] = "abT_DP_preT"
+table(so$level2_new, so$annotation_level1)
+table(so$level2_new, so$annotation_level2_parent1)
+
+so$is_ref = "other"
+so$is_ref[so$annotation_level1 == "abT_DP" & so$annotation_level1_20241216 == "abT_DP"] = "ref"
+so$is_ref[so$annotation_level1 == "abT_DP" & so$annotation_level1_20241216 != "abT_DP"] = "query"
+so$is_ref[so$annotation_level2_parent1 %in% c("miniverse", "proliferating", "preT")] = "other"
+cell_embeddings_ref = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "ref",]
+dim(cell_embeddings_ref)
+cell_embeddings_query = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "query",]
+dim(cell_embeddings_query)
+
+# Use the Annoy algorithm to find nearest neighbors between query (3k) and ref (10K) datasets
+n_neighbors = 30  # Number of nearest neighbors to find k =30
+
+# Create Annoy index for ref dataset
+annoy_index = new(AnnoyAngular, ncol(cell_embeddings_ref)) ##use cosine distance Angular
+for (i in 1:nrow(cell_embeddings_ref)) {
+  annoy_index$addItem(i - 1, cell_embeddings_ref[i, ])
+}
+annoy_index$build(10)  # Build the index with 10 trees
+
+# Find nearest ref neighbors for each cell in query dataset
+nn_indices <- t(sapply(1:nrow(cell_embeddings_query), function(i) {
+  annoy_index$getNNsByVector(cell_embeddings_query[i, ], n_neighbors)
+}))
+
+# nn_indices gives you the indices of nearest neighbors in the ref dataset
+# the rows are cells from query dataset, columns are the 30 nearest cells in the ref dataset
+dim(nn_indices)
+head(nn_indices)
+
+labels_ref = as.character(so$annotation_level2_20241216[so$is_ref == "ref"])
+# Transfer labels based on majority vote from nearest neighbors
+transfer_labels <- apply(nn_indices, 1, function(neighbors) {
+  # Get labels for the nearest neighbors
+  neighbor_labels <- labels_ref[neighbors + 1]  # Add 1 for R's 1-based index
+  
+  # Return the most common label (majority vote)
+  most_common_label <- names(sort(table(neighbor_labels), decreasing = TRUE))[1]
+  return(most_common_label)
+})
+
+# Now, transfer_labels contains the predicted labels for the 3k PBMC dataset
+so$level2_new[so$is_ref == "query"] = transfer_labels
+
+table(so$annotation_level2_parent1, so$level2_new)
+table(so$annotation_level1_20241216, so$level2_new)
+table(so$annotation_level2_20241216, so$level2_new)
+
+if (all(colnames(so_orig)[so_orig$annotation_level1 == "abT_DP"] == colnames(so))) {
+    print("True")
+    so_orig$annotation_level2[so_orig$annotation_level1 == "abT_DP"] = so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "abT_DP"]]
+}
+
+
+
+```

@@ -560,6 +560,57 @@ so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
 saveRDS(so, file = "igt1_96_Treg_20241216.Rds")
 ```
 
+**Annotation 20250109**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg")
+so = so_orig[,so_orig$annotation_level1 == "treg"]
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/treg/20250109_treg"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+
+pdf(sprintf("%s/MDE_totalvi_20241008_rmIGTsample_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
+dev.off()
+
+```
+
+
+Transfer labels
+Nothing to tranfer because only cells got removed
+Just rename prolif, minivers and preT
+```{r}
+library(RcppAnnoy)
+
+so$level2_new = as.character(so$annotation_level2_20241216)
+so$level2_new[so$annotation_level2_parent1 == "proliferating"] = "treg_prolif"
+so$level2_new[so$annotation_level2_parent1 == "miniverse"] = "treg_miniverse"
+so$level2_new[so$annotation_level2_parent1 == "preT"] = "treg_preT"
+table(so$level2_new, so$annotation_level1)
+table(so$level2_new, so$annotation_level2_parent1)
+
+table(so_orig$annotation_level2[so_orig$annotation_level1 == "treg"], so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "treg"]])
+
+if (all(colnames(so_orig)[so_orig$annotation_level1 == "treg"] == colnames(so))) {
+    print("True")
+    so_orig$annotation_level2[so_orig$annotation_level1 == "treg"] = so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "treg"]]
+}
+
+nn_indices = NULL
+transfer_labels = NULL
+
+
+```
+
+
 
 
 (My silhouette code)

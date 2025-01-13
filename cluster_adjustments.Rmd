@@ -1831,6 +1831,65 @@ dev.off()
 
 ```
 
+Transfer labels: see code in each clustering_XX.Rmd file
+
+Readjust level2 parent after tranfer labels
+```{r}
+table(so_orig$annotation_level1, so_orig$annotation_level2_parent1)
+
+# so$level2_parent = "other"
+# so$level2_parent[so$annotation_level1 == "thymocyte"] = "preT"
+# 
+# so$level2_parent[so$annotation_level1 == "miniverse"] = "miniverse"
+# 
+# so$level2_parent[so$annotation_level1 == "prolif"] = "prolif"
+# so$level2_parent[so$annotation_level2 %in% c("CD8AB_cl19", "CD4_cl8", "treg_cl5", "miniverse_cl13")] = "prolif"
+
+so_orig$annotation_level2_parent1[so_orig$annotation_level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","treg_cl2", "treg_cl3", "treg_cl4", "treg_cl6", "treg_cl8")] = "activated"
+so_orig$annotation_level2_parent1[so_orig$annotation_level2 %in% c("CD4_cl1", "CD4_cl12", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD8AB_cl1", "CD8AB_cl2", "CD8AB_cl22", "CD8AB_cl4", "CD8AB_cl5","treg_cl1", "treg_cl7")] = "resting"
+
+so_orig$annotation_level2_parent1[so_orig$annotation_level1 %in% c("abT_CD8aa", "gdT", "nonconv", "abT_DN", "abT_DP") & so_orig$annotation_level2_parent1 %in% c("resting", "activated")] = "other"
+
+table(so_orig$annotation_level1, so_orig$annotation_level2_parent1)
+
+```
+
+
+
+WRITE ANNOTATION FILE
+--> annotation_table_20250109.csv
+igt1_96_withtotalvi20250109.Rds
+```{r}
+annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_parent1", "annotation_level2", "nonconv_tcr_recog")])
+colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
+table(annot$level2_parent1, annot$level1)
+
+sum(rowSums(apply(annot,2,is.na)))
+
+write.table(x = annot, file = "annotation_table_20250109_2.csv", row.names = F, quote = F, sep = ",")
+
+# annot_summary <- annot %>%
+#   group_by(level2, level1, level2_parent1) %>% 
+#   summarize(counts = n(), .groups = "drop") %>%
+#   arrange(
+#     sub("^.*_cl", "", level2) %>% as.numeric(), # Extract cluster number and convert to numeric
+#     level2                                     # Keep cluster prefix order (CD4, treg, etc.)
+#   ) %>% 
+#     arrange(level1) %>%
+#     as.data.frame()
+# write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
+
+annot_summary <- annot %>%
+    select(level1,level2_parent1) %>%
+    group_by(level1, level2_parent1) %>% 
+    summarize(counts = n(), .groups = "drop") %>%
+    arrange(level1) %>%
+    as.data.frame()
+
+write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
+```
+
+
 Export mudata to calculate new incremental MDE
 
 ```{python}
@@ -1850,6 +1909,7 @@ import pandas as pd
 
 working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96'
 path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006.h5mu'
+path_to_latent='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent.csv'
 
 mdata = mu.read(path_to_mudata) 
 
@@ -1858,77 +1918,111 @@ set(annotationl1.index) == set(mdata.mod['RNA'].obs.index)
 mdata.mod['RNA'].obs['level1'] = annotationl1['level1']
 mdata.mod['RNA'].obs['level1'].isna().sum()
 
+latent = pd.read_csv(path_to_latent, index_col = 0, header = 0)
+
 mdata_CD8AB = mdata[mdata.mod['RNA'].obs['level1'] == 'CD8AB'] 
 mdata_CD8AB
-mdata_CD8AB.write(working_dir+'/export_data/igt1_96_20250109_CD8AB.h5mu')
+# mdata_CD8AB.write(working_dir+'/export_data/igt1_96_20250109_CD8AB.h5mu')
+latent_subset = latent.loc[mdata_CD8AB.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD8AB.csv', index=True)
 
 mdata_CD4 = mdata[mdata.mod['RNA'].obs['level1'] == 'CD4'] 
 mdata_CD4
-mdata_CD4.write(working_dir+'/export_data/igt1_96_20250109_CD4.h5mu')
+# mdata_CD4.write(working_dir+'/export_data/igt1_96_20250109_CD4.h5mu')
+latent_subset = latent.loc[mdata_CD4.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD4.csv', index=True)
 
 mdata_Treg = mdata[mdata.mod['RNA'].obs['level1'] == 'Treg'] 
 mdata_Treg
-mdata_Treg.write(working_dir+'/export_data/igt1_96_20250109_Treg.h5mu')
+# mdata_Treg.write(working_dir+'/export_data/igt1_96_20250109_Treg.h5mu')
+latent_subset = latent.loc[mdata_Treg.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_Treg.csv', index=True)
 
 mdata_gdT = mdata[mdata.mod['RNA'].obs['level1'] == 'gdT'] 
 mdata_gdT
-mdata_gdT.write(working_dir+'/export_data/igt1_96_20250109_gdT.h5mu')
+# mdata_gdT.write(working_dir+'/export_data/igt1_96_20250109_gdT.h5mu')
+latent_subset = latent.loc[mdata_gdT.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_gdT.csv', index=True)
 
 mdata_nonconv = mdata[mdata.mod['RNA'].obs['level1'] == 'nonconv'] 
 mdata_nonconv
-mdata_nonconv.write(working_dir+'/export_data/igt1_96_20250109_nonconv.h5mu')
+# mdata_nonconv.write(working_dir+'/export_data/igt1_96_20250109_nonconv.h5mu')
+latent_subset = latent.loc[mdata_nonconv.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_nonconv.csv', index=True)
 
 mdata_abT_CD8aa = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_CD8aa'] 
 mdata_abT_CD8aa
-mdata_abT_CD8aa.write(working_dir+'/export_data/igt1_96_20250109_abT_CD8aa.h5mu')
+# mdata_abT_CD8aa.write(working_dir+'/export_data/igt1_96_20250109_abT_CD8aa.h5mu')
+latent_subset = latent.loc[mdata_abT_CD8aa.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_CD8aa.csv', index=True)
 
 mdata_abT_DN = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_DN'] 
 mdata_abT_DN
-mdata_abT_DN.write(working_dir+'/export_data/igt1_96_20250109_abT_DN.h5mu')
+# mdata_abT_DN.write(working_dir+'/export_data/igt1_96_20250109_abT_DN.h5mu')
+latent_subset = latent.loc[mdata_abT_DN.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_DN.csv', index=True)
 
 mdata_abT_DP = mdata[mdata.mod['RNA'].obs['level1'] == 'abT_DP'] 
 mdata_abT_DP
-mdata_abT_DP.write(working_dir+'/export_data/igt1_96_20250109_abT_DP.h5mu')
-
+# mdata_abT_DP.write(working_dir+'/export_data/igt1_96_20250109_abT_DP.h5mu')
+latent_subset = latent.loc[mdata_abT_DP.mod['RNA'].obs.index]
+latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_DP.csv', index=True)
 
 
 ```
 
+not needed for Treg and DP
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB
 prefix=20250109_CD8AB
 mde_ref_file=totalvi_20241014_CD8AB_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent.csv
-
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD8AB.csv
 cd $working_dir
 python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-```
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+prefix=20250109_CD4
+mde_ref_file=totalvi_20241014_CD4_rmIGTsample/mde2.csv
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD4.csv
+cd $working_dir
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-Transfer labels
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
+prefix=20250109_gdT
+mde_ref_file=totalvi_20241014_gdT_rmIGTsample/mde2.csv
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_gdT.csv
+cd $working_dir
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-```{r}
-library(RcppAnnoy)
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN
+prefix=20250109_abT_DN
+mde_ref_file=totalvi_20241014_abT_DN_rmIGTsample/mde2.csv
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_DN.csv
+cd $working_dir
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-# Use the Annoy algorithm to find nearest neighbors between query (3k) and ref (10K) datasets
-n_neighbors <- 30  # Number of nearest neighbors to find k =30
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa
+prefix=20250109_abT_CD8aa
+mde_ref_file=totalvi_20241014_abT_CD8aa_rmIGTsample/mde2.csv
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_CD8aa.csv
+cd $working_dir
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-# Create Annoy index for 10k PBMC dataset
-annoy_index <- new(AnnoyAngular, ncol(cell_embeddings_10k)) ##use cosine distance Angular
-for (i in 1:nrow(cell_embeddings_10k)) {
-  annoy_index$addItem(i - 1, cell_embeddings_10k[i, ])
-}
-annoy_index$build(10)  # Build the index with 10 trees
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv
+prefix=20250109_nonconv
+mde_ref_file=totalvi_20241014_nonconv_rmIGTsample/mde2.csv
+totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_nonconv.csv
+cd $working_dir
+python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
 
-# Find nearest neighbors for each cell in 3k dataset
-nn_indices <- t(sapply(1:nrow(cell_embeddings_3k), function(i) {
-  annoy_index$getNNsByVector(cell_embeddings_3k[i, ], n_neighbors)
-}))
 
-# nn_indices gives you the indices of nearest neighbors in the 10k PBMC dataset
-# the rows are cells from 3k dataset, columns are the 30 nearest cells in the 10k dataset
-dim(nn_indices)
+
 ```
 
 
