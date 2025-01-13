@@ -120,7 +120,7 @@ incremental_mde = pymde.preserve_neighbors(
 #     )
 
 print("incremental_mde.embed")
-incremental_mde.embed(eps=1e-6, verbose=True,device='cuda:0')
+incremental_mde.embed(eps=1e-6, verbose=True)
 
 pymde.plot(mde_ref_embedding.values)
 fig = plt.gcf() 
