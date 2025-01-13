@@ -1831,9 +1831,14 @@ dev.off()
 
 ```
 
-Transfer labels: see code in each clustering_XX.Rmd file
+Transfer labels: 
+--> see code in each clustering_XX.Rmd file
+```{r}
 
-Readjust level2 parent after tranfer labels
+```
+
+
+Readjust level2 parent after transfer labels
 ```{r}
 table(so_orig$annotation_level1, so_orig$annotation_level2_parent1)
 
@@ -1972,57 +1977,13 @@ latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/I
 ```
 
 FYI not needed for Treg and DP
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_CD8AB.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_CD4.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_gdT.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_abT_CD8aa.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_abT_DN.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_nonconv.sh
 ```{bash}
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB
-prefix=20250109_CD8AB
-mde_ref_file=totalvi_20241014_CD8AB_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD8AB.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
-prefix=20250109_CD4
-mde_ref_file=totalvi_20241014_CD4_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD4.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
-prefix=20250109_gdT
-mde_ref_file=totalvi_20241014_gdT_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_gdT.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DN
-prefix=20250109_abT_DN
-mde_ref_file=totalvi_20241014_abT_DN_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_DN.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa
-prefix=20250109_abT_CD8aa
-mde_ref_file=totalvi_20241014_abT_CD8aa_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_CD8aa.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv
-prefix=20250109_nonconv
-mde_ref_file=totalvi_20241014_nonconv_rmIGTsample/mde2.csv
-totalvi_integrated_file=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_nonconv.csv
-cd $working_dir
-python $SCRIPT_DIR/run_mde_incremental.py --working_dir=$working_dir --prefix=$prefix --mde_ref_file=$mde_ref_file --totalvi_integrated_file=$totalvi_integrated_file
-
-
-
 ```
 
 
