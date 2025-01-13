@@ -1932,7 +1932,7 @@ mdata_CD4
 latent_subset = latent.loc[mdata_CD4.mod['RNA'].obs.index]
 latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD4.csv', index=True)
 
-mdata_Treg = mdata[mdata.mod['RNA'].obs['level1'] == 'Treg'] 
+mdata_Treg = mdata[mdata.mod['RNA'].obs['level1'] == 'treg'] 
 mdata_Treg
 # mdata_Treg.write(working_dir+'/export_data/igt1_96_20250109_Treg.h5mu')
 latent_subset = latent.loc[mdata_Treg.mod['RNA'].obs.index]
@@ -1971,7 +1971,7 @@ latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/I
 
 ```
 
-not needed for Treg and DP
+FYI not needed for Treg and DP
 ```{bash}
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
 working_dir=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB
