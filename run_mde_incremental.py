@@ -133,7 +133,8 @@ print("anchor MDE")
 # model_pkl_file = prefix+'/mde_incremental_model.pkl' 
 # with open(model_pkl_file, 'wb') as file:  
 #     pickle.dump(incremental_mde, file)
-    
+ 
+model_pkl_file = prefix+'/mde_incremental_model.pkl'
 with open(model_pkl_file, 'rb') as file:
     incremental_mde = pickle.load(file)
 
