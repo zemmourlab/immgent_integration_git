@@ -569,6 +569,12 @@ so = so_orig[,so_orig$annotation_level1 == "treg"]
 
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/totalvi_20241014_Treg_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241014_Treg_rmIGTsample", calculate_umap = F)
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+totalvi = read.csv(file = sprintf("%s/mde2.csv",dir_with_file), header = T, sep = ",", row.names = 1)
+
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/treg/20250109_treg"
 so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 

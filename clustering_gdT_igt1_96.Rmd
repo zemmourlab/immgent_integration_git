@@ -213,7 +213,9 @@ saveRDS(so, file = "igt1_96_gdT_20241216.Rds")
 **Annotation 20250109**
 
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_level1only.Rds")
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT")
 so = so_orig[,so_orig$annotation_level1 == "gdT"]
 
@@ -222,81 +224,140 @@ so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), pre
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/20250109_gdT"
 so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
-
-pdf(sprintf("%s/MDE_totalvi_20241008_rmIGTsample_Clusters_2024113.pdf", "."), 20, 20, useDingbats = F)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_oct24", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
-# print(DimPlot(so, reduction = "mde_totalvi_20241008_rmIGTsample", group.by = annotation_level2_Treg, split.by = "organ_simplified", ncol = trunc(sqrt(length(unique(so$organ_simplified)))), raster = T, raster.dpi = c(512,512), label = F, pt.size = 2) + scale_color_manual(values = mypal))
-dev.off()
-
 ```
-
 
 Transfer labels
 
 ```{r}
-library(RcppAnnoy)
+MyTransferLabels = function(cell_embeddings_ref, cell_embeddings_query, labels_ref = as.character(so$annotation_level2_20241216[so$is_ref == "ref"]), n_neighbors = 30) {
+    require(RcppAnnoy)
+    # cell_embeddings_ref = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "ref",]
+    # cell_embeddings_query = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "query",]
+    # labels_ref = as.character(so$annotation_level2_20241216[so$is_ref == "ref"])
+    
+    # Use the Annoy algorithm to find nearest neighbors between query and ref datasets
+    message(sprintf("Number of nearest neighbors to find betweeen query and ref: %s", n_neighbors))
+    
+    message("Create Annoy index for ref dataset")
+    annoy_index = new(AnnoyAngular, ncol(cell_embeddings_ref)) ##use cosine distance Angular
+    for (i in 1:nrow(cell_embeddings_ref)) {
+        annoy_index$addItem(i - 1, cell_embeddings_ref[i, ])
+    }
+    annoy_index$build(10)  # Build the index with 10 trees
+    
+    message("Find nearest ref neighbors for each cell in query dataset")
+    nn_indices <- t(sapply(1:nrow(cell_embeddings_query), function(i) {
+        annoy_index$getNNsByVector(cell_embeddings_query[i, ], n_neighbors)
+    }))
+    
+    # nn_indices gives you the indices of nearest neighbors in the ref dataset
+    # the rows are cells from query dataset, columns are the 30 nearest cells in the ref dataset
+    # dim(nn_indices)
+    # head(nn_indices)
+    
+    message("Transfer labels based on majority vote from nearest neighbors")
+    transfer_labels <- apply(nn_indices, 1, function(neighbors) {
+        # Get labels for the nearest neighbors
+        neighbor_labels <- labels_ref[neighbors + 1]  # Add 1 for R's 1-based index
+        
+        # Return the most common label (majority vote)
+        most_common_label <- names(sort(table(neighbor_labels), decreasing = TRUE))[1]
+        return(most_common_label)
+    })
+    
+    names(transfer_labels) = rownames(cell_embeddings_query)
+    
+    return(transfer_labels)
+}
 
 so$level2_new = as.character(so$annotation_level2_20241216)
 so$level2_new[so$annotation_level2_parent1 == "proliferating"] = "gdT_prolif"
 so$level2_new[so$annotation_level2_parent1 == "miniverse"] = "gdT_miniverse"
-so$level2_new[so$annotation_level2_parent1 == "preT"] = "gdT_preT"
+# so$level2_new[so$annotation_level2_parent1 == "preT"] = "CD4_preT"
 table(so$level2_new, so$annotation_level1)
-# table(so$level2_new, so$annotation_level2_parent1)
+table(so$level2_new, so$annotation_level2_parent1)
 
 so$is_ref = "other"
 so$is_ref[so$annotation_level1 == "gdT" & so$annotation_level1_20241216 == "gdT"] = "ref"
 so$is_ref[so$annotation_level1 == "gdT" & so$annotation_level1_20241216 != "gdT"] = "query"
-so$is_ref[so$annotation_level2_parent1 %in% c("miniverse", "proliferating", "preT")] = "other"
+so$is_ref[so$annotation_level2_parent1 %in% c("miniverse")] = "other" #"proliferating", "preT"
 cell_embeddings_ref = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "ref",]
 cell_embeddings_query = so[["totalvi_20241008_rmIGTsample"]]@cell.embeddings[so$is_ref == "query",]
-
-# Use the Annoy algorithm to find nearest neighbors between query (3k) and ref (10K) datasets
-n_neighbors = 30  # Number of nearest neighbors to find k =30
-
-# Create Annoy index for ref dataset
-annoy_index = new(AnnoyAngular, ncol(cell_embeddings_ref)) ##use cosine distance Angular
-for (i in 1:nrow(cell_embeddings_ref)) {
-  annoy_index$addItem(i - 1, cell_embeddings_ref[i, ])
-}
-annoy_index$build(10)  # Build the index with 10 trees
-
-# Find nearest ref neighbors for each cell in query dataset
-nn_indices <- t(sapply(1:nrow(cell_embeddings_query), function(i) {
-  annoy_index$getNNsByVector(cell_embeddings_query[i, ], n_neighbors)
-}))
-
-# nn_indices gives you the indices of nearest neighbors in the ref dataset
-# the rows are cells from query dataset, columns are the 30 nearest cells in the ref dataset
-dim(nn_indices)
-head(nn_indices)
-
 labels_ref = as.character(so$annotation_level2_20241216[so$is_ref == "ref"])
-# Transfer labels based on majority vote from nearest neighbors
-transfer_labels <- apply(nn_indices, 1, function(neighbors) {
-  # Get labels for the nearest neighbors
-  neighbor_labels <- labels_ref[neighbors + 1]  # Add 1 for R's 1-based index
-  
-  # Return the most common label (majority vote)
-  most_common_label <- names(sort(table(neighbor_labels), decreasing = TRUE))[1]
-  return(most_common_label)
-})
+
+transfer_labels = MyTransferLabels(cell_embeddings_ref, cell_embeddings_query, labels_ref, n_neighbors = 30)
 
 # Now, transfer_labels contains the predicted labels for the 3k PBMC dataset
 so$level2_new[so$is_ref == "query"] = transfer_labels
+table(transfer_labels)
 
 table(so$annotation_level2_parent1, so$level2_new)
 table(so$annotation_level1, so$level2_new)
 table(so$annotation_level2_20241216, so$level2_new)
 
+```
+
+Check transfer and readjust clusters if needed, i.e. add new clusters
+CD4_cl28: used to be abT DP
+
+```{r}
+# FeaturePlot(so, reduction = "mde_incremental",slot = "count", features = "Stmn1", order = T, raster = T, raster.dpi = c(1024,1024))
+
+prefix_latent = "totalvi_20241008_rmIGTsample"
+n_latent = ncol(so[[prefix_latent]]@cell.embeddings)
+so = FindNeighbors(so, dims = 1:n_latent, reduction = prefix_latent)
+so = FindClusters(so, resolution = 1, cluster.name = sprintf("Cluster_%s_Res1",prefix_latent))
+
+pdf(sprintf("%s/MDE_annotation_20250109_TransferLabels_Reclustering_to_see.pdf", "20250109_gdT"), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "level2_new", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2) + ggtitle("transfer labels from annotation_level2_20241216")
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = sprintf("Cluster_%s_Res1",prefix_latent), raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+dev.off()
+
+so$level2_new[so$Cluster_totalvi_20241008_rmIGTsample_Res1 %in% "9" ] = "gdT_52"
+so$level2_new[so$Cluster_totalvi_20241008_rmIGTsample_Res1 %in% "15" & so[["mde_incremental"]]@cell.embeddings[,1] > 1.7 ] = "gdT_53"
+so$level2_new[so$Cluster_totalvi_20241008_rmIGTsample_Res1 %in% "15" & so[["mde_incremental"]]@cell.embeddings[,1] < 1.7 ] = "gdT_54"
+so$level2_new[so$level2_new  %in% c("not_CD4CD8_cl48")] = "gdT_prolif"
+so$level2_new[so$annotation_level2_parent1  %in% c("proliferating")] = "gdT_prolif"
+
+# DimPlot(so, reduction = "mde_incremental", cells = names(so$level2_new[so$Cluster_totalvi_20241008_rmIGTsample_Res1 %in% "25" & so[["mde_incremental"]]@cell.embeddings[,1] < 1 ]), raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+
+# so$annotation_level2_parent1 = "not_applicable"
+# annot$level2_parent1[annot$level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","treg_cl2", "treg_cl3", "treg_cl4", "treg_cl6", "treg_cl8")] = "activated"
+# so$annotation_level2_parent1[so$annotation_level2 %in% c("CD4_cl1", "CD4_cl12", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD8AB_cl1", "CD8AB_cl2", "CD8AB_cl22", "CD8AB_cl4", "CD8AB_cl5","treg_cl1", "treg_cl7")] = "resting"
+# so$annotation_level2_parent1[so$annotation_level2 %in% c("CD4_cl8", "CD8AB_cl19", "treg_cl5","not_CD4CD8_cl48")] = "proliferating"
+# table(so$annotation_level2_parent1, so$annotation_level2)
+
+#rerun annotation_level2_parent1 since new annotated cells from transfer labels etc
+so$annotation_level2_parent1[!so$level2_new %in% c("gdT_prolif", "gdT_miniverse", "not_CD4CD8_cl48")] = "other"
+table(so$annotation_level2_parent1, so$level2_new)
+
+pdf(sprintf("%s/MDE_annotation_20250109_level2.pdf", "20250109_gdT"), 20, 20, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level1)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level1_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+DimPlot(so, reduction = "mde_incremental", group.by = "level2_new", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal) + ggtitle("After transfer labels and reclustering")
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_20241216", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal)
+dev.off()
+
 if (all(colnames(so_orig)[so_orig$annotation_level1 == "gdT"] == colnames(so))) {
     print("True")
     so_orig$annotation_level2[so_orig$annotation_level1 == "gdT"] = so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "gdT"]]
+    so_orig$annotation_level2_parent1[so_orig$annotation_level1 == "gdT"] = so$annotation_level2_parent1[colnames(so_orig)[so_orig$annotation_level1 == "gdT"]]
 }
 
+table(so_orig$annotation_level2_parent1[so_orig$annotation_level1 == "gdT"], so_orig$annotation_level2[so_orig$annotation_level1 == "gdT"])
+table(so_orig$annotation_level2[so_orig$annotation_level1 == "gdT"], so_orig$annotation_level2_20241216[so_orig$annotation_level1 == "gdT"])
+
+#Export to save awaiting the other annotations
+annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2", "annotation_level2_parent1", "nonconv_tcr_recog")])
+colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
+table(annot$level2_parent1, annot$level1)
+sum(rowSums(apply(annot,2,is.na)))
+write.table(x = annot, file = "../annotation_table_20250109_withlevel2CD8AB_CD4.csv", row.names = F, quote = F, sep = ",")
+
+
 ```
-
-
-
