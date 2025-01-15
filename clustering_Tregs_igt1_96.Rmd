@@ -68,6 +68,10 @@ mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
 
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+mypal_level2_parent1 = setNames(rev(mypal), unique(so_orig$annotation_level2_parent1))
+
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
 

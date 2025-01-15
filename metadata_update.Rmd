@@ -297,7 +297,7 @@ so$annotation_level2.IGTHT = NULL
 # so$annotation_level2_parent1[so$annotation_level2 %in% c("CD4_cl8", "CD8AB_cl19", "treg_cl5","not_CD4CD8_cl48", "gdT_prolif", "CD4_prolif", "CD8AB_prolif")] = "proliferating"
 # table(so$annotation_level2_parent1, so$annotation_level2)
 
-annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109_withlevel2CD8AB_CD4_gdT_nonconv_CD8aa_DN_DP.csv",header = T, sep = ",", row.names = 1)
 all(rownames(annotl1) == colnames(so))
 colnames(annotl1)
 so$annotation_level1 = annotl1[colnames(so),"level1"]
