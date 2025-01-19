@@ -101,11 +101,30 @@ MyDimPlotHighlight <- function(seurat_object = so,
     require(scattermore)
     require(ggplot2)
     
-    missing_names = setdiff(unique(so@meta.data[,highlight_column_name]), names(mycols))
-    new_colors = mycols[which(is.na(names(mycols)))[1:length(missing_names)]]
-    names(new_colors) = missing_names
-    color_mapping = c(mycols[!is.na(names(mycols))], new_colors)
-    # color_mapping = setNames(mycols, unique(so@meta.data[,highlight_column_name]))
+    # missing_names = setdiff(unique(seurat_object@meta.data[,highlight_column_name]), names(mycols))
+    # new_colors = mycols[which(is.na(names(mycols)))[1:length(missing_names)]]
+    # names(new_colors) = missing_names
+    # color_mapping = c(mycols[!is.na(names(mycols))], new_colors)
+    # # color_mapping = setNames(mycols, unique(so@meta.data[,highlight_column_name]))
+    
+    missing_names = setdiff(unique(seurat_object@meta.data[[highlight_column_name]]), names(mycols))
+    # missing_names = setdiff(levels(seurat_object@meta.data[[highlight_column_name]]), names(mycols))
+    
+    # new_colors <- setNames(mycols[seq_len(length(missing_names))], missing_names)
+    # color_mapping <- c(mycols[!is.na(names(mycols))], new_colors)
+    
+    if (length(missing_names) > 0) {
+        # Assign new colors to missing categories
+        if (any(is.na(names(mycols)))) {
+            new_colors = mycols[which(is.na(names(mycols)))][1:length(missing_names)]
+        } else {
+            new_colors = mycols[1:length(missing_names)]
+        }
+        names(new_colors) <- missing_names
+        color_mapping <- c(mycols[!is.na(names(mycols))], new_colors)
+    } else {
+        color_mapping = mycols
+    }
     
     # UMAP embeddings
     dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]

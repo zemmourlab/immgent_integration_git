@@ -844,12 +844,32 @@ table(so_orig$annotation_level2_parent1, so_orig$annotation_level2)
 
 #Export to save awaiting the other annotations
 annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2", "annotation_level2_parent1", "nonconv_tcr_recog")])
-colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
+colnames(annot) = c("cell_id", "level1", "level2", "level2_parent1", "nonconv_tcr_recog")
 table(annot$level2_parent1, annot$level1)
 sum(rowSums(apply(annot,2,is.na)))
 write.table(x = annot, file = "../annotation_table_20250109_withlevel2CD8AB.csv", row.names = F, quote = F, sep = ",")
 
 
+```
+
+Check Prolif clusters
+
+```{r}
+
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8AB")
+so = so_orig[,so_orig$annotation_level1 == "CD8AB"]
+so = NormalizeData(so)
+so$is_prolif = so$S.Score >0.07 | so$G2M.Score >0.2
+
+pdf(sprintf("%s/Prolif_scores_MDE.pdf","."), 20, 20, useDingbats = F)
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "S.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "G2M.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+DimPlot(so, reduction = "mde_incremental", group.by = "is_prolif", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = c("grey", "red"))
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$is_prolif == "TRUE")), highlight_column_name ="is_prolif", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = c("grey", "red"), label = F, print_plot1 = T, print_plot2 = F )
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$annotation_level2_parent1 == "proliferating")), highlight_column_name ="annotation_level2_parent1", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2_parent1, label = F, print_plot1 = T, print_plot2 = F )
+dev.off()
+
+so$is_prolif = NULL
 ```
 
 

@@ -88,7 +88,8 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 so = AddLatentData(so, latent_file = sprintf("%s/umap_python.csv",dir_with_file), prefix = "umap_totalvi_20241029_fitleredGenesProt", calculate_umap = F)
 so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241029_fitleredGenesProt", calculate_umap = F)
 
-
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
 ```
 
 **Add Clusters e.g. totalvi_20241006/clusters.csv**
@@ -280,6 +281,9 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 
 add annotation_table_20250109.csv
 ```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_level1only.Rds")
+# so = so_orig
+
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
 so = so_orig
 so$annotation_level1_20241216 = so$annotation_level1
@@ -290,28 +294,41 @@ so$annotation_level2_parent1_20241216 = so$annotation_level2_parent1
 so$annotation_level2_parent1 = NULL
 so$annotation_level2.IGTHT = NULL
 
-# Now directly in annotation_table_2050109.csv but if needed:
+# Now directly in annotation_table_2050109.csv but if needed: double check before using
 # so$annotation_level2_parent1 = "not_applicable"
 # annot$level2_parent1[annot$level2 %in% c("CD4_cl10", "CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl20", "CD4_cl21", "CD4_cl22", "CD4_cl23", "CD4_cl25", "CD4_cl9", "CD4_cl28", "CD8AB_cl10", "CD8AB_cl11", "CD8AB_cl12", "CD8AB_cl13", "CD8AB_cl14", "CD8AB_cl15", "CD8AB_cl18", "CD8AB_cl20", "CD8AB_cl6", "CD8AB_cl7","CD8AB_cl25", "CD8AB_cl26","CD8AB_cl28","treg_cl2", "treg_cl3", "treg_cl4", "treg_cl6", "treg_cl8")] = "activated"
 # so$annotation_level2_parent1[so$annotation_level2 %in% c("CD4_cl1", "CD4_cl12", "CD4_cl2", "CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD8AB_cl1", "CD8AB_cl2", "CD8AB_cl22", "CD8AB_cl4", "CD8AB_cl5","CD8AB_cl27","treg_cl1", "treg_cl7")] = "resting"
 # so$annotation_level2_parent1[so$annotation_level2 %in% c("CD4_cl8", "CD8AB_cl19", "treg_cl5","not_CD4CD8_cl48", "gdT_prolif", "CD4_prolif", "CD8AB_prolif")] = "proliferating"
 # table(so$annotation_level2_parent1, so$annotation_level2)
 
-annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109_withlevel2CD8AB_CD4_gdT_nonconv_CD8aa_DN_DP.csv",header = T, sep = ",", row.names = 1)
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
 all(rownames(annotl1) == colnames(so))
 colnames(annotl1)
 so$annotation_level1 = annotl1[colnames(so),"level1"]
 so$annotation_level2 = annotl1[colnames(so),"level2"]
 so$annotation_level2_parent1 = annotl1[colnames(so),"level2_parent1"]
 
+table(so$annotation_level1_20241216, so$annotation_level1)
+
+# annotation_level2_order = so@meta.data %>%
+#     select(annotation_level2, annotation_level1, annotation_level2_parent1) %>%
+#     group_by(annotation_level2, annotation_level1, annotation_level2_parent1) %>%
+#     arrange(
+#         sub("^.*_cl", "", annotation_level2) %>% as.numeric(), # Extract cluster number and convert to numeric
+#         annotation_level2                                     # Keep cluster prefix order (CD4, treg, etc.)
+#     ) %>%
+#     arrange(annotation_level1) %>%
+#     pull(annotation_level2) %>%
+#     unique() %>%
+#     as.character()
+
 annotation_level2_order = so@meta.data %>%
     select(annotation_level2, annotation_level1, annotation_level2_parent1) %>%
     group_by(annotation_level2, annotation_level1, annotation_level2_parent1) %>%
-    arrange(
-        sub("^.*_cl", "", annotation_level2) %>% as.numeric(), # Extract cluster number and convert to numeric
-        annotation_level2                                     # Keep cluster prefix order (CD4, treg, etc.)
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
     ) %>%
-    arrange(annotation_level1) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
     pull(annotation_level2) %>%
     unique() %>%
     as.character()
@@ -324,12 +341,48 @@ any(is.na(so$annotation_level2))
 
 so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_2.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
 
 ```
 
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so = so_orig
+so$annotation_level1 = NULL
+so$annotation_level2 = NULL
+so$annotation_level2_parent1 = NULL
+so$annotation_level2.IGTHT = NULL
 
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
+all(rownames(annotl1) == colnames(so))
+colnames(annotl1)
+so$annotation_level1 = annotl1[colnames(so),"level1"]
+so$annotation_level2 = annotl1[colnames(so),"level2"]
+so$annotation_level2_group = annotl1[colnames(so),"level2.group"]
+
+so$annotation_level2_group[grepl("miniverse",so$annotation_level2 )] = "miniverse"
+so$annotation_level2_group[grepl("prolif",so$annotation_level2 )] = "proliferating"
+so$annotation_level2_group[grepl("unclear",so$annotation_level2 )] = "other"
+so$annotation_level2_group[is.na(so$annotation_level2_group)] = "other"
+
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
+```
+
+
+**Add proliferation scores**
+
+```{r}
+cc_scores = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Prolif_scores.csv", header = T, sep = ",", row.names = 1)
+cc_scores = cc_scores[colnames(so),]
+all(rownames(cc_scores) == colnames(so))
+
+so$S.Score = cc_scores$S.Score
+so$G2M.Score = cc_scores$G2M.Score
+
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+```
 
 
 

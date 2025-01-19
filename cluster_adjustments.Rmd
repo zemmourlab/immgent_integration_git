@@ -117,7 +117,7 @@ names(mypal) = NULL
 
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level2 = setNames(mypal, unique(so$annotation_level2))
-mypal_level2_parent1 = setNames(rev(mypal), unique(so_orig$annotation_level2_parent1))
+mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
 # mypal_odhran = setNames(mypal, unique(so$odhran))
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
@@ -1458,7 +1458,6 @@ dev.off()
 ```
 
 11. Miniverse
-miniverse_cl13 to prolif!
 ```{r}
 ##1. initial assignement based on clusters
 so$level1[so$annotation_level2 %in% "miniverse_cl1"] = "CD4"
@@ -1913,56 +1912,231 @@ latent_subset.to_csv('/project/zemmour/david/ImmgenT/analysis/data_integration/I
 ```
 
 
-Transfer labels + add new clusters if needed +  Readjust level2 parent after transfer labels
---> see code in each clustering_XX.Rmd file
-```{r}
-
-```
-
-WRITE ANNOTATION FILE
---> annotation_table_20250109.csv
-igt1_96_withtotalvi20250109.Rds
-```{r}
-annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_parent1", "annotation_level2", "nonconv_tcr_recog")])
-colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
-table(annot$level2_parent1, annot$level1)
-
-sum(rowSums(apply(annot,2,is.na)))
-
-write.table(x = annot, file = "annotation_table_20250109.csv", row.names = F, quote = F, sep = ",")
-
-# annot_summary <- annot %>%
-#   group_by(level2, level1, level2_parent1) %>% 
-#   summarize(counts = n(), .groups = "drop") %>%
-#   arrange(
-#     sub("^.*_cl", "", level2) %>% as.numeric(), # Extract cluster number and convert to numeric
-#     level2                                     # Keep cluster prefix order (CD4, treg, etc.)
-#   ) %>% 
-#     arrange(level1) %>%
-#     as.data.frame()
-# write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
-
-annot_summary <- annot %>%
-    select(level1,level2_parent1) %>%
-    group_by(level1, level2_parent1) %>% 
-    summarize(counts = n(), .groups = "drop") %>%
-    arrange(level1) %>%
-    as.data.frame()
-
-write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
-```
-
-
-
-FYI not needed for Treg and DP
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_CD8AB.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_CD4.sh
+sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_Treg.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_gdT.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_abT_CD8aa.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_abT_DN.sh
 sbatch $SCRIPT_DIR/run_mde_incremental_wrapper_20250109_nonconv.sh
+DP just reran the MDE. see clustering_abT_DP.Rmd file
 ```{bash}
 ```
+
+Transfer labels + add new clusters if needed +  Readjust level2 parent after transfer labels
+--> see code in each clustering_XX.Rmd file
+```{r}
+```
+
+Check cell cycle
+is_prolif: S.Score >0.07  or so$G2M.Score >0.15
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
+
+# hmc = read.table("/Users/david/Library/CloudStorage/Dropbox/datasets/human_mouse_orthologs_tableS4_zilionis.csv",skip = 2, header = T, sep = ",")
+# cc_genes = read.table("/Users/david/Library/CloudStorage/Dropbox/datasets/CellCycleGenes_DominguezCellRes2016.csv", header = T, sep = ",")
+# cc_genes$Mouse_ortholog = hmc$Mouse_ortholog[match(cc_genes$Symbol,hmc$Human_ortholog)]
+# write.table(x =cc_genes,file =  "/Users/david/Library/CloudStorage/Dropbox/datasets/CellCycleGenes_DominguezCellRes2016_withmouseorthologs.csv", sep = ",", row.names = F, col.names = T, quote = T)
+
+cc_genes = read.table("CellCycleGenes_DominguezCellRes2016_withmouseorthologs.csv", header = T, sep = ",")
+so = NormalizeData(so)
+so = CellCycleScoring(so, s.features = na.omit(cc_genes$Mouse_ortholog[cc_genes$Phase == "G1-S"]), g2m.features = na.omit(cc_genes$Mouse_ortholog[cc_genes$Phase == "G2-M"]))
+
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "Phase", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+so$is_prolif = so$S.Score >0.07 | so$G2M.Score >0.15
+so$prolif_score
+
+pdf("Prolif_scores.pdf", 10, 10, useDingbats = F)
+plot(density(so$S.Score), main = "annotation_level2_parent1 proliferating in red")
+lines(density(so$S.Score[so$annotation_level2_parent1 == "proliferating"]), add = T, col = "red")
+plot(density(so$G2M.Score))
+lines(density(so$G2M.Score[so$annotation_level2_parent1 == "proliferating"]), add = T, col = "red")
+plot(so$S.Score,so$G2M.Score, pch = ".", main = "annotation_level2_parent1 proliferating in red")
+points(so$S.Score[so$annotation_level2_parent1 == "proliferating"],so$G2M.Score[so$annotation_level2_parent1 == "proliferating"], pch = ".", col = "red")
+dev.off()
+
+pdf("Prolif_scores_inMiniverse.pdf", 10, 10, useDingbats = F)
+plot(density(so$S.Score), main = "annotation_level2_parent1 miniverse in red")
+lines(density(so$S.Score[so$annotation_level2_parent1 == "miniverse"]), add = T, col = "red")
+plot(density(so$G2M.Score))
+lines(density(so$G2M.Score[so$annotation_level2_parent1 == "miniverse"]), add = T, col = "red")
+plot(so$S.Score,so$G2M.Score, pch = ".", main = "annotation_level2_parent1 miniverse in red")
+points(so$S.Score[so$annotation_level2_parent1 == "miniverse"],so$G2M.Score[so$annotation_level2_parent1 == "miniverse"], pch = ".", col = "red")
+dev.off()
+
+pdf("Prolif_score_MDE.pdf", 10, 10,useDingbats = F)
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", slot = "data", features = "S.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", slot = "data", features = "G2M.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+dev.off()
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_prolif", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
+
+write.table(file = "Prolif_scores.csv", x = data.frame(cell_id = colnames(so), so@meta.data[,c("S.Score", "G2M.Score", "Phase")]), row.names = F, quote = F, sep = ",")
+
+```
+
+Rename clusters
+```{r}
+#updated as readjusting clusters in each.
+so_orig_beforerenaming = so_orig
+
+so_orig$annotation_level1[so_orig$annotation_level1 == "CD8AB"] = "CD8"
+so_orig$annotation_level1[so_orig$annotation_level1 == "abT_CD8aa"] = "CD8aa"
+so_orig$annotation_level1[so_orig$annotation_level1 == "abT_DN"] = "DN"
+so_orig$annotation_level1[so_orig$annotation_level1 == "abT_DP"] = "DP"
+so_orig$annotation_level1[so_orig$annotation_level1 == "treg"] = "Treg"
+table(so_orig$annotation_level1)
+any(is.na(so_orig$annotation_level1))
+
+so_orig$annotation_level2 = gsub(pattern = "CD8AB", replacement = "CD8", x = so_orig$annotation_level2)
+so_orig$annotation_level2 = gsub(pattern = "abT_CD8aa", replacement = "CD8aa", x = so_orig$annotation_level2)
+so_orig$annotation_level2 = gsub(pattern = "abT_DN", replacement = "DN", x = so_orig$annotation_level2)
+so_orig$annotation_level2 = gsub(pattern = "abT_DP", replacement = "DP", x = so_orig$annotation_level2)
+so_orig$annotation_level2 = gsub(pattern = "treg", replacement = "Treg", x = so_orig$annotation_level2)
+table(so_orig$annotation_level2)
+any(is.na(so_orig$annotation_level2))
+
+```
+
+
+CB modifs:
+level2_parent1 renamed level2.group
+miniverse and proliferating in level2_parent1 as NA now.
+```{r}
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109_cb.csv",header = T, sep = ",", row.names = 1)
+
+annot$level2[annot$level2 == "miniverse_cl13"] = "unclear_miniverse"
+annot$level2[annot$level2 == "thymocyte" & annot$level1 == "unclear"] = "unclear_thymocyte"
+annot$level2.group[annot$level2 == "unclear_thymocyte" ] = NA
+
+
+
+```
+
+
+WRITE ANNOTATION FILE
+--> annotation_table_20250109.csv
+```{r}
+#updated as readjusting clusters in each.
+# annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_parent1", "annotation_level2", "nonconv_tcr_recog")])
+# colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
+# table(annot$level2_parent1, annot$level1)
+# sum(rowSums(apply(annot,2,is.na)))
+# write.table(x = annot, file = "annotation_table_20250109.csv", row.names = F, quote = F, sep = ",")
+
+annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
+
+annot_summary  = annot %>%
+  group_by(level2, level1, level2.group) %>%
+  summarize(counts = n(), .groups = "drop") %>%
+  mutate(
+    cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", level2), sub("^.*_cl", "", level2), NA))  # Extract cluster number and convert to numeric
+  ) %>%
+  arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
+ 
+write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
+
+# so_orig$is_prolif = NULL
+# DefaultAssay(so_orig) = "ADT"
+# so_orig[['RNA']]$data = NULL
+
+# dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+# so_orig = AddLatentData(so_orig, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+
+
+```
+
+Final MDE plots 
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
+so2 = so_orig[, !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
+so3 = so_orig[, so_orig$organ != "thymus" & !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
+
+table(so3$annotation_level1, so3$annotation_level2_parent1)
+table(so3$annotation_level2, so3$annotation_level2_parent1)
+
+pdf("MDE_annotation_20250109_nothymusnocrap.pdf", 10,10, useDingbats = F)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_parent1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 1, raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+dev.off()
+
+pdf("MDE_annotation_20250109_nothymusnocrap2_level1split.pdf", 10,10, useDingbats = F)
+for (i in unique(so3$annotation_level1)) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    print(p)
+     p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+    print(p)
+}
+dev.off()
+
+pdf("MDE_annotation_20250109_nothymusnocrap2_level2parentsplit.pdf", 10,10, useDingbats = F)
+for (i in unique(so3$annotation_level2_parent1)) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    print(p)
+        p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+    print(p)
+}
+dev.off()
+
+
+###Same but with thymus
+pdf("MDE_annotation_20250109_nocrap.pdf", 10,10, useDingbats = F)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_parent1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol =1, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2) + NoLegend()
+dev.off()
+
+pdf("MDE_annotation_20250109_nocrap2_level1split.pdf", 10,10, useDingbats = F)
+for (i in unique(so2$annotation_level1)) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    print(p)
+     p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+    print(p)
+}
+dev.off()
+pdf("MDE_annotation_20250109_nocrap2_level2parentsplit.pdf", 10,10, useDingbats = F)
+for (i in unique(so2$annotation_level2_parent1)) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    print(p)
+        p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+    print(p)
+}
+dev.off()
+
+
+
+
+
+
+
+```
+
+```
+
 
 
 

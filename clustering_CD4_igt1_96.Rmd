@@ -812,3 +812,59 @@ write.table(x = annot, file = "../annotation_table_20250109_withlevel2CD8AB_CD4_
 
 ```
 
+Check Prolif clusters
+
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+so = so_orig[,so_orig$annotation_level1 == "CD4"]
+so = NormalizeData(so)
+so$is_prolif = so$S.Score >0.07 | so$G2M.Score >0.2
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/20250109_CD4"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+pdf(sprintf("%s/Prolif_scores_MDE_tosee.pdf","."), 10, 10, useDingbats = F)
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "S.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "G2M.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+DimPlot(so, reduction = "mde_incremental", group.by = "is_prolif", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = c("grey", "red"))
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$is_prolif)), highlight_column_name ="is_prolif", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = c("grey","red"), label = F, print_plot1 = T, print_plot2 = F )
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$annotation_level2_parent1 == "proliferating")), highlight_column_name ="annotation_level2_parent1", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2_parent1, label = F, print_plot1 = T, print_plot2 = F )
+dev.off()
+
+so$is_prolif = NULL
+```
+
+
+EXPORT CLEAN CD4 seurat object
+remove unwanted cell embeddings
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_parent1 = setNames(mypal, unique(so_orig$annotation_level2_parent1))
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+so = so_orig[,so_orig$annotation_level1 == "CD4"]
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/20250109_CD4"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+DefaultAssay(so) = "ADT"
+so[['RNA']]$data = NULL
+DefaultAssay(so) = "RNA"
+so[['ADT']]$data = NULL
+DefaultAssay(so) = "RNA"
+
+saveRDS(so, file = "igt1_96_CD4_20250109.Rds")
+```
