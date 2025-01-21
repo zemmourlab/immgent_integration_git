@@ -2053,18 +2053,18 @@ Final MDE plots
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
 mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
-mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
+mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
 so2 = so_orig[, !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
 so3 = so_orig[, so_orig$organ != "thymus" & !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
 
-table(so3$annotation_level1, so3$annotation_level2_parent1)
-table(so3$annotation_level2, so3$annotation_level2_parent1)
+table(so3$annotation_level1, so3$annotation_level2_group)
+table(so3$annotation_level2, so3$annotation_level2_group)
 
 pdf("MDE_annotation_20250109_nothymusnocrap.pdf", 10,10, useDingbats = F)
 DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
-DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
-DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_parent1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
-DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_group", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
 DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2)
 DimPlot(so3, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 1, raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
 dev.off()
@@ -2074,7 +2074,7 @@ for (i in unique(so3$annotation_level1)) {
     print(i)
     p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level2_group", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_group, print_plot1 = T, print_plot2 = T)
     print(p)
      p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
     print(p)
@@ -2082,13 +2082,13 @@ for (i in unique(so3$annotation_level1)) {
 dev.off()
 
 pdf("MDE_annotation_20250109_nothymusnocrap2_level2parentsplit.pdf", 10,10, useDingbats = F)
-for (i in unique(so3$annotation_level2_parent1)) {
+for (i in unique(so3$annotation_level2_group)) {
     print(i)
-    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_group == i], highlight_column_name = "annotation_level2_group", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_group, print_plot1 = T, print_plot2 = T)
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_group == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
     print(p)
-        p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+        p = MyDimPlotHighlight(seurat_object = so3, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so3)[so3$annotation_level2_group == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
     print(p)
 }
 dev.off()
@@ -2097,9 +2097,9 @@ dev.off()
 ###Same but with thymus
 pdf("MDE_annotation_20250109_nocrap.pdf", 10,10, useDingbats = F)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
-DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
-DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_parent1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
-DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_parent1", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_parent1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_group", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol =1, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2) + NoLegend()
 dev.off()
@@ -2109,20 +2109,20 @@ for (i in unique(so2$annotation_level1)) {
     print(i)
     p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level2_group", labelclusters = F, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_group, print_plot1 = T, print_plot2 = T)
     print(p)
      p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
     print(p)
 }
 dev.off()
 pdf("MDE_annotation_20250109_nocrap2_level2parentsplit.pdf", 10,10, useDingbats = F)
-for (i in unique(so2$annotation_level2_parent1)) {
+for (i in unique(so2$annotation_level2_group)) {
     print(i)
-    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2_parent1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_parent1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_group == i], highlight_column_name = "annotation_level2_group", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2_group, print_plot1 = T, print_plot2 = T)
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
+    p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_group == i], highlight_column_name = "annotation_level1", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level1, print_plot1 = T, print_plot2 = T)
     print(p)
-        p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_parent1 == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
+        p = MyDimPlotHighlight(seurat_object = so2, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so2)[so2$annotation_level2_group == i], highlight_column_name = "annotation_level2", labelclusters = T, title = i, pixels = c(512, 512), highlight_size = 0.5, highlight_alpha = 0.5, mycols = mypal_level2, print_plot1 = T, print_plot2 = T)
     print(p)
 }
 dev.off()
@@ -2135,7 +2135,6 @@ dev.off()
 
 ```
 
-```
 
 
 

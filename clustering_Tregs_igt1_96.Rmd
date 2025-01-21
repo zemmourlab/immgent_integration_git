@@ -68,9 +68,9 @@ mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
 
-mypal_level1 = setNames(mypal, unique(so$annotation_level1))
-mypal_level2 = setNames(mypal, unique(so$annotation_level2))
-mypal_level2_parent1 = setNames(rev(mypal), unique(so_orig$annotation_level2_parent1))
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
@@ -735,34 +735,45 @@ dev.off()
 
 ```
 
-
-
-######
-Transfer labels
-Nothing to tranfer because only cells got removed
-Just rename prolif, minivers and preT
+export data
 ```{r}
-library(RcppAnnoy)
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
-so$level2_new = as.character(so$annotation_level2_20241216)
-so$level2_new[so$annotation_level2_parent1 == "proliferating"] = "treg_prolif"
-so$level2_new[so$annotation_level2_parent1 == "miniverse"] = "treg_miniverse"
-so$level2_new[so$annotation_level2_parent1 == "preT"] = "treg_preT"
-table(so$level2_new, so$annotation_level1)
-table(so$level2_new, so$annotation_level2_parent1)
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg")
+so = so_orig[,so_orig$annotation_level1 == "Treg"]
 
-table(so_orig$annotation_level2[so_orig$annotation_level1 == "treg"], so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "treg"]])
+# dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+# so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/20250109_Treg"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
-if (all(colnames(so_orig)[so_orig$annotation_level1 == "treg"] == colnames(so))) {
-    print("True")
-    so_orig$annotation_level2[so_orig$annotation_level1 == "treg"] = so$level2_new[colnames(so_orig)[so_orig$annotation_level1 == "treg"]]
-}
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
 
-nn_indices = NULL
-transfer_labels = NULL
+
+pdf(sprintf("%s/MDE_AnnotationLevel20250109.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "Treg")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T, labelclusters = T )
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2) + theme_void() + NoLegend() 
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group) + theme_void() + NoLegend() 
+dev.off()
+
+saveRDS(so, file = "igt1_96_Treg_20250109.Rds")
 
 
 ```
+
+
+
 
 
 

@@ -1,0 +1,456 @@
+---
+title: "MDE tests"
+output: html_document
+date: "2025-01-19"
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=128GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+```
+
+
+**Troubleshooting MDE**
+
+attractive_penalty (pymde.Function class (or factory)) – Callable that constructs a distortion function, given positive weights. Typically one of the classes from pymde.penalties, such as pymde.penalties.log1p, pymde.penalties.Huber, or pymde.penalties.Quadratic.
+
+repulsive_penalty (pymde.Function class (or factory)) – Callable that constructs a distortion function, given negative weights. (If None, only positive weights are used.) For example, pymde.penalties.Log or pymde.penalties.InversePower.
+
+constraint (pymde.constraints.Constraint (optional)) – Embedding constraint, like pymde.Standardized() or pymde.Anchored(anchors, values) (or None). Defaults to no constraint when a repulsive penalty is provided, otherwise defaults to pymde.Standardized().
+Contraints:
+- pymde.Standardized(): When a standardization constraint is imposed, the embedding problem always has a solution. Additionally, the standardization constraint forces the embedding to spread out. When using distortion functions from weights, this means we do not need repulsive penalties (but can choose to include them anyway).
+- anchor
+
+n_neighbors (int (optional)) – The number of nearest neighbors to compute for each row (item) of data. A sensible value is chosen by default, depending on the number of items.
+
+repulsive_fraction (float (optional)) – How many repulsive edges to include, relative to the number of attractive edges. 1 means as many repulsive edges as attractive edges. The higher this number, the more uniformly spread out the embedding will be. Defaults to 0.5 for standardized embeddings, and 1 otherwise. (If repulsive_penalty is None, this argument is ignored.)
+
+max_distance (float (optional)) – If not None, neighborhoods are restricted to have a radius no greater than max_distance.
+
+*Prepare the data*
+```{python}
+
+import warnings; warnings.simplefilter('ignore')
+import argparse
+
+working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/'
+path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20250109_CD4.h5mu'
+prefix='MDE_tests'
+totalvi_integrated_file='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_CD4.csv'
+annotation_file='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv'
+
+print("Importing libraries")
+import warnings; warnings.simplefilter('ignore')
+import scvi
+import os
+import sys
+import scanpy as sc
+import muon as mu
+import mudata as mu
+
+import numpy as np
+import mplscience
+import matplotlib.pyplot as plt
+import pickle
+import pandas as pd
+import seaborn as sns
+import torch
+import pymde #to run MDE
+pymde.seed(0)
+
+print("Global configurations")
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_columns', 1000)
+# sc.set_figure_params(figsize=(6, 6), frameon=False)
+scvi.settings.seed = 0  # optional: ensures reproducibility
+pymde.seed(0)
+#sns.set_theme()
+if torch.cuda.is_available():
+    print("CUDA is available")
+    print("Using device:", torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision("high")
+
+print("Reading integrated ref+query latent space")  
+totalvi_integrated_total = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
+totalvi_integrated = totalvi_integrated.sample(n=50000, random_state=42)  # Use random_state for reproducibility
+
+annot_total = pd.read_csv(annotation_file, index_col = 0, header = 0)
+annot = annot_total.loc[totalvi_integrated.index,:]
+color_map = {
+    'CD4_cl12': "#0000FF", 'CD4_cl28': "#000033", 'CD4_cl3': "#005300", 'CD4_cl9': "#009FFF", 'CD4_cl1': "#FE8F42",
+    'CD4_miniverse': "#720055", 'CD4_cl7': "#A10300", 'CD4_cl10': "#14F9FF", 'CD4_cl2': "#00479E", 'CD4_cl4': "#B00068",
+    'CD4_cl5': "#1C8356", 'CD4_cl21': "#AAF400", 'CD4_prolif': "#BDCDFF", 'CD4_cl14': "#B5EFB5", 'CD4_cl25': "#3B00FB",
+    'CD4_cl13': "#D95F02", 'CD4_cl20': "#FDBF6F", 'CD4_cl22': "#FF7F00", 'CD4_cl23': "#CAB2D6", 'CD4_cl15': "#FBB4AE",
+    'CD4_cl16': "#F1E2CC", 'CD4_cl18': "#CCCCCC", 'CD4_cl17': "#984EA3"
+}
+
+```
+
+*Tests*
+```{python}
+#1. Classic one
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#2. all default
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=None,
+    repulsive_fraction=None,
+    n_neighbors = None,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+#3. all default + constraint=pymde.Standardized(),
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=None,
+    n_neighbors = None,
+    verbose=True,
+    device = 'cuda:0'
+    )
+
+#4. all default + constraint=pymde.Standardized() + n_neighbors = 100
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=None,
+    n_neighbors = 100,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#5. all default + n_neighbors = 100
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=None,
+    repulsive_fraction=None,
+    n_neighbors = 100,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#6. all default + n_neighbors = None + repulsive_fraction=1,
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=None,
+    repulsive_fraction=1,
+    n_neighbors = None,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#7. classic + less repultive
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#8. classic + more repulsive
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=10,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#9. classic + repulsive_fraction 1 
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=1,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+
+#2.1. pymde.preserve_distances default
+mde = pymde.preserve_distances(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    loss=pymde.functions.losses.Absolute,
+    constraint=None,
+    max_distances=50000000.0,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#2.2. pymde.preserve_distances + pymde.losses.WeightedQuadratic
+mde = pymde.preserve_distances(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    loss=pymde.losses.WeightedQuadratic,
+    constraint=None,
+    max_distances=50000000.0,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+#2.3. pymde.preserve_distances + pymde.losses.WeightedQuadratic
+mde = pymde.preserve_distances(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    loss=pymde.losses.WeightedQuadratic,
+    constraint=pymde.Standardized(),
+    max_distances=50000000.0,
+    verbose=True,
+    device = 'cuda:0'
+    )   
+ 
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+
+```
+
+Plot
+```{python}
+
+colors = full_df['level2'].map(color_map)
+from matplotlib.patches import Patch
+
+plt.figure(figsize=(10, 6))  # Setting the figure size
+scatter = plt.scatter(full_df[0], full_df[1], c=colors, alpha=0.6, s = 1)
+legend_elements = [Patch(facecolor=color_map[key], label=key) for key in color_map]
+plt.legend(handles=legend_elements, title="Level 2 Groups", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xlabel('Component 1')  # Label for the x-axis
+plt.ylabel('Component 2')  # Label for the y-axis
+plt.title('Scatter Plot of MDE Embeddings Colored by Level 2 Group')  # Title of the plot
+plt.tight_layout()
+plt.show()
+```
+
+**Testing sampling equally the clusters before doing MDE**
+```{python}
+annot_total = pd.read_csv(annotation_file, index_col = 0, header = 0)
+annot_total['cell_id'] = annot_total.index
+annot = annot_total[annot_total['level1'] == 'CD4'].groupby('level2').apply(lambda x: x.sample(min(len(x), 1000), random_state=1))
+annot.index = annot['cell_id']
+
+totalvi_integrated_total = pd.read_csv(totalvi_integrated_file, index_col = 0, header = 0)
+totalvi_integrated = totalvi_integrated_total.loc[annot.index,:]
+
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty=pymde.functions.penalties.Log1p, 
+    repulsive_penalty=pymde.functions.penalties.Log,
+    constraint=pymde.Standardized(),
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device = 'cuda:0'
+    )
+    
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+full_df = mde_df.join(annot)
+
+color_map = {
+    'CD4_cl12': "#0000FF", 'CD4_cl28': "#000033", 'CD4_cl3': "#005300", 'CD4_cl9': "#009FFF", 'CD4_cl1': "#FE8F42",
+    'CD4_miniverse': "#720055", 'CD4_cl7': "#A10300", 'CD4_cl10': "#14F9FF", 'CD4_cl2': "#00479E", 'CD4_cl4': "#B00068",
+    'CD4_cl5': "#1C8356", 'CD4_cl21': "#AAF400", 'CD4_prolif': "#BDCDFF", 'CD4_cl14': "#B5EFB5", 'CD4_cl25': "#3B00FB",
+    'CD4_cl13': "#D95F02", 'CD4_cl20': "#FDBF6F", 'CD4_cl22': "#FF7F00", 'CD4_cl23': "#CAB2D6", 'CD4_cl15': "#FBB4AE",
+    'CD4_cl16': "#F1E2CC", 'CD4_cl18': "#CCCCCC", 'CD4_cl17': "#984EA3"
+}
+
+
+colors = full_df['level2'].map(color_map)
+from matplotlib.patches import Patch
+
+plt.figure(figsize=(10, 6))  # Setting the figure size
+scatter = plt.scatter(full_df[0], full_df[1], c=colors, alpha=0.6, s = 1)
+legend_elements = [Patch(facecolor=color_map[key], label=key) for key in color_map]
+plt.legend(handles=legend_elements, title="Level 2 Groups", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xlabel('Component 1')  # Label for the x-axis
+plt.ylabel('Component 2')  # Label for the y-axis
+plt.title('Scatter Plot of MDE Embeddings Colored by Level 2 Group')  # Title of the plot
+plt.tight_layout()
+plt.show()
+
+
+##anchors the other cells
+
+# match mde_ref_embedding with index in totalvi_integrated
+mde_ref_embedding = mde_df
+mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(totalvi_integrated_total.index)] #subset cells present in the integrated space other wise mismatch between anchors and values in pymde.Anchored
+rownames = mde_ref_embedding.index.tolist()  # Convert index to list
+index_positions = [totalvi_integrated_total.index.get_loc(item) for item in rownames if item in totalvi_integrated_total.index]
+len(index_positions)
+len(mde_ref_embedding.index)
+rownames_tensor = torch.tensor(index_positions, device='cuda:0')
+
+print("pymde.Anchored")
+anchor_constraint = pymde.Anchored(
+    anchors=rownames_tensor,
+    values=torch.tensor(mde_ref_embedding.values, dtype=torch.float32,device='cuda:0'), #device='cpu' 'cuda:0'
+)
+
+print("pymde.preserve_neighbors")
+incremental_mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated_total.values, dtype=torch.float32,device='cuda:0'), #device='cpu'
+    embedding_dim=2,
+    constraint=anchor_constraint,
+    repulsive_fraction=0.7,
+    n_neighbors = 15,
+    verbose=True,
+    device='cuda:0'
+)
+
+incremental_mde.embed(verbose=True)
+incremental_mde_df = pd.DataFrame(incremental_mde.X.cpu().numpy(), index = totalvi_integrated_total.index)
+full_df = incremental_mde_df.join(annot_total)
+
+colors = full_df['level2'].map(color_map)
+from matplotlib.patches import Patch
+
+plt.figure(figsize=(10, 6))  # Setting the figure size
+scatter = plt.scatter(full_df[0], full_df[1], c=colors, alpha=0.6, s = 1)
+plt.xlim(-3, 3)
+plt.ylim(-3, 3)
+legend_elements = [Patch(facecolor=color_map[key], label=key) for key in color_map]
+plt.legend(handles=legend_elements, title="Level 2 Groups", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xlabel('Component 1')  # Label for the x-axis
+plt.ylabel('Component 2')  # Label for the y-axis
+plt.title('Scatter Plot of MDE Embeddings Colored by Level 2 Group')  # Title of the plot
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+```
+
+**If wanted to save**
+```{python}
+
+import pickle
+model_pkl_file = prefix+"/mde_model.pkl"  
+with open(model_pkl_file, 'wb') as file:  
+    pickle.dump(mde, file)
+
+# with open(model_pkl_file, 'rb') as file:  
+#     model = pickle.load(file)
+
+embedding = mde.embed(verbose=True)
+mde_df = pd.DataFrame(embedding.cpu(), index = totalvi_integrated.index) 
+mde_df.to_csv(prefix+"/mde2.csv", index=True)
+
+pairs, distorsions = mde.high_distortion_pairs()
+pairs_df = pd.DataFrame(pairs.cpu(), columns=['cell1', 'cell2'])
+pairs_df['cell1'] = totalvi_integrated.index[pairs_df['cell1']]
+pairs_df['cell2'] = totalvi_integrated.index[pairs_df['cell2']]
+distorsions_df = pd.DataFrame(distorsions.cpu(),columns=['distortion'])
+pairs_df['distortion'] = distorsions_df['distortion']
+#pairs_df.sample(n=1000000, replace=False).to_csv(prefix+"/mde_distorsions_sample.csv")
+pairs_df.to_csv(prefix+"/mde_distorsions.csv")
+#most_distorted_pairs = pairs[:500]
+mde.distortions_cdf()
+fig = plt.gcf() 
+fig.savefig(prefix+"/mde_distorsion_cdf.png")
+```
+
+

@@ -346,6 +346,7 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 
 ```
 
+
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 so = so_orig
@@ -365,6 +366,25 @@ so$annotation_level2_group[grepl("miniverse",so$annotation_level2 )] = "minivers
 so$annotation_level2_group[grepl("prolif",so$annotation_level2 )] = "proliferating"
 so$annotation_level2_group[grepl("unclear",so$annotation_level2 )] = "other"
 so$annotation_level2_group[is.na(so$annotation_level2_group)] = "other"
+
+annotation_level2_order = so@meta.data %>%
+    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
+    ) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
+    pull(annotation_level2) %>%
+    unique() %>%
+    as.character()
+
+test = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(test))
+
+so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(so$annotation_level2))
+
+so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
 
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 

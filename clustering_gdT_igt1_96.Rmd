@@ -385,4 +385,41 @@ so_orig$annotation_level2[so_orig$annotation_level2 %in% "gdT_cl32"] = "gdT_prol
 
 ```
 
+export data
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT")
+so = so_orig[,so_orig$annotation_level1 == "gdT"]
+
+# dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+# so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/20250109_gdT"
+so = AddLatentData(so, latent_file = sprintf("%s/mde_incremental.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+
+pdf(sprintf("%s/MDE_AnnotationLevel20250109.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "gdT")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T, labelclusters = T )
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2) + theme_void() + NoLegend() 
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group) + theme_void() + NoLegend() 
+dev.off()
+
+saveRDS(so, file = "igt1_96_gdT_20250109.Rds")
+
+
+```
+
 

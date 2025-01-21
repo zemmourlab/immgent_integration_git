@@ -13,7 +13,7 @@ sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=128GB
-sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=32GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=128GB
 cd $LABHOME
 
 module load python/anaconda-2022.05 
@@ -87,6 +87,7 @@ working_dir='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/ab
 path_to_mudata='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20250109_abT_DP.h5mu'
 prefix='20250109_abT_DP'
 totalvi_integrated_file='/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample/latent_abT_DP.csv'
+annotation = '/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv'
 
 print("Importing libraries")
 import warnings; warnings.simplefilter('ignore')
@@ -131,6 +132,19 @@ mde = pymde.preserve_neighbors(
     verbose=True,
     device = 'cuda:0'
 )
+
+mde = pymde.preserve_neighbors(
+    torch.tensor(totalvi_integrated.values, dtype=torch.float32,device='cuda:0'),
+    embedding_dim=2,
+    attractive_penalty='pymde.functions.penalties.Log1p', 
+    repulsive_penalty='pymde.functions.penalties.Log'
+    constraint=None,
+    repulsive_fraction=None,
+    n_neighbors = None,
+    verbose=True,
+    device = 'cuda:0'
+)
+
 
 import pickle
 model_pkl_file = prefix+"/mde_model.pkl"  
@@ -342,3 +356,42 @@ MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = na
 MyDimPlotHighlight(so, umap_to_plot = "mde_incremental", cells_to_highlight = names(which(so$annotation_level2_parent1 == "proliferating")), highlight_column_name ="annotation_level2_parent1", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2_parent1, label = F, print_plot1 = T, print_plot2 = F )
 dev.off()
 ```
+
+
+export data
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP")
+so = so_orig[,so_orig$annotation_level1 == "DP"]
+
+# dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
+# so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_DP/20250109_abT_DP"
+so = AddLatentData(so, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
+
+
+pdf(sprintf("%s/MDE_AnnotationLevel20250109.pdf", "."), 10, 10, useDingbats = F)
+MyDimPlotHighlight(so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "DP")), highlight_column_name ="annotation_level2", highlight_size = 0.5, highlight_alpha = 0.5, pixels = c(512, 512), mycols = mypal_level2, print_plot1 = T, print_plot2 = T, labelclusters = T )
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2) + theme_void() + NoLegend() 
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group) + theme_void() + NoLegend() 
+dev.off()
+
+saveRDS(so, file = "igt1_96_DP_20250109.Rds")
+
+
+```
+
