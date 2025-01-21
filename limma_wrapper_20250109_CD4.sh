@@ -56,6 +56,6 @@ Rscript $SCRIPT_DIR/limma_contrasts_20250121_OneVsAll_notMiniProlif.R $path_to_s
 
 echo "Prolif miniverse"
 path_to_fit_object=$output_dir/$fit_file_name
-prefix_file_name=Level2Groups
+prefix_file_name=Level2Group
 Rscript $SCRIPT_DIR/limma_contrasts_20250121_Level2Group.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
