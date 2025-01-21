@@ -213,48 +213,64 @@ namescontrasts = c()
 # }
 
 #Activated vs Resting
-group1_filter <- expr(annotation_level2_group == "activated") ##EDIT
-group2_filter <- expr(annotation_level2_group %in% "resting") #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "Activated_vs_Resting" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts["act_v_rest"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts["act_v_rest"] = nmecontrast
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+tryCatch({
+    group1_filter <- expr(annotation_level2_group == "activated") ##EDIT
+    group2_filter <- expr(annotation_level2_group %in% "resting") #& level2_parent1 == "resting" ##EDIT
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
+    nmecontrast = "Activated_vs_Resting" ##EDIT
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts["act_v_rest"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts["act_v_rest"] = nmecontrast
+    gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}, error = function(e) {
+    message("Error: no activated or resting cells ", names(tt_list)[j], " - ", e$message)
+})
 
 #Proliferating vs all
-group1_filter <- expr(annotation_level2_group == "proliferating") ##EDIT
-group2_filter <- expr(!(annotation_level2_group %in% "proliferating") )  #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "Proliferating_vs_All" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts["prolif"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts["prolif"] = nmecontrast
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+tryCatch({
+    group1_filter <- expr(annotation_level2_group == "proliferating") ##EDIT
+    group2_filter <- expr(!(annotation_level2_group %in% "proliferating") )  #& level2_parent1 == "resting" ##EDIT
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
+    nmecontrast = "Proliferating_vs_All" ##EDIT
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts["prolif"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts["prolif"] = nmecontrast
+    gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}, error = function(e) {
+    message("Error: no proliferating cells ", names(tt_list)[j], " - ", e$message)
+})
 
 #Miniverse vs all
-group1_filter <- expr(annotation_level2_group == "miniverse") ##EDIT
-group2_filter <- expr(!(annotation_level2_group %in% "miniverse") )  #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "Miniverse_vs_All" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts["mini"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts["mini"] = nmecontrast
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+tryCatch({
+    group1_filter <- expr(annotation_level2_group == "miniverse") ##EDIT
+    group2_filter <- expr(!(annotation_level2_group %in% "miniverse") )  #& level2_parent1 == "resting" ##EDIT
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
+    nmecontrast = "Miniverse_vs_All" ##EDIT
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts["mini"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts["mini"] = nmecontrast
+    gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}, error = function(e) {
+    message("Error: no miniverse cells", names(tt_list)[j], " - ", e$message)
+})
 
 #Miniverse vs Prolif
-group1_filter <- expr(annotation_level2_group == "miniverse") ##EDIT
-group2_filter <- expr(annotation_level2_group %in% "proliferating")  #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "Miniverse_vs_Proliferating" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts["mini_v_prolif"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts["mini_v_prolif"] = nmecontrast
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+tryCatch({
+    group1_filter <- expr(annotation_level2_group == "miniverse") ##EDIT
+    group2_filter <- expr(annotation_level2_group %in% "proliferating")  #& level2_parent1 == "resting" ##EDIT
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
+    nmecontrast = "Miniverse_vs_Proliferating" ##EDIT
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts["mini_v_prolif"] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts["mini_v_prolif"] = nmecontrast
+    gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}, error = function(e) {
+    message("Error: no proliferating or proliferating cells ", names(tt_list)[j], " - ", e$message)
+})
 
 message("contrasts.fit...")
 cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
