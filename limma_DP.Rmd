@@ -80,7 +80,16 @@ sbatch $SCRIPT_DIR/limma_wrapper_20240109_DP.sh
 one vs all
 
 ```{bash}
+echo "OneVsAll"
+path_to_fit_object=$output_dir/$fit_file_name
+prefix_file_name=OneVsAll
+Rscript $SCRIPT_DIR/limma_contrasts_20250121_OneVsAll_notMiniProlif.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
+path_to_seurat_object = "DGE_limma/20250109/igt1_96_DP_20250109_sampled_so.Rds"
+path_to_tmm_object = "DGE_limma/20250109/igt1_96_DP_20250109_tmm.Rds"
+path_to_fit_object = "DGE_limma/20250109/igt1_96_DP_20250109_fit.Rds"
+output_dir = "DGE_limma/20250109/"
+prefix_file_name = "OneVsAll"
 
 
 
