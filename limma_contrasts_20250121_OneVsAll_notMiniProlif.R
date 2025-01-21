@@ -175,7 +175,7 @@ design = fit$design
 
 message("loading metadata")
 metadata = data.frame(so@meta.data[,c("annotation_level2","annotation_level2_group", "IGTHT","organ_simplified","condition_broad", "condition_detailed", "sex")])
-metadata = metadata[!metadata$annotation_level2_group %in% c("proliferating", "miniverse"),]
+
 if (!is.null(so$annotation_level2.IGTHT)) {
     metadata$annotation_level2.IGTHT = so$annotation_level2.IGTHT
 } else {
@@ -184,6 +184,8 @@ if (!is.null(so$annotation_level2.IGTHT)) {
 metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
+
+metadata = metadata[!metadata$annotation_level2_group %in% c("proliferating", "miniverse"),]
 
 message("creating constrats")
 metadata$annotation_level2 = factor(metadata$annotation_level2, levels = levels(metadata$annotation_level2)[levels(metadata$annotation_level2) %in% metadata$annotation_level2])
