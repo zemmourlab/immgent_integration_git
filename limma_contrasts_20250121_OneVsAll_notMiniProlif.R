@@ -223,7 +223,8 @@ tt_list = list()
 for (i in colnames(cont.matrix)) {
     print(i)
     tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
-    tt_list[[i]]$SYMBOL = gene_symbol
+    # tt_list[[i]]$SYMBOL = gene_symbol
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
 }
 
 tmp = tt_list

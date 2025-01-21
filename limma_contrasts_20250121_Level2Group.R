@@ -187,7 +187,7 @@ dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
 
 message("creating constrats") ##EDIT
-metadata = metadata[metadata$annotation_level2_group %in% c("activated", "resting", "proliferating", "miniverse"),]
+metadata = metadata# metadata = metadata[metadata$annotation_level2_group %in% c("activated", "resting", "proliferating", "miniverse","other"),]
 metadata$annotation_level2_group = factor(metadata$annotation_level2_group, levels = unique(metadata$annotation_level2_group))
 
 contrasts = c()
@@ -268,7 +268,7 @@ tt_list = list()
 for (i in colnames(cont.matrix)) {
     print(i)
     tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
-    tt_list[[i]]$SYMBOL = gene_symbol
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])#gene_symbol
 }
 
 tmp = tt_list
