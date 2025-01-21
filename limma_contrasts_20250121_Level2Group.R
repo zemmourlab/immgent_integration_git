@@ -224,7 +224,7 @@ tryCatch({
     namescontrasts["act_v_rest"] = nmecontrast
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }, error = function(e) {
-    message("Error: no activated or resting cells ", names(tt_list)[j], " - ", e$message)
+    message("Warning: no activated or resting cells ", e$message)
 })
 
 #Proliferating vs all
@@ -239,7 +239,7 @@ tryCatch({
     namescontrasts["prolif"] = nmecontrast
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }, error = function(e) {
-    message("Error: no proliferating cells ", names(tt_list)[j], " - ", e$message)
+    message("Warning: no proliferating cells ", e$message)
 })
 
 #Miniverse vs all
@@ -254,7 +254,7 @@ tryCatch({
     namescontrasts["mini"] = nmecontrast
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }, error = function(e) {
-    message("Error: no miniverse cells", names(tt_list)[j], " - ", e$message)
+    message("Warning: no miniverse cells", e$message)
 })
 
 #Miniverse vs Prolif
@@ -269,7 +269,7 @@ tryCatch({
     namescontrasts["mini_v_prolif"] = nmecontrast
     gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 }, error = function(e) {
-    message("Error: no proliferating or proliferating cells ", names(tt_list)[j], " - ", e$message)
+    message("Warning: no proliferating or proliferating cells ", e$message)
 })
 
 message("contrasts.fit...")
