@@ -2,7 +2,7 @@
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
 #SBATCH --partition=beagle3-bigmem
 #SBATCH --nodes=2 
-#SBATCH --mem=1024GB
+#SBATCH --mem=512GB
 #SBATCH -J limma_%j            
 #SBATCH -o limma_%j.log
 #SBATCH -t 2-00:00:00              ##SBATCH --mem=8G
