@@ -32,19 +32,19 @@ cd $path_to_wd
 output_dir=DGE_limma/20250109
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/igt1_96_Treg_20250109.Rds
 tmm_file_name=igt1_96_Treg_20250109_tmm.Rds
-Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
+# Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 path_to_tmm_object=$output_dir/$tmm_file_name
 fit_file_name=igt1_96_Treg_20250109_fit.Rds
-Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
+# Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Resting
-Rscript $SCRIPT_DIR/limma_contrasts_20250121_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+# Rscript $SCRIPT_DIR/limma_contrasts_20250121_inResting.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=in_Activated
-Rscript $SCRIPT_DIR/limma_contrasts_20250121_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+# Rscript $SCRIPT_DIR/limma_contrasts_20250121_inActivated.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=OneVsAll
@@ -52,5 +52,5 @@ Rscript $SCRIPT_DIR/limma_contrasts_20250121_OneVsAll_notMiniProlif.R $path_to_s
 
 path_to_fit_object=$output_dir/$fit_file_name
 prefix_file_name=Level2Group
-Rscript $SCRIPT_DIR/limma_contrasts_20250121_Level2Group.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
+# Rscript $SCRIPT_DIR/limma_contrasts_20250121_Level2Group.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 

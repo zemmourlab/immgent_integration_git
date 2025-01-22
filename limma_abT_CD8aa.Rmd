@@ -82,6 +82,13 @@ one vs all
 
 ```
 
+sbatch $SCRIPT_DIR/limma_wrapper_20240109_CD8aa.sh
+one vs all (not miniverse or prolif)
+miniverse, prolif, miverse v prolif
+```{r}
+
+```
+
 Make table and signatures (now in each contrast script too)
 ```{r}
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/abT_CD8aa/DGE_limma/20241217")
