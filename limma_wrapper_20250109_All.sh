@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=caslake 
-#SBATCH --nodes=1 
-#SBATCH --mem=96GB
+#SBATCH --partition=beagle3-bigmem
+#SBATCH --nodes=2 
+#SBATCH --mem=1024GB
 #SBATCH -J limma_%j            
 #SBATCH -o limma_%j.log
-#SBATCH -t 36:00:00              ##SBATCH --mem=8G
+#SBATCH -t 2-00:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/limma_wrapper_20250109.sh
+#run as: sbatch $SCRIPT_DIR/limma_wrapper_20250109_All.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
