@@ -24,7 +24,7 @@ path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
 cd $path_to_wd
 
 echo "Sampling seurat object"
-path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/igt1_96_withtotalvi20250109_clean.Rds
+path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_clean.Rds
 output_dir=DGE_limma/20250109
 so_file_name=igt1_96_withtotalvi20250109_clean_sampled.Rds
 Rscript $SCRIPT_DIR/limma_sample_seuratobject_20241217.R $path_to_seurat_object $output_dir $so_file_name
