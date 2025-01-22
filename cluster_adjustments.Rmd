@@ -2055,6 +2055,7 @@ mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
 mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
 mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
 so2 = so_orig[, !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
+# saveRDS(so2, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_clean.Rds")
 so3 = so_orig[, so_orig$organ != "thymus" & !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
 
 table(so3$annotation_level1, so3$annotation_level2_group)
