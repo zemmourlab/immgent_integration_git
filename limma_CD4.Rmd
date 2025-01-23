@@ -88,7 +88,20 @@ activated vs resting
 
 ```
 
-Make table and signatures (now in each contrast script too)
+sbatch $SCRIPT_DIR/limma_wrapper_20240109_Treg.sh
+one vs all (not miniverse or prolif)
+one vs all in resting
+one vs all in activated
+activated vs resting
+miniverse, prolif, miverse v prolif
+```{r}
+
+```
+
+
+
+########
+Make table and signatures (now in each contrast script too
 ```{r}
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20241217")
 
@@ -158,5 +171,7 @@ for (i in 1:length(file_list)) {
 
 
 ```
+
+
 
 
