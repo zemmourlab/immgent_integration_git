@@ -1,10 +1,10 @@
 ---
-title: "cometsc_gdT"
+title: "cometsc_nonconv"
 output: html_document
 date: "2025-01-09"
 ---
 
-Continuation from clustering_gdT_igt_1_96.Rmd
+Continuation from clustering_nonconv_igt_1_96.Rmd
 
 ```{bash}
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
@@ -15,7 +15,7 @@ module load openblas/0.3.13
 source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
 
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv
 R
 ```
 
@@ -63,10 +63,10 @@ remove data without CITEseq: "IGT7"  "IGT8"  "IGT9"  "IGT44" "IGT45" "IGT46" "IG
 Remove IGT1: CITEseq V1
 Remove IGT90: CD45.1/2 only, not the panel
 remove protein with less than 1000 rowSums, except TCRVA11.1-TCRVA11.2
---> cometsc/20250109/igt1_96_gdT_filteredforCometsc.Rds
+--> cometsc/20250109/igt1_96_nonconv_filteredforCometsc.Rds
 
 ```{r}
-so = readRDS("igt1_96_gdT_20250109.Rds")
+so = readRDS("igt1_96_nonconv_20250109.Rds")
 so_orig = so
 
 #remove IGT without CITEseq:
@@ -116,13 +116,13 @@ tmp2 = tmp2[,-1]
 pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Mean CLR ADT per IGT")
 dev.off()
 
-saveRDS(so, sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+saveRDS(so, sprintf("%s/igt1_96_nonconv_filteredforCometsc.Rds", prefix))
 
 ```
 
 Heatmap Clusters ADT
 ```{r}
-so = readRDS(sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+so = readRDS(sprintf("%s/igt1_96_nonconv_filteredforCometsc.Rds", prefix))
 
 so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
 adt = so[["ADT"]]$data
@@ -146,7 +146,7 @@ dev.off()
 export data for cometsc
 tabmarker.txt tabvis.txt tabcluster.txt
 ```{r}
-so = readRDS(sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+so = readRDS(sprintf("%s/igt1_96_nonconv_filteredforCometsc.Rds", prefix))
 
 #Sample cells so that no more than 2000 cells per cluster
 sample_cells = so@meta.data %>%
@@ -190,7 +190,7 @@ Comet tabmarker.txt tabvis.txt tabcluster.txt output/ -skipvis True
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/cometsc_wrapper_20250109_gdT.sh
+#run as: sbatch $SCRIPT_DIR/cometsc_wrapper_20250109_nonconv.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -201,7 +201,7 @@ module load openblas/0.3.13 #load again or error
 
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/cometsc/20250109
+path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv/cometsc/20250109
 
 cd $path_to_wd
 

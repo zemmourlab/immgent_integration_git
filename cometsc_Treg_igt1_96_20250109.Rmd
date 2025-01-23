@@ -61,7 +61,7 @@ clusters = "annotation_level2"
 Filter the data:
 remove data without CITEseq: "IGT7"  "IGT8"  "IGT9"  "IGT44" "IGT45" "IGT46" "IGT73" "IGT85" "IGT90" "IGT91" "IGT92"
 Remove IGT1: CITEseq V1
-Remove IGT90: Treg5.1/2 only, not the panel
+Remove IGT90: CD45.1/2 only, not the panel
 remove protein with less than 1000 rowSums, except TCRVA11.1-TCRVA11.2
 --> cometsc/20250109/igt1_96_Treg_filteredforCometsc.Rds
 
