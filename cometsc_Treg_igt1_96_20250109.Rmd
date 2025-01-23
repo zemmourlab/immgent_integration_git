@@ -51,6 +51,7 @@ names(mypal) = NULL
 Prefix
 ```{r}
 prefix = "cometsc/20250109"
+dir.create(prefix, recursive = TRUE)
 reduc = "mde_incremental"
 clusters = "annotation_level2"
 ```
