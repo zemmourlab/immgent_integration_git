@@ -388,6 +388,10 @@ so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
 
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
+# so_orig = so
+# so$annotation_level2 = as.character(so$annotation_level2)
+# so$annotation_level2[so$annotation_level2 == "DNcl29"] = "DN_cl29"
+
 ```
 
 

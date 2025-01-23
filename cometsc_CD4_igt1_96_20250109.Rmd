@@ -218,12 +218,12 @@ back to source activate /project/zemmour/david/envs/scvi_20240315
 Prefix
 ```{r}
 prefix = prefix
-prefix2 = "20241023_k2_logdata" 
-prefix2 = "20241023_k2data"
-prefix3 = "markers_CD4clusters"
+prefix2 = "k2_logdata" # prefix2 = "k2data"
+# prefix3 = "markers_level2"
 ```
 
 ```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
 so = readRDS(sprintf("%s/igt1_96_CD4_filteredforCometsc.Rds", prefix))
 ```
 
@@ -252,7 +252,8 @@ SeSpPPVNPV = function(tp = tmp["tp"], tn = tmp["tn"], fp=tmp["fp"], fn=tmp["fn"]
 
 singleton_list = list()
 files = list.files(path = sprintf("%s/%s", prefix, prefix2), pattern = "singleton_all_ranked.csv")
-cluster_ids = gsub(".*_(cl\\d+)_.*", "\\1", files)
+# cluster_ids = gsub(".*_(cl\\d+)_.*", "\\1", files)
+cluster_ids = gsub("cluster_|_singleton_all_ranked.csv", "", files)
 for (i in 1:length(files)) {
     singleton_list[[files[i]]] = read.table(file = sprintf("%s/%s/%s", prefix, prefix2, files[i]), header = T, as.is = T, sep = ",")
     if(nrow(singleton_list[[files[i]]]) != 0) {

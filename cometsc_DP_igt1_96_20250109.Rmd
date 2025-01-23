@@ -211,3 +211,59 @@ Comet input_data.txt input_umap.txt input_clusters.txt k2 -C 36 -K 2 # -C is for
 
 ```
 
+**Find gating strategy**
+back to source activate /project/zemmour/david/envs/scvi_20240315
+Prefix
+```{r}
+prefix = prefix
+prefix2 = "k2_logdata" # prefix2 = "k2data"
+# prefix3 = "markers_level2"
+```
+
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP")
+so = readRDS(sprintf("%s/igt1_96_DP_filteredforCometsc.Rds", prefix))
+```
+
+```{r}
+TpTnFpFn = function(x = colnames(so) %in% gate_list[["cl2"]], y = so$is_cl2) { 
+    tmp = table(x,y)
+    #rownames(tmp) = c("gate_neg", "gate_pos")
+    #colnames(tmp) = c("notcluster", "cluster")
+    tp = tmp[2,2]
+    tn = tmp[1,1]
+    fp = tmp[2,1]
+    fn = tmp[1,2]
+    return(c(tp = tp, tn = tn, fp=fp, fn=fn))
+}
+
+SeSpPPVNPV = function(tp = tmp["tp"], tn = tmp["tn"], fp=tmp["fp"], fn=tmp["fn"]) {
+    se = tp / (tp+fn)
+    sp = tn / (fp+tn)
+    ppv = tp / (tp+fp)
+    npv = tn / (tn+fn)
+    res = c(se, sp, ppv, npv)
+    names(res) =  c("se", "sp", "ppv", "npv")
+    return(res)
+}
+
+
+singleton_list = list()
+files = list.files(path = sprintf("%s/%s", prefix, prefix2), pattern = "singleton_all_ranked.csv")
+# cluster_ids = gsub(".*_(cl\\d+)_.*", "\\1", files)
+cluster_ids = gsub("cluster_|_singleton_all_ranked.csv", "", files)
+for (i in 1:length(files)) {
+    singleton_list[[files[i]]] = read.table(file = sprintf("%s/%s/%s", prefix, prefix2, files[i]), header = T, as.is = T, sep = ",")
+    if(nrow(singleton_list[[files[i]]]) != 0) {
+        singleton_list[[files[i]]][,"cluster"] = cluster_ids[i]
+    }
+}
+singleton_list = Reduce(f = rbind, singleton_list)
+
+singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice_head(n = 5) %>% as.data.frame() %>% write.table(sprintf("%s/%s/singleton_all_ranked_top5percluster.csv", prefix, prefix2), sep = ",", quote = F, row.names = F, col.names = T)
+
+singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice_head(n = 10) %>% as.data.frame() %>% write.table(sprintf("%s/%s/singleton_all_ranked_top10percluster.csv", prefix, prefix2), sep = ",", quote = F, row.names = F, col.names = T)
+
+```
+
+

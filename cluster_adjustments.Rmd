@@ -2011,7 +2011,7 @@ annot$level2[annot$level2 == "miniverse_cl13"] = "unclear_miniverse"
 annot$level2[annot$level2 == "thymocyte" & annot$level1 == "unclear"] = "unclear_thymocyte"
 annot$level2.group[annot$level2 == "unclear_thymocyte" ] = NA
 
-
+annot$level2[annot$level2 == "DNcl29"] = "DN_cl29"
 
 ```
 
@@ -2027,6 +2027,7 @@ WRITE ANNOTATION FILE
 # write.table(x = annot, file = "annotation_table_20250109.csv", row.names = F, quote = F, sep = ",")
 
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
+
 
 annot_summary  = annot %>%
   group_by(level2, level1, level2.group) %>%

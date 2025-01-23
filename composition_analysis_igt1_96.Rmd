@@ -102,8 +102,6 @@ m3$sample_name_new = make.names(m3$sample_name_new)
 saveRDS(m3, file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
 
 write.table(m3, file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.csv", prefix) ,row.names = F, col.names = T, sep = ",", quote = F)
-
-
 ```
 
 ```{r}
@@ -137,6 +135,21 @@ for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
 dev.off()
 
 ```
+
+split by annotation_level1
+```{r}
+m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+
+# which(colnames(m3) == "sample_name")
+# i = "CD4"
+for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+    print(i)
+    sub = c(which(grepl(sprintf("%s_",i), colnames(m3))), seq(which(colnames(m3) == "sample_name"),ncol(m3)))
+    write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerSample_withMetadata_%s.csv", prefix,i) ,row.names = F, col.names = T, sep = ",", quote = F)
+}
+```
+
+
 
 **Count number of cells for each cluster LEVEL 1 in each sample**
 ```{r}
@@ -196,6 +209,7 @@ pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = l
 dev.off()
 
 ```
+
 
 **Count number of cells for each cluster level 2 in each IGT**
 ```{r}
@@ -315,6 +329,21 @@ for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
 
 dev.off()
 ```
+
+split by annotation_level1
+```{r}
+m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerOrgan.Rds", prefix))
+
+# which(colnames(m3) == "sample_name")
+# i = "CD4"
+for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+    print(i)
+    sub = which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3)))
+    write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerOrgan_%s.csv", prefix,i) ,row.names = F, col.names = T, sep = ",", quote = F)
+}
+```
+
+
 
 **Count number of cells for each cluster level 1 in each organ**
 ```{r}
@@ -608,6 +637,12 @@ ggplot(df) + geom_point(aes(experiment_number, number_of_clusters), size = 3) +
     ylim(c(0,130)) + theme_bw() + theme(axis.text.x=element_text(size=10, angle = 30), axis.text.y=element_text(size=20), legend.text=element_text(size=15), axis.title.x = element_text(size=15) , axis.title.y = element_text(size=15), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
 dev.off()
 
+
+```
+
+**Split per annotation level1**
+
+```{r}
 
 ```
 

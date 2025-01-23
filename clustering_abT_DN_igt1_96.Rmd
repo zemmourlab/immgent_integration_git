@@ -446,6 +446,10 @@ dev.off()
 
 saveRDS(so, file = "igt1_96_DN_20250109.Rds")
 
+so$annotation_level2 = as.character(so$annotation_level2)
+so$annotation_level2[so$annotation_level2 == "DNcl29"] = "DN_cl29"
+so$annotation_level2 = factor(so$annotation_level2)
+
 
 ```
 
