@@ -1,0 +1,213 @@
+---
+title: "cometsc_gdT"
+output: html_document
+date: "2025-01-09"
+---
+
+Continuation from clustering_gdT_igt_1_96.Rmd
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
+R
+```
+
+```{r}
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+options(Seurat.object.assay.version = 'v5')
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = viridis(100)
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+```
+
+Prefix
+```{r}
+prefix = "cometsc/20250109"
+dir.create(prefix, recursive = TRUE)
+reduc = "mde_incremental"
+clusters = "annotation_level2"
+```
+
+**Prepare the data**
+
+Filter the data:
+remove data without CITEseq: "IGT7"  "IGT8"  "IGT9"  "IGT44" "IGT45" "IGT46" "IGT73" "IGT85" "IGT90" "IGT91" "IGT92"
+Remove IGT1: CITEseq V1
+Remove IGT90: gdT5.1/2 only, not the panel
+remove protein with less than 1000 rowSums, except TCRVA11.1-TCRVA11.2
+--> cometsc/20250109/igt1_96_gdT_filteredforCometsc.Rds
+
+```{r}
+so = readRDS("igt1_96_gdT_20250109.Rds")
+so_orig = so
+
+#remove IGT without CITEseq:
+table(so$cite_seq, so$IGT)
+so = so[,so$cite_seq == T]
+so = so[,!so$IGT %in% c("IGT1")]
+
+#remove IGT with less than 50 cells
+so = so[,so$IGT %in% names(which(table(so$IGT) >50))]
+table(so$cite_seq, so$IGT)
+so$IGT = factor(so$IGT, levels = names(which(table(so$IGT) >0)))
+
+adt = so[["ADT"]]$counts
+tmp = as.data.frame(t(as.matrix(adt)))
+tmp$IGT = so$IGT
+
+tmp2 = melt(tmp)
+tmp2 = tmp2 %>% group_by(IGT, variable) %>% summarise(sum(value))
+tmp2 = dcast(tmp2, variable ~ IGT)
+rownames(tmp2) = tmp2[,1]
+tmp2 = tmp2[,-1]
+pdf(sprintf("%s/dataprep_ADT_pre_post.pdf", prefix), 10,15)
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Sum ADT per IGT")
+
+
+#Remove ADT with no signal
+adt = so[["ADT"]]$counts
+hist(log10(rowSums(adt)+1))
+remove_adt = setdiff(names(which(rowSums(adt) < 100)), c("TCRVA11.1-TCRVA11.2"))
+
+#remake seurat object without those
+adt = adt[!rownames(adt) %in% remove_adt,]
+so[["ADT"]] = NULL
+so[["ADT"]] = CreateAssayObject(counts = adt)
+
+#CLR normlization
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+adt = so[["ADT"]]$data
+tmp = as.data.frame(t(as.matrix(adt)))
+tmp$IGT = so$IGT
+tmp2 = melt(tmp)
+tmp2 = tmp2 %>% group_by(IGT, variable) %>% summarise(mean(value))
+tmp2 = dcast(tmp2, variable ~ IGT)
+rownames(tmp2) = tmp2[,1]
+tmp2 = tmp2[,-1]
+#tmp2 = apply(tmp2,1, as.numeric)
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Mean CLR ADT per IGT")
+dev.off()
+
+saveRDS(so, sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+
+```
+
+Heatmap Clusters ADT
+```{r}
+so = readRDS(sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+adt = so[["ADT"]]$data
+tmp = as.data.frame(t(as.matrix(adt)))
+tmp[,clusters] = so[[clusters]]
+tmp2 = melt(tmp)
+tmp2 = tmp2 %>% group_by(!!sym(clusters), variable) %>% summarise(mean(value)) 
+tmp2 = dcast(tmp2, as.formula(paste("variable ~", clusters)))
+rownames(tmp2) = tmp2[,1]
+tmp2 = tmp2[,-1]
+#tmp2 = apply(tmp2,1, as.numeric)
+pdf(sprintf("%s/heatmap_ADT_clusters.pdf", prefix), 10,15)
+pheatmap(log10(tmp2+1), cluster_rows = F, cluster_cols = F, main = "Mean CLR ADT per clusters")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = T, main = "Mean CLR ADT per clusters")
+pheatmap(log10(tmp2+1), cluster_rows = T, cluster_cols = F, main = "Mean CLR ADT per clusters")
+dev.off()
+
+
+```
+
+export data for cometsc
+tabmarker.txt tabvis.txt tabcluster.txt
+```{r}
+so = readRDS(sprintf("%s/igt1_96_gdT_filteredforCometsc.Rds", prefix))
+
+#Sample cells so that no more than 2000 cells per cluster
+sample_cells = so@meta.data %>%
+  group_by(!!sym(clusters)) %>%
+  sample_n(size = min(2000, n()), replace = FALSE) %>%
+    pull(colnames)
+
+so = so[,sample_cells]
+table(so[[clusters]])
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+adt = as.matrix(so[["ADT"]]$data)
+write.table(adt, file = sprintf("%s/input_data.txt",prefix), sep = "\t", row.names = T, col.names = T, quote = F)
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+adt = as.matrix(so[["ADT"]]$data)
+write.table(adt, file = sprintf("%s/input_data_log.txt",prefix), sep = "\t", row.names = T, col.names = T, quote = F)
+
+vis = so[[reduc]]@cell.embeddings
+write.table(vis, file = sprintf("%s/input_umap.txt",prefix), sep = "\t", row.names = T, col.names = F, quote = F)
+
+clusters = data.frame(cell_id = colnames(so), clusters = so[[clusters]])
+write.table(clusters, file = sprintf("%s/input_clusters.txt",prefix), sep = "\t", row.names = F, col.names = F, quote = F)
+
+protein_list = rownames(so[["ADT"]])
+write.table(protein_list, file = sprintf("%s/input_markers.txt",prefix), sep = "\t", row.names = F, col.names = F, quote = F)
+```
+
+**Run COMETSC**
+Comet tabmarker.txt tabvis.txt tabcluster.txt output/ -skipvis True
+
+```{bash}
+#!/bin/bash
+#SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
+#SBATCH --partition=caslake 
+#SBATCH --nodes=1 
+#SBATCH --mem=96GB
+#SBATCH -J cometsc_%j            
+#SBATCH -o cometsc_%j.log
+#SBATCH -t 24:00:00              ##SBATCH --mem=8G
+#SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
+#SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
+
+#run as: sbatch $SCRIPT_DIR/cometsc_wrapper_20250109_gdT.sh
+
+module load python/anaconda-2022.05 
+source $(conda info --base)/etc/profile.d/conda.sh
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/cometsc #torch worjks but scvi not, jax error
+module load openblas/0.3.13 #load again or error
+
+
+SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
+path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT/cometsc/20250109
+
+cd $path_to_wd
+
+Comet input_data_log.txt input_umap.txt input_clusters.txt k2_log -C 36 -K 2
+
+Comet input_data.txt input_umap.txt input_clusters.txt k2 -C 36 -K 2 # -C is for cores, -K is the number of gene combinations for two does single and 2 markers -->
+
+```
+
