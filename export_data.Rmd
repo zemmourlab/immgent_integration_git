@@ -69,17 +69,20 @@ sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 
 sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
 cd $LABHOME
 
+#module load python/anaconda-2022.05 
+#module load hdf5/1.12.0 #for BPCells but also others
+#module load openblas/0.3.13
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi #source activate /project/zemmour/david/envs/scvi_20240315
+#module load openblas/0.3.13 #load again or error
+
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-
-source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
-#source activate /project/zemmour/david/envs/scvi_20240315
-module load openblas/0.3.13 #load again or error
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13
 
 R
 options(max.print=1000)
-options(Seurat.object.assay.version = 'v5')
 ```
 
 **Initialize: load libraries and custom functions**
@@ -103,6 +106,9 @@ prefix = "totalvi_igt1_96_20241006"
 so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/immgent_igt1_56_20241006.Rds")
 so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006_inmemory_diet_seurat.Rds")
 
+prefix = "20250109"
+so_orig = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
 DefaultAssay(so) = "RNA"
 
 #write.table(so[["umap_totalvi"]]@cell.embeddings, file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/bpcells/%s_counts/%s_BPCells_so_umaptotalvi.csv", prefix, prefix), quote = F, sep = ",", row.names = T, col.names = T)
@@ -117,60 +123,30 @@ DefaultAssay(so) = "RNA"
 
 ```
 
-(Update the metadata in seurat object) skip, now its own script metadata_update.Rmd
+Export in-memory diet seurat object (no metadata, no umaps etc)
 ```{r}
-message("check colnames to be IGT.BARCODE")
-pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
-matches = grepl(pattern, so$colnames)
-all(matches)
-#and adjust colnames if needed:
-unique(so$IGT[which(matches == F)])
-#Adjust colnames(so) 
-#pattern = "(IGT\\S*)_(\\d+)"
-so$colnames = colnames(so)
-sample(colnames(so), 100)
-pattern = "(\\S*)_(\\d+)"
-so$colnames = gsub(pattern, "\\1", so$colnames) #remove the _1 or other number at the end
-sample(so$colnames, 100)
-unique(so$IGT[!grepl("^IGT", so$colnames)])
-so$colnames[!grepl("^IGT", so$colnames)] = paste(so$IGT[!grepl("^IGT", so$colnames)], so$colnames[!grepl("^IGT", so$colnames)], sep = ".")
-sample(so$colnames, 100)
-any(duplicated(so$colnames))
-#recheck
-pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
-matches = grepl(pattern, so$colnames)
-all(matches)
-#so@meta.data[which(matches == F),]
-if(all(matches)) {colnames(so) = so$colnames}
-all(grepl(pattern, colnames(so)))
+so = so_orig
+so@meta.data = so@meta.data[,c("IGTHT", "nCount_RNA", "nFeature_RNA", "nCount_ADT", "nFeature_ADT")]
 
-#add sample_id: IGT.HT
-#so$sample_id_david = paste(so$IGT, so$hashtag_number, sep = ".") #in IGT1-56
-table(so$IGT)
-any(is.na(so$IGT))
-table(so$hashtag_number)
-any(is.na(so$hashtag_number))
-IGT.HT = paste(so$IGT, so$hashtag_number, sep = ".")
-IGT.HT = gsub(x = IGT.HT, pattern = "IGT", replacement = "I")
-IGT.HT = gsub(x = IGT.HT, pattern = "HT", replacement = "H")
-so$IGT.HT = IGT.HT
+file_dir = "export_data"
+so[["RNA"]]$counts = as(object = so[["RNA"]]$counts, Class = "dgCMatrix")
+DefaultAssay(so) = "RNA"
 
-#order IGT
-unique(so$IGT)
-extract_numeric = function(x) {
-  as.numeric(gsub("\\D", "", x))
-}
-ordered_vector = unique(so$IGT)[order(extract_numeric(unique(so$IGT)))] %>% as.character()
-so$IGT = factor(so$IGT, levels = ordered_vector)
+so = DietSeurat(so,
+  layers = c("counts"),
+  features = NULL,
+  assays = c("RNA", "ADT"),
+  dimreducs = NULL,
+  graphs = NULL,
+  misc = TRUE
+)
 
-#Clean up metadata
-cat(colnames(so@meta.data), sep = '\",\"')
-#someta = so@meta.data
-so@meta.data = so@meta.data[,c("nCount_RNA","nFeature_RNA","nCount_ADT","nFeature_ADT","percent_mito","signature_1T.enriched","signature_1mnp.enriched","signature_1B.enriched","signature_1ILC.enriched","IGT","is_spleen_standard","Rosetta_RNA_clusters","Rosetta_Protein_clusters","hashtag_number","ClusterTOTALVI_Res0.25","ClusterTOTALVI_Res0.5","ClusterTOTALVI_Res1","ClusterTOTALVI_Res2","ClusterTOTALVI_Res3","ClusterTOTALVI_Res4","iNKT","MAIT", "sample_id_david")]
+saveRDS(object = so, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir, prefix))
 
+#sod = readRDS(sprintf("export_data/%s_inmemory_diet_seurat.Rds", prefix))
 ```
 
-Export seurat object as BPCells (on-disk instead of in-memory) object and with sketched assay
+Export diet seurat object as BPCells (on-disk instead of in-memory) object and with sketched assay
 ```{r}
 library(BPCells)
 file_dir = "export_data/bpcells"
@@ -196,27 +172,6 @@ saveRDS( object = so_bp,
 
 #so_bp = readRDS(sprintf("%s/%s_BPCells_seurat.Rds", file_dir, prefix))
 
-```
-
-Export in-memory diet seurat object
-```{r}
-file_dir = "export_data"
-sod = so
-sod[["RNA"]]$counts = as(object = sod[["RNA"]]$counts, Class = "dgCMatrix")
-DefaultAssay(sod) = "RNA"
-
-sod = DietSeurat(sod,
-  layers = c("counts"),
-  features = NULL,
-  assays = c("RNA", "ADT"),
-  dimreducs = c("totalvi", "umap_totalvi"),
-  graphs = NULL,
-  misc = TRUE
-)
-
-saveRDS(object = sod, file = sprintf("%s/%s_inmemory_diet_seurat.Rds", file_dir, prefix))
-
-#sod = readRDS(sprintf("export_data/%s_inmemory_diet_seurat.Rds", prefix))
 ```
 
 Export individual files (like for GEO)
@@ -250,7 +205,7 @@ write.table(reductions, file = sprintf("%s/reductions.tsv", file_dir), sep = "\t
 
 ```
 
-Export Anndata h5ad file
+(Export Anndata h5ad file)
 Don't forget to activate the scvi python environment before launching R
 doesn't work anymore (library issue), just see pytjon code below, instead
 ```{r}
@@ -353,7 +308,7 @@ so@meta.data = m2
 **For python**
 source activate /project/zemmour/david/envs/scvi_20240315
 
-Don't make Make h5ad files: weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
+Don't make h5ad files: weird, doesn't want to save protein names in adata_rna.obsm['protein'].varm..
 Make h5mu file!
 ```{python}
 import pandas as pd
@@ -361,7 +316,7 @@ from scipy.io import mmread
 import anndata as ad
 
 os.chdir("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/")
-prefix = "totalvi_igt1_96_20241006"
+prefix = "igt1_96_20250109" #totalvi_igt1_96_20241006
 
 # Step 1: Load the data
 matrix_rna = mmread('individual_files/matrix_rna.mtx').tocsr()  # Load the RNA expression matrix and convert to CSR format
