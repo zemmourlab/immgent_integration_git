@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
 #SBATCH --partition=zemmour-hm
+#SBATCH --qos=zemmour
 #SBATCH --nodes=1
 #SBATCH --mem=0
 #SBATCH -J limma_%j            
