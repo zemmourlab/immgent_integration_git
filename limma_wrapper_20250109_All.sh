@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=beagle3-bigmem
-#SBATCH --nodes=2 
+#SBATCH --partition=zemmour-hm
+#SBATCH --nodes=1
 #SBATCH --mem=0
 #SBATCH -J limma_%j            
 #SBATCH -o limma_%j.log
-#SBATCH -t 2-00:00:00              ##SBATCH --mem=8G
+#SBATCH -t 30-00:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
