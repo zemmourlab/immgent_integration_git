@@ -31,15 +31,6 @@ libs = c("fastTopics", "flashier", "Matrix", "Seurat","BPCells")
 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
-ensure_directory <- function(path) {
-    if (!dir.exists(path)) {
-        dir.create(path, recursive = TRUE)
-        message(paste("Directory created:", path))
-    } else {
-        message(paste("Directory already exists:", path))
-    }
-}
-
 message("loading seurat object")
 so = readRDS(file = path_to_seurat_object)
 
@@ -57,7 +48,6 @@ mt_genes = grepl(x = rownames(so), pattern = "^mt-")
 genes_not_expressed = rowSums(so[["RNA"]]$counts) == 0
 genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
 cat("Number of genes to keep:", sum(genes_to_keep), "\n")
-
 
 message("Variance regularization")
 n = nrow(counts)

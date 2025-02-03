@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=zemmour-hm 
+#SBATCH --partition=zemmour-hm
+#SBATCH --qos=zemmour
 #SBATCH --nodes=1 
 #SBATCH --mem=0
 #SBATCH -J topic_%j            
@@ -9,7 +10,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/topic_wrapper.sh
+#run as: sbatch $SCRIPT_DIR/topic_wrapper_20250203.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
