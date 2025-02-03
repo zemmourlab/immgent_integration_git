@@ -8,7 +8,7 @@ options(expressions = 50000)
 
 # Parse arguments
 args = commandArgs(TRUE)
-if (length(args) < 5) {
+if (length(args) < 2) {
     stop("Usage: Rscript topic_template.R [path_to_seurat_object] [output_dir]")
 }
 path_to_seurat_object = args[1]
