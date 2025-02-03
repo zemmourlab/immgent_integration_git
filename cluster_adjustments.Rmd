@@ -2020,11 +2020,11 @@ WRITE ANNOTATION FILE
 --> annotation_table_20250109.csv
 ```{r}
 #updated as readjusting clusters in each.
-# annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_parent1", "annotation_level2", "nonconv_tcr_recog")])
-# colnames(annot) = c("cell_id", "level1", "level2_parent1", "level2", "nonconv_tcr_recog")
-# table(annot$level2_parent1, annot$level1)
-# sum(rowSums(apply(annot,2,is.na)))
-# write.table(x = annot, file = "annotation_table_20250109.csv", row.names = F, quote = F, sep = ",")
+annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2")])
+colnames(annot) = c("cell_id", "level1", "level2.group", "level2")
+table(annot$level2.group, annot$level1)
+sum(rowSums(apply(annot,2,is.na)))
+write.table(x = annot, file = "annotation_table_202501092.csv", row.names = F, quote = F, sep = ",")
 
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
 
@@ -2037,7 +2037,7 @@ annot_summary  = annot %>%
   ) %>%
   arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
  
-write.table(x = annot_summary, file = "annotation_table_history_20250109.csv", row.names = F, quote = F, sep = ",")
+write.table(x = annot_summary, file = "annotation_table_history_202501092.csv", row.names = F, quote = F, sep = ",")
 
 # so_orig$is_prolif = NULL
 # DefaultAssay(so_orig) = "ADT"

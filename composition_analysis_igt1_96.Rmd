@@ -338,7 +338,7 @@ m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerOrgan.Rds", prefix))
 # i = "CD4"
 for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
     print(i)
-    sub = which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3)))
+    sub = c(which("organ_simplified",which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3))))
     write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerOrgan_%s.csv", prefix,i) ,row.names = F, col.names = T, sep = ",", quote = F)
 }
 ```

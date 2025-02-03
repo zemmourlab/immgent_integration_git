@@ -106,7 +106,7 @@ prefix = "totalvi_igt1_96_20241006"
 so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/immgent_igt1_56_20241006.Rds")
 so = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/totalvi_igt1_96_20241006_inmemory_diet_seurat.Rds")
 
-prefix = "20250109"
+prefix = "igt1_96_20250109"
 so_orig = readRDS(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
 DefaultAssay(so) = "RNA"
@@ -154,8 +154,8 @@ file_dir = "export_data/bpcells"
 DefaultAssay(so) = "RNA"
 so = JoinLayers(so)
 
-write_matrix_dir(mat = so[["RNA"]]$counts, dir = sprintf("%s/%s_counts", file_dir, prefix))
-counts.mat = open_matrix_dir(dir = sprintf("%s/%s_counts", file_dir, prefix))
+write_matrix_dir(mat = so[["RNA"]]$counts, dir = sprintf("%s/counts", file_dir)) #sprintf("%s/%s_counts", file_dir, prefix)
+counts.mat = open_matrix_dir(dir = sprintf("%s/counts", file_dir)) #sprintf("%s/%s_counts", file_dir, prefix)
 
 so_bp = so
 so_bp[["RNA"]]$counts = counts.mat
