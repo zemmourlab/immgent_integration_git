@@ -59,7 +59,7 @@ fit = flash(shifted_log_counts,
             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
             var_type = 2, 
             S = s1,
-            backfit = F)
+            backfit = T)
 
 saveRDS(fit, file = sprintf("%s/fit.Rds", output_dir))
 
