@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A pi-zemmour 
+#SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
 #SBATCH --qos=zemmour
 #SBATCH --partition=zemmour-hm
 #SBATCH --nodes=1 
