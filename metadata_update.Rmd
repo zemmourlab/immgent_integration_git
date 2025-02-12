@@ -435,8 +435,9 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 ```{r}
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv",header = T, sep = ",")
-m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20240920_v6.csv",header = T, sep = ",")
-m = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+# m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20240920_v6.csv",header = T, sep = ",")
+# m = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250203_v7.csv",header = T, sep = ",")
 ```
 
 **update the metadata**

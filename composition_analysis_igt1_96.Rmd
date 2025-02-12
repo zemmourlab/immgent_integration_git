@@ -11,6 +11,7 @@ editor_options:
 
 ```{bash}
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
 sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 
 module load python/anaconda-2022.05 
