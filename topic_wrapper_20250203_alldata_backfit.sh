@@ -6,7 +6,7 @@
 #SBATCH --mem=0
 #SBATCH -J topic_%j            
 #SBATCH -o topic_%j.log
-#SBATCH -t 30-00:00:00              ##SBATCH --mem=8G
+#SBATCH -t 20-00:00:00              ##SBATCH --mem=8G
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
