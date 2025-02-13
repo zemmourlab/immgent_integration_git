@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour
-#SBATCH --qos=zemmour
 #SBATCH --partition=caslake
 #SBATCH --nodes=1 
 #SBATCH --mem=0
