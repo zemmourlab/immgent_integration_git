@@ -1,6 +1,6 @@
 # David Zemmour
 # R
-# usage: Rscript topic_flashier_20250203.R [path_to_seurat_object] [output_dir]
+# Usage: Rscript topic_flashier_20250203.R [path_to_seurat_object] [output_dir] [backfit (True/False)]
 # LOOK FOR EDIT to find where to edit the script! 
 
 options(max.print=1000)
@@ -8,11 +8,21 @@ options(expressions = 50000)
 
 # Parse arguments
 args = commandArgs(TRUE)
-if (length(args) < 2) {
-    stop("Usage: Rscript topic_template.R [path_to_seurat_object] [output_dir]")
+if (length(args) < 3) {
+    stop("Usage: Rscript topic_flashier_20250203.R [path_to_seurat_object] [output_dir] [backfit True/False]")
 }
 path_to_seurat_object = args[1]
 output_dir = args[2] 
+backfit_option = tolower(args[3])
+
+# Validate and convert backfit_option
+if (backfit_option %in% c("true", "t")) {
+    backfit_option=  TRUE
+} else if (backfit_option %in% c("false", "f")) {
+    backfit_option = FALSE
+} else {
+    stop("Error: backfit should be 'True' or 'False'.")
+}
 
 # Validate inputs
 if (!dir.exists(output_dir)) {
@@ -38,8 +48,10 @@ message("log1p with scale factor as the average rowSums(counts)")
 norm_fac = mean(so$nCount_RNA)
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = norm_fac)
 counts = so[['RNA']]$counts
-counts = t(counts)
 shifted_log_counts = so[['RNA']]$data
+
+#transpose!
+counts = t(counts)
 shifted_log_counts = t(shifted_log_counts)
 
 message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
@@ -64,7 +76,7 @@ fit = flash(shifted_log_counts,
             ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
             var_type = 2, 
             S = s1,
-            backfit = F)
+            backfit = backfit_option)
 
 saveRDS(fit, file = sprintf("%s/fit.Rds", output_dir))
 

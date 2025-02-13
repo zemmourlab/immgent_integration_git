@@ -546,7 +546,7 @@ counts = so[['RNA']]$counts
 shifted_log_counts = so[['RNA']]$data
 ```
 
-Filter genes
+Filter genes and transpose
 ```{r}
 genes_to_keep = rowSums(counts) >0
 #if want to remove TCR, mt, ribo, Gm and Rik genes: use this

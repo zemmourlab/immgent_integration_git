@@ -38,7 +38,9 @@ message("log1p with scale factor as the average rowSums(counts)")
 norm_fac = mean(so$nCount_RNA)
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = norm_fac)
 counts = so[['RNA']]$counts
+counts = t(counts)
 shifted_log_counts = so[['RNA']]$data
+shifted_log_counts = t(shifted_log_counts)
 
 message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
 tcr_genes = grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
@@ -48,6 +50,9 @@ mt_genes = grepl(x = rownames(so), pattern = "^mt-")
 genes_not_expressed = rowSums(so[["RNA"]]$counts) == 0
 genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
 cat("Number of genes to keep:", sum(genes_to_keep), "\n")
+
+shifted_log_counts = shifted_log_counts[,genes_to_keep]
+counts = counts[,genes_to_keep]
 
 message("Variance regularization")
 n = nrow(counts)
