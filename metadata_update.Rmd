@@ -12,9 +12,26 @@ Most uptodate seurat object
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241028.Rds")
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241101.Rds")
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+# so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
 ```
+
+single cell metadata: single_cell_qc.csv
+Sample metadata: 
+iNKT MAIT by TCR data file: inktInDec24Freeze.csv maitInDec24Freeze.csv
+annotation file: annotation_table_20250109.csv
+cell cycle file: Prolif_scores.csv
+TG by TCR: allTGcells.csv
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so = so_orig
+
+so@meta.data = data.frame(IGT_cellID = colnames(so))
+rownames(so@meta.data) = so$IGT_cellID
+```
+
 
 Load original seurat object
 ```{r}
@@ -23,9 +40,7 @@ prefix = "totalvi_igt1_56_20240306_allgenes"
 to_subset = "Treg"
 so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
 # so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
-
 so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
-
 so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006_inmemory_diet_seurat.Rds")
 ```
 
@@ -92,7 +107,21 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
 ```
 
-**Add Clusters e.g. totalvi_20241006/clusters.csv**
+**1. Add single_cell_qc.csv**
+```{r}
+scqc = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/single_cell_qc.csv",header = T, sep = ",")
+all(rownames(scqc) == colnames(so))
+
+tmp = merge(so@meta.data, scqc, by = "IGT_cellID", all.x = T, all.y = F)
+rownames(tmp) = tmp$IGT_cellID
+tmp = tmp[colnames(so),]
+all(rownames(tmp) == colnames(so))
+colnames(tmp)
+so@meta.data = tmp
+head(so@meta.data)
+```
+
+**2. Add Clusters e.g. totalvi_20241006/clusters.csv and/or annotations**
 ```{r}
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4_activated/totalvi_20241014_CD4_activated_rmIGTsample/Cluster_totalvi_20241014_CD4_activated_rmIGTsample_Res.csv",header = T, sep = ",", row.names = 1)
 annot2 = annot[match(colnames(so), rownames(annot)),]
@@ -100,9 +129,8 @@ rownames(annot2) = colnames(so)
 so@meta.data = data.frame(so@meta.data,annot2)
 ```
 
-**Add Annotations**
-annotation_level1.csv
-annotation_level2_XX.csv
+first annotation_level1.csv
+first annotation_level2_XX.csv
 ```{r}
 annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_level1.csv",header = F, sep = ",", row.names = 1)
 so$annotation_level1 = annotl1[colnames(so),1]
@@ -348,8 +376,8 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 
 
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
-so = so_orig
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# so = so_orig
 so$annotation_level1 = NULL
 so$annotation_level2 = NULL
 so$annotation_level2_parent1 = NULL
@@ -386,7 +414,7 @@ any(is.na(so$annotation_level2))
 
 so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 
 # so_orig = so
 # so$annotation_level2 = as.character(so$annotation_level2)
@@ -395,7 +423,7 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 ```
 
 
-**Add proliferation scores**
+**3. Add proliferation scores**
 
 ```{r}
 cc_scores = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Prolif_scores.csv", header = T, sep = ",", row.names = 1)
@@ -405,7 +433,6 @@ all(rownames(cc_scores) == colnames(so))
 so$S.Score = cc_scores$S.Score
 so$G2M.Score = cc_scores$G2M.Score
 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 ```
 
 
@@ -431,16 +458,53 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 ```
 
 
-**Load metadata csv file**
+
+**4.update the sample metadata**
+Load metadata csv file
 ```{r}
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240324_v3.csv",header = T, sep = ",")
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20240920_v6.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
-m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250203_v7.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
+
+# changing here and not in the original file to keep consistent with the database
+colnames(m)
+m$IGT_10xlane_id = NULL
+m$organism_id = NULL
+m$IGT = m$immgent_IGT_10xlane_id
+m$immgent_IGT_10xlane_id = NULL
+m$HT = m$hashtag_number
+m$hashtag_number = NULL
+m$sample_id = NULL
+m$count_unique = NULL
+
+colnames(m)
 ```
 
-**update the metadata**
+code version with V7, easier
+```{r}
+tmp = merge(so@meta.data, m, by = "IGTHT", all.x = T, all.y = F)
+rownames(tmp) = tmp$IGT_cellID
+tmp = tmp[colnames(so),]
+all(rownames(tmp) == colnames(so))
+colnames(tmp)
+tmp$count_unique = NULL
+so@meta.data = tmp
+
+#Any missing data in sample_metadata?
+tmp$IGT[which(is.na(tmp$exp_number))] %>% unique()
+tmp$IGTHT[which(is.na(tmp$exp_number))] %>% unique()
+
+all(rownames(tmp) == colnames(so))
+tmp = tmp[rownames(so@meta.data),]
+all(rownames(tmp) == colnames(so))
+
+so@meta.data = tmp
+head(so@meta.data)
+```
+
+Some other code, if needed
 ```{r}
 
 #Remove unwanted columns in Sample_metadata csv
@@ -448,10 +512,12 @@ m$ht_number = NULL
 m$igt_number = NULL
 m$count_unique = NULL
 
+#not needed in V7
 m$IGTHT = paste(m$immgent_IGT_10xlane_id, m$hashtag_number, sep = "")
 m$IGTHT = gsub(pattern = "IGT", replacement = "I", x = m$IGTHT)
 m$IGTHT = gsub(pattern = "HT", replacement = "H", x = m$IGTHT)
 
+#not needed in V7
 m$cite_seq = T
 m$cite_seq[m$IGT %in% sprintf("IGT%s",c(7,8,9,44,45,46,73,85,90,91,92))] = F
 
@@ -465,6 +531,8 @@ someta$seurat_clusters = NULL
 someta$IGTHT = someta$IGT.HT
 someta$IGTHT = gsub(x = someta$IGTHT, pattern = "\\.", replacement = "")
 someta$IGT.HT = NULL
+colnames(someta)[!(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number", "IGTHT")))]
+colnames(someta)[!(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("IGTHT"))) | !colnames(someta) %in% c("Cell_ID", "is_spleen_standard", "B6J_shipped_from_JAX", "timepoint_days", "sample_name_david", "is_spleen_healthy", "is_spleen_healthy_igt", "infection_days", "treat_mode", "tumor_days")]
 someta = someta[, !(colnames(someta) %in% colnames(m) & !(colnames(someta) %in% c("sample_id", "hashtag_number", "IGTHT")))]
 m2 = merge(someta, m, by  = "IGTHT", all.x = T)
 #m2 = merge(someta, m, by  = "sample_id", all.x = T)
@@ -574,6 +642,28 @@ so$is_spleen_healthy_igt[so$is_spleen_healthy == T] = as.character(so$IGT[so$is_
 
 ```
 
+**5.Add iNKT and MAIT info**
+```{r}
+nkt = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/inktInDec24Freeze.csv", sep = ",", row.names = 1, header = T, as.is = T)
+so$iNKT = colnames(so) %in% rownames(nkt)
+table(so$iNKT)
+
+mait = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/maitInDec24Freeze.csv", sep = ",", row.names = 1, header = T, as.is = T)
+so$MAIT = colnames(so) %in% rownames(mait)
+table(so$MAIT)
+
+```
+
+**6.Add trangenic**
+```{r}
+tg = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/allTGcells.csv", sep = ",", header = T, as.is = T)
+rownames(tg) = tg$IGT.cellID
+so$transgenic_byTCR = NA
+# all(colnames(so) == tg$IGT.cellID[match(colnames(so),tg$IGT.cellID)])
+so$transgenic_byTCR = tg$TG[match(colnames(so),tg$IGT.cellID)]
+all(so$transgenic_byTCR[tg$IGT.cellID] == tg$TG)
+
+```
 
 **if needed, small adjustments**
 ```{r}
@@ -587,13 +677,20 @@ so$organ_simplified[so$IGTHT %in% igtht_thymus[,1]] = "thymus"
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241006.Rds")
 ```
 
-**Add iNKT and MAIT info**
+**Remove unwanted dimensional reductions**
 ```{r}
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241021.Rds")
-tcr = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/All.IGTs.Enhanced.Summary.Table.2024-10-11.csv", sep = ",", header = T, quote = F, as.is = T)
-so$iNKT = colnames(so) %in% tcr$IGT.cellID[tcr$isNKT]
-so$MAIT = colnames(so) %in% tcr$IGT.cellID[tcr$isMAIT]
+so[["umap_totalvi_20241006"]] = NULL
+so[["mde_totalvi_20241006"]] = NULL
+so[["umap2_totalvi_20241006"]] = NULL
+so[["mdeumap_totalvi_20241006"]] = NULL
+so[["umap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde2_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mdeumap_totalvi_20241008_rmIGTsample"]] = NULL
+so[["mde_totalvi_20241029_fitleredGenesProt"]] = NULL
+so[["umap_totalvi_20241029_fitleredGenesProt"]] = NULL
 ```
+
 
 **Save**
 ```{r}
@@ -602,7 +699,8 @@ so[['RNA']]$data = NULL
 DefaultAssay(so) = "RNA"
 so[['ADT']]$data = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 
 ```
 

@@ -836,7 +836,8 @@ so$is_prolif = NULL
 
 export data
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4")
 so = so_orig[,so_orig$annotation_level1 == "CD4"]
@@ -866,7 +867,8 @@ DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group",
 DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group) + theme_void() + NoLegend() 
 dev.off()
 
-saveRDS(so, file = "igt1_96_CD4_20250109.Rds")
+# saveRDS(so, file = "igt1_96_CD4_20250109.Rds")
+saveRDS(so, file = "igt1_96_CD4_20250212.Rds")
 
 
 ```

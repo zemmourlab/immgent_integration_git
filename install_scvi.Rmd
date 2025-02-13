@@ -22,15 +22,8 @@ conda remove --prefix /project/zemmour/david/envs/scvi120_test1 --all
 
 conda remove --prefix /project/zemmour/david/envs/scvi120_test2 --all
 conda remove --prefix /project/zemmour/david/envs/scvi120_test3 --all
-to do:
 conda remove --prefix /project/zemmour/david/envs/scvi120_20241003 --all
 conda remove --prefix /project/zemmour/david/envs/scvi113_20240525 --all
-
-scvi120_test1
-scvi120_test2
-scvi120_test3
-scvi120_20241003
-scvi113_20240525
 
 
 

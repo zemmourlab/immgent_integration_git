@@ -387,10 +387,12 @@ so_orig$annotation_level2[so_orig$annotation_level2 %in% "gdT_cl32"] = "gdT_prol
 
 export data
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT")
 so = so_orig[,so_orig$annotation_level1 == "gdT"]
+so
 
 # dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/totalvi_20241008_rmIGTsample"
 # so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
@@ -417,7 +419,8 @@ DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group",
 DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2_group", raster = T, raster.dpi = c(512,512), label = T) + scale_color_manual(values = mypal_level2_group) + theme_void() + NoLegend() 
 dev.off()
 
-saveRDS(so, file = "igt1_96_gdT_20250109.Rds")
+# saveRDS(so, file = "igt1_96_gdT_20250109.Rds")
+saveRDS(so, file = "igt1_96_gdT_20250212.Rds")
 
 
 ```
