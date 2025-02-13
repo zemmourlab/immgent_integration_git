@@ -26,6 +26,7 @@ cd $path_to_wd
 
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_clean.Rds
 output_dir=topic/flashier20250203_alldata_backfit
+backfit=True
 
-Rscript $SCRIPT_DIR/topic_flashier_20250203_withbackfit.R $path_to_seurat_object $output_dir
-
+# Rscript $SCRIPT_DIR/topic_flashier_20250203_withbackfit.R $path_to_seurat_object $output_dir
+Rscript $SCRIPT_DIR/topic_flashier_20250212.R $path_to_seurat_object $output_dir $backfit
