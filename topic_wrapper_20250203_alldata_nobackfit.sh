@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH -A pi-zemmour
-#SBATCH --partition=caslake
+#SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
+#SBATCH --partition=beagle3-bigmem
 #SBATCH --nodes=1 
 #SBATCH --mem=0
 #SBATCH -J topic_%j            
