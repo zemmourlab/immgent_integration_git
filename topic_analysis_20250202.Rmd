@@ -98,6 +98,11 @@ topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
 topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit
 topic_wrapper_20250203_alldata_backfit.sh -- all cells data no backfit
 
+topic_wrapper_20250203_sampleddata_nobackfit.sh -- sampled data no backfit
+topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
+topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit
+topic_wrapper_20250203_alldata_backfit.sh -- all cells data + backfit
+
 
 *Plots for flashier object*
 ```{r}
