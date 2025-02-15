@@ -69,7 +69,9 @@ mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
 mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
@@ -93,10 +95,6 @@ so2 = so_orig[,colnames(so1)]
 so = so2
 ```
 
-topic_wrapper_20250203.sh -- sampled data no backfit
-topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
-topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit
-topic_wrapper_20250203_alldata_backfit.sh -- all cells data no backfit
 
 topic_wrapper_20250203_sampleddata_nobackfit.sh -- sampled data no backfit
 topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
@@ -111,7 +109,7 @@ prefix2 = "flashier20250203_sampleddata_backfit"
 fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
 #round(fit$L_pm[1:10, ], digits = 3)
 
-all(rownames(fit$F_pm) == colnames(so))
+all(rownames(fit$L_pm) == colnames(so))
 
 ```
 
@@ -127,32 +125,40 @@ histogram_loadings_plot.pdf
 ```{r}
 pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 20, 20, useDingbats = F)
 plot(fit, 
-     include_scree = F,
-     include_pm = T,
+     # include_scree = F,
+     # include_pm = T,
      plot_type = "histogram",
      pm_which = "loadings", 
-     pm_groups = as.character(so$organ_simplified ),
+     pm_groups = so$organ_simplified,
      bins = 20,
      pm_colors = mypal_organ) #+ NoLegend()
      # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
-dev.off()
 
 plot(fit, 
-     include_scree = F,
-     include_pm = T,
+     # include_scree = F,
+     # include_pm = T,
      plot_type = "histogram",
      pm_which = "loadings", 
-     pm_subset = spl_cells,
-     pm_groups = so$IGT[so$is_spleen_healthy],
+     pm_groups = so$annotation_level1,
      bins = 20,
-     pm_colors = mypal[1:length(unique(so$IGT[so$is_spleen_healthy]))]) +
-    ggtitle("Spleen standard only")#+ NoLegend()
+     pm_colors = mypal_level1) #+ NoLegend()
+     # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
+
+# plot(fit, 
+#      include_scree = F,
+#      include_pm = T,
+#      plot_type = "histogram",
+#      pm_which = "loadings", 
+#      pm_subset = spl_cells,
+#      pm_groups = so$IGT[so$is_spleen_healthy],
+#      bins = 20,
+#      pm_colors = mypal[1:length(unique(so$IGT[so$is_spleen_healthy]))]) +
+#     ggtitle("Spleen standard only")#+ NoLegend()
 
 dev.off()
 
 pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20, 8, useDingbats = F)
 plot(fit, 
-     include_scree = F,
      plot_type = "structure",
      pm_which = "loadings", 
      pm_groups = so$organ_simplified,
@@ -160,12 +166,20 @@ plot(fit,
      gap = 25) #+ NoLegend()
 
 plot(fit, 
+     include_scree = F,
      plot_type = "structure",
      pm_which = "loadings", 
-     pm_subset = spl_cells,
-     pm_groups = so$IGT[so$is_spleen_healthy],
+     pm_groups = so$annotation_level1,
      pm_colors = mypal,
-     gap = 25)
+     gap = 25) #+ NoLegend()
+
+# plot(fit, 
+#      plot_type = "structure",
+#      pm_which = "loadings", 
+#      pm_subset = spl_cells,
+#      pm_groups = so$IGT[so$is_spleen_healthy],
+#      pm_colors = mypal,
+#      gap = 25)
 dev.off()
 
 
@@ -178,7 +192,7 @@ de_genes_factors.txt
 message("factors_volcano.pdf")
 res = ldf(fit, type = "i")
 F1 = with(res, F %*% diag(D)) #same as res$F %*% diag(res$D)
-rownames(F1) = colnames(shifted_log_counts)
+# rownames(F1) = colnames(shifted_log_counts)
 head(sort(F1[,6], decreasing = TRUE), n = 16)
 F1 %>% write.table(sprintf("%s/%s/de_genes_factors.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
 genes = apply(F1, 2, order, decreasing = TRUE)[1:10, 2:fit$n_factors]
