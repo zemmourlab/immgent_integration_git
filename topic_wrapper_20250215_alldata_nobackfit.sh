@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/topic_wrapper_20250215_sampleddata_nobackfit.sh
+#run as: sbatch $SCRIPT_DIR/topic_wrapper_20250215_alldata_nobackfit.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -23,9 +23,8 @@ path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
 
 cd $path_to_wd
 
-path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DGE_limma/20250109/igt1_96_withtotalvi20250109_clean_sampled.Rds
-output_dir=topic/flashier20250215_sampleddata_nobackfit
+path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_clean.Rds
+output_dir=topic/flashier20250215_alldata_nobackfit
 backfit=False
 
 Rscript $SCRIPT_DIR/topic_flashier_20250212.R $path_to_seurat_object $output_dir $backfit
-
