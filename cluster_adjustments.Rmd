@@ -115,9 +115,9 @@ mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 #pal.bands(mypal, main="Colormap suggestions")
 
-mypal_level1 = setNames(mypal, unique(so$annotation_level1))
-mypal_level2 = setNames(mypal, unique(so$annotation_level2))
-mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
 # mypal_odhran = setNames(mypal, unique(so$odhran))
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
@@ -2028,7 +2028,6 @@ write.table(x = annot, file = "annotation_table_202501092.csv", row.names = F, q
 
 annot = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
 
-
 annot_summary  = annot %>%
   group_by(level2, level1, level2.group) %>%
   summarize(counts = n(), .groups = "drop") %>%
@@ -2052,9 +2051,9 @@ write.table(x = annot_summary, file = "annotation_table_history_202501092.csv", 
 Final MDE plots 
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
-mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
-mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
-mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
+# mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2_group = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_group))
 so2 = so_orig[, !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
 # saveRDS(so2, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109_clean.Rds")
 so3 = so_orig[, so_orig$organ != "thymus" & !so_orig$annotation_level1 %in% c("nonT", "remove", "unclear")]
@@ -2099,11 +2098,12 @@ dev.off()
 ###Same but with thymus
 pdf("MDE_annotation_20250109_nocrap.pdf", 10,10, useDingbats = F)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)  + NoLegend()
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", split.by = "annotation_level2_group", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level1)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", split.by = "annotation_level1", ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2_group)
 DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol = 2, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2)
-DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol =1, raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal_level2) + NoLegend()
+DimPlot(so2, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", split.by = NULL, ncol =1, raster = T, raster.dpi = c(1024,1024), label = T, label.size = 2) + scale_color_manual(values = mypal_level2) + NoLegend()
 dev.off()
 
 pdf("MDE_annotation_20250109_nocrap2_level1split.pdf", 10,10, useDingbats = F)

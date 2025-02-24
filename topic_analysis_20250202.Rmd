@@ -2,6 +2,8 @@
 title: "topic_analysis"
 output: html_document
 date: "2024-04-30"
+editor_options: 
+  chunk_output_type: console
 ---
 
 **Start interactive session on Midway3**
@@ -10,6 +12,7 @@ ssh -Y zemmour@midway3.rcc.uchicago.edu
 sinfo -s
 screen -S david
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 --mem=128GB
 sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
@@ -39,10 +42,10 @@ R
 
 ```{r}
 options(max.print=1000)
-setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
+# setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -50,11 +53,14 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 #Gradients
 library(RColorBrewer)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
-ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+# ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
 ColorRamp = rev(rainbow(10, end = 4/6))
 library(viridis)
 ColorRamp = rev(viridis(100))
 ColorRamp = rev(cividis(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+# ColorRamp = colorRampPalette(c('Red'))(20)
 #image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
 
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
@@ -72,6 +78,9 @@ mypal_organ = setNames(mypal, unique(so$organ_simplified))
 mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
@@ -89,10 +98,19 @@ ensure_directory <- function(path) {
 https://willwerscheid.github.io/flashier/articles/flashier_intro.html
 
 ```{r}
-so1 = readRDS(file = "DGE_limma/20250109/igt1_96_withtotalvi20250109_clean_sampled.Rds")
+# so1 = readRDS(file = "DGE_limma/20250109/igt1_96_withtotalvi20250109_clean_sampled.Rds")
+so1 = readRDS(file = "igt1_96_withtotalvi20250109_clean.Rds")
 so_orig = readRDS(file = "igt1_96_withtotalvi20250212.Rds")
 so2 = so_orig[,colnames(so1)]
 so = so2
+rm(so1)
+rm(so_orig)
+rm(so2)
+
+so$spleen_standard = so$organ_simplified == "spleen" & so$jax == T & so$condition_broad == "healthy" & so$age_weeks >= 6 & so$age_weeks <= 8 & so$target_cells_simplified %in% c("allT", "CD45p")
+spl_cells = colnames(so)[so$spleen_standard]
+
+# so@meta.data %>% filter(spleen_standard == T) %>% select(IGT) %>% unique() %>% dim()
 ```
 
 
@@ -101,11 +119,16 @@ topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
 topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit
 topic_wrapper_20250203_alldata_backfit.sh -- all cells data + backfit
 
+flashier20250215_alldata_nobackfit
+flashier20250215_sampleddata_nobackfit
+
 
 *Plots for flashier object*
 ```{r}
 prefix = "topic"
-prefix2 = "flashier20250203_sampleddata_backfit"
+# prefix2 = "flashier20250203_sampleddata_backfit"
+prefix2 = "flashier20250203_alldata_backfit"
+# prefix2 = "flashier20250215_sampleddata_nobackfit"
 fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
 #round(fit$L_pm[1:10, ], digits = 3)
 
@@ -119,67 +142,71 @@ pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 5, 5, useDingbats = F)
 # plot(fit, include_scree = T, include_pm = F, plot_type = "scree")
 plot(fit, plot_type = "scree")
 dev.off()
+
+sum(fit$pve)
+fit$pve
+order(fit$pve, decreasing = T)
 ```
 
 histogram_loadings_plot.pdf
 ```{r}
 pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 20, 20, useDingbats = F)
-plot(fit, 
+plot(fit,
      # include_scree = F,
      # include_pm = T,
      plot_type = "histogram",
-     pm_which = "loadings", 
+     pm_which = "loadings",
      pm_groups = so$organ_simplified,
      bins = 20,
      pm_colors = mypal_organ) #+ NoLegend()
      # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
 
-plot(fit, 
+plot(fit,
      # include_scree = F,
      # include_pm = T,
      plot_type = "histogram",
-     pm_which = "loadings", 
+     pm_which = "loadings",
      pm_groups = so$annotation_level1,
      bins = 20,
      pm_colors = mypal_level1) #+ NoLegend()
      # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
 
-# plot(fit, 
-#      include_scree = F,
-#      include_pm = T,
-#      plot_type = "histogram",
-#      pm_which = "loadings", 
-#      pm_subset = spl_cells,
-#      pm_groups = so$IGT[so$is_spleen_healthy],
-#      bins = 20,
-#      pm_colors = mypal[1:length(unique(so$IGT[so$is_spleen_healthy]))]) +
-#     ggtitle("Spleen standard only")#+ NoLegend()
+plot(fit,
+     # include_scree = F,
+     # include_pm = T,
+     plot_type = "histogram",
+     pm_which = "loadings",
+     pm_subset = spl_cells,
+     pm_groups = so$IGT[so$spleen_standard],
+     bins = 20,
+     pm_colors = mypal_igt[unique(so$IGT[so$spleen_standard])]) + #mypal[1:length(unique(so$IGT[so$spleen_standard]))]
+    ggtitle("Spleen standard only")#+ NoLegend()
 
 dev.off()
 
 pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 20, 8, useDingbats = F)
-plot(fit, 
+plot(fit,
      plot_type = "structure",
-     pm_which = "loadings", 
+     pm_which = "loadings",
      pm_groups = so$organ_simplified,
      pm_colors = mypal,
      gap = 25) #+ NoLegend()
 
-plot(fit, 
+plot(fit,
      include_scree = F,
      plot_type = "structure",
-     pm_which = "loadings", 
+     pm_which = "loadings",
      pm_groups = so$annotation_level1,
      pm_colors = mypal,
      gap = 25) #+ NoLegend()
 
-# plot(fit, 
-#      plot_type = "structure",
-#      pm_which = "loadings", 
-#      pm_subset = spl_cells,
-#      pm_groups = so$IGT[so$is_spleen_healthy],
-#      pm_colors = mypal,
-#      gap = 25)
+plot(fit,
+     plot_type = "structure",
+     pm_which = "loadings",
+     pm_subset = spl_cells,
+     pm_groups = so$IGT[so$spleen_standard],
+     pm_colors = mypal,
+     gap = 25)
 dev.off()
 
 
@@ -194,6 +221,8 @@ res = ldf(fit, type = "i")
 F1 = with(res, F %*% diag(D)) #same as res$F %*% diag(res$D)
 # rownames(F1) = colnames(shifted_log_counts)
 head(sort(F1[,6], decreasing = TRUE), n = 16)
+colnames(F1) = sprintf("F%s", 1:ncol(F1))
+F1 = F1[,order(fit$pve, decreasing = T)]
 F1 %>% write.table(sprintf("%s/%s/de_genes_factors.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
 genes = apply(F1, 2, order, decreasing = TRUE)[1:10, 2:fit$n_factors]
 top_genes = rownames(F1)[genes]
@@ -207,7 +236,7 @@ for (i in 1:fit$n_factors) {
              plot_type = "scatter",
              pm_which = "factors",
              kset = i,
-             labels = TRUE,
+             labels = T,
              n_labels = 50,
              label_size = 2.5) +
         labs(x = "increase in shifted log expression",
@@ -229,6 +258,975 @@ dev.off()
 
 
 ```
+
+**DGE Factors**
+linear model with level2, organ_simplified, condition_detailed
+1. Cosmology: Cell type-specific topics? Or combination of topics (Topic shared across cell type?)
+Calculate for each level2 signature how much it is explained by a combination of topics? simple correlation?
+2. Other topics that correlate with what? tissues? disease? Tissue-specific topics?
+
+```{r}
+
+L1 = with(ldf(fit, type = "i"), L %*% diag(D)) #same as res$F %*% diag(res$D)
+# L1 = with(ldf(fit, type = "i"), L) 
+# L1 = with(ldf(fit, type = "i"), L) 
+# rownames(F1) = colnames(shifted_log_counts)
+# head(sort(F1[,6], decreasing = TRUE), n = 16)
+colnames(L1) = sprintf("F%s", 1:ncol(L1))
+
+all(rownames(L1) == colnames(so))
+
+mdata_orig = data.frame(so@meta.data,L1)
+# shist(mdata_orig$F1)
+# max(mdata_orig[mdata_orig$spleen_standard == T,grepl("^F",colnames(mdata_orig))])
+
+```
+
+Limma with spleen control
+```{r}
+library(limma)
+mdata = mdata_orig[mdata_orig$spleen_standard == T,]
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+pdf(sprintf("%s/%s/spleenctrl_factors_boxplots.pdf", prefix, prefix2), 20,10, useDingbats = F)
+for (i in colnames(mdata)[grepl("^F",colnames(mdata))]) {
+    print(i)
+    p = ggplot(mdata[mdata$spleen_standard == T,], aes(IGT, !!sym(i))) + 
+        geom_boxplot(aes(fill = IGT, group = IGT) ) + 
+        ylim(0,ceiling(max(mdata[mdata$spleen_standard == T,grepl("^F",colnames(mdata))]))) +
+        scale_fill_manual(values = mypal_igt) + theme_bw() + 
+        ggtitle(label = sprintf("%s", i)) # + theme_bw()+ ggtitle(label = "F1 IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)
+    print(p)
+}
+dev.off()
+
+#limma model
+# factor_means = mdata %>% filter(mdata$spleen_standard == T) %>% group_by(IGT) %>% summarize_at(vars(matches("^F")), mean) %>% as.data.frame()
+# factor_means = factor_means[order(extract_numeric(factor_means$IGT)),]
+# rownames(factor_means) = factor_means$IGT
+# factor_means = factor_means[,-1]
+# factor_means = t(factor_means)
+
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + IGT, data = mdata[mdata$spleen_standard == T,])
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[mdata$spleen_standard == T, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# Apply empirical Bayes moderation
+fit2 = eBayes(fit)
+# Extract p-values for all comparisons
+adj_pvalues = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH")
+
+pvmat = adj_pvalues
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/spleenctrl_factors_heatmap.pdf", prefix, prefix2), 10,10, useDingbats = F)
+pheatmap(factor_means, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, main = "mean from LD")
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#### former code without limma - useless
+factor_means = mdata %>% filter(mdata$spleen_standard == T) %>% group_by(IGT) %>% summarize_at(vars(matches("^F")), mean) %>% as.data.frame()
+factor_means = factor_means[order(extract_numeric(factor_means$IGT)),]
+rownames(factor_means) = factor_means$IGT
+factor_means = factor_means[,-1]
+pheatmap(tmp)
+
+forms = sprintf("%s ~ 0+IGT", colnames(mdata)[grepl("^F",colnames(mdata))])
+lm_list = sapply(forms, function(x) {lm(formula = as.formula(x), data = mdata[mdata$spleen_standard == T,])}, simplify = FALSE)
+pv = lapply(lm_list, function(x) {
+    res = summary(x)
+    res$coefficients[,'Pr(>|t|)']
+})
+pvmat = do.call(cbind,pv)
+colnames(pvmat) = colnames(mdata)[grepl("^F",colnames(mdata))]
+pvmat = pvmat[order(extract_numeric(rownames(pvmat))),]
+extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+# labels_matrix = ifelse(is.na(pvmat), yes = 1, no = as.character(signif(tmp3,2)*100))
+pdf(sprintf("%s/%s/spleenctrl_factors_heatmap.pdf", prefix, prefix2), 10,10, useDingbats = F)
+pheatmap(factor_means, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix)
+dev.off()
+labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
+
+
+```
+
+Limma with annotation level1
+
+```{r}
+prefix3 = "limma/20250218_level1_IGTHT"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig
+mdata$IGTHT = factor(mdata$IGTHT, levels = unique(mdata$IGTHT))
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+mdata$annotation_level1 = factor(mdata$annotation_level1)
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + annotation_level1 + IGTHT, data = mdata)
+colnames(design) = gsub("annotation_level1|IGTHT", "", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level1, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(annotation_level1) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$annotation_level1)) {
+    print(cl)
+    group1_filter <- expr(annotation_level1 == cl)
+    group2_filter <- expr(!(annotation_level1 %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level1")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+# fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(cont.matrix)) {
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+
+```
+
+lm with annotation level2: 0 + annotation_level2 + IGTHT
+
+```{r}
+prefix3 = "limma/20250218_level2_IGTHT"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+mdata$annotation_level2 =  factor(mdata$annotation_level2, levels = names(which(!table( mdata$annotation_level2)==0)))
+# mdata$annotation_level2 = factor(mdata$annotation_level2)
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + annotation_level2 + IGTHT, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("annotation_level2|IGTHT", "", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+# fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(annotation_level2) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$annotation_level2)) {
+    print(cl)
+    group1_filter <- expr(annotation_level2 == cl)
+    group2_filter <- expr(!(annotation_level2 %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+# fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 20,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+
+
+
+#################
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, file = sprintf("%s/%s/fit_limma_level2_IGTHT_constrastfit.Rds", prefix, prefix2))
+fit2 = readRDS(sprintf("%s/%s/fit_limma_level2_IGTHT_constrastfit.Rds", prefix, prefix2))
+# Extract p-values for all comparisons
+adj_pvalues = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH")
+# write.table(results, file = sprintf("%s/%s/fit_limma_leve2_IGTHT_table.txt", prefix, prefix2), quote = F, row.names = T, col.names = T, sep = ",")
+
+pvmat = adj_pvalues
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/fit_limma_level2_IGTHT_heatmap.pdf", prefix, prefix2), 20,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+```
+
+lm with organ in healthy: ~ 0 + organ_simplified + IGT
+
+```{r}
+prefix3 = "limma/20250218_organsimplified_IGT"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig %>% filter(condition_broad == "healthy") %>% as.data.frame()
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+# mdata$annotation_level2 = factor(mdata$annotation_level2)
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified + IGT, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+# fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(organ_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    group1_filter <- expr(organ_simplified == cl)
+    group2_filter <- expr(!(organ_simplified %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    nmecontrast = sprintf("%s_vs_AllinHealthy", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+# fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 20,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+
+
+
+#################
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, file = sprintf("%s/%s/fit_limma_level2_IGTHT_constrastfit.Rds", prefix, prefix2))
+fit2 = readRDS(sprintf("%s/%s/fit_limma_level2_IGTHT_constrastfit.Rds", prefix, prefix2))
+# Extract p-values for all comparisons
+adj_pvalues = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH")
+# write.table(results, file = sprintf("%s/%s/fit_limma_leve2_IGTHT_table.txt", prefix, prefix2), quote = F, row.names = T, col.names = T, sep = ",")
+
+pvmat = adj_pvalues
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/fit_limma_level2_IGTHT_heatmap.pdf", prefix, prefix2), 20,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+```
+
+lm with organ in healthy: ~ 0 + organ_simplified + IGT + annotation_level1
+
+```{r}
+prefix3 = "limma/20250218_organsimplified_IGT_level1"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig %>% filter(condition_broad == "healthy") %>% as.data.frame()
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+# mdata$annotation_level2 = factor(mdata$annotation_level2)
+
+mdata$annotation_level1 = factor(mdata$annotation_level1)
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified + IGT + annotation_level1, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|annotation_level1", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(organ_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    group1_filter <- expr(organ_simplified == cl)
+    group2_filter <- expr(!(organ_simplified %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    nmecontrast = sprintf("%s_vs_AllinHealthy", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 20,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+```
+
+lm with sample: 0 + IGTHT --> What samples are enriched in each GP? to find the samples for the low PVE topics
+
+```{r}
+prefix3 = "limma/20250218_IGTHT"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig
+mdata$IGTHT = factor(mdata$IGTHT, levels = unique(mdata$IGTHT))
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0  + IGTHT, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("IGTHT", "", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(IGTHT) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$IGTHT)) {
+    print(cl)
+    group1_filter <- expr(IGTHT == cl)
+    group2_filter <- expr(!(IGTHT %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "IGTHT")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 60,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+# Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 &
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+
+
+```
+
+lm with level2_IGTHT: 0 + annotation_level2_IGTHT --> Error in qr.default(x) : too large a matrix for LINPACK
+lm with level1_IGTHT: 0 + annotation_level2_IGTHT --> Error in qr.default(x) --> What level 2 in each samples is enriched in each GP? to find the samples for the low PVE topics
+
+```{r}
+prefix3 = "limma/20250219_level1IGTHT"
+ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
+
+mdata = mdata_orig
+mdata$IGTHT = factor(mdata$IGTHT, levels = unique(mdata$IGTHT))
+mdata$annotation_level1 =  factor(mdata$annotation_level1, levels = names(which(!table( mdata$annotation_level1)==0)))
+mdata$annotation_level1_IGTHT = factor(paste(mdata$annotation_level1,mdata$IGTHT,sep = "_"))
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0  + annotation_level1_IGTHT, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("annotation_level1_IGTHT", "", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("^F", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+saveRDS(fit, file = sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+# fit = readRDS(sprintf("%s/%s/%s/fit.Rds", prefix, prefix2, prefix3))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(annotation_level1_IGTHT) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$annotation_level1_IGTHT)) {
+    print(cl)
+    group1_filter <- expr(annotation_level1_IGTHT == cl)
+    group2_filter <- expr(!(annotation_level1_IGTHT %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level1_IGTHT")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+
+#write coefficients
+results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+write.table(results, file = sprintf("%s/%s/%s/coefficients.csv", prefix, prefix2, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf", prefix, prefix2, prefix3), 60,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+# Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds", prefix, prefix2, prefix3))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 &
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf", prefix, prefix2, prefix3))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, prefix3))
+
+
+
+```
+
+
+
+
+
+
+
+
 
 structure_plot.pdf
 ebmfUMAP.pdf: new UMAP from fit$L (row normalized in module_scores_percentile2 for less batch effect)
@@ -535,8 +1533,6 @@ all(names(mean_shifted_log_counts) == rownames(factors))
 colnames(loadings) = sprintf("david.factor.%s", 1:ncol(loadings))
 rownames(loadings) == colnames(so)
 
-Assay()
-
 plot(so[["ADT"]]@counts["CD62L",], rowSums(loadings))
 spl_cells
 lm(so[["ADT"]]@counts["CD62L",] ~ rowSums(loadings))
@@ -567,10 +1563,19 @@ plot(so[["ADT"]]@data["CD62L",], 1.5^(rowSums(loadings)))
 plot(so[["ADT"]]@data["CD62L",], 1.5^(rowSums(loadings)[]))
 plot(so[["ADT"]]@data["CD62L",!colnames(so) %in% spl_cells], 1.5^(rowSums(loadings)[!colnames(so) %in% spl_cells]))
 
+```
 
+**DGE topic**
+linear model with level2, organ_simplified, condition_detailed
+1. Cosmology: Cell type-specific topics? Or combination of topics (Topic shared across cell type?)
+Calculate for each level2 signature how much it is explained by a combination of topics? simple correlation?
+2. Other topics that correlate with what? tissues? disease? Tissue-specific topics?
 
+```{r}
 
 ```
+
+
 
 
 **Compare topics with Kait's**
@@ -753,7 +1758,7 @@ plot(fit,
 plot(fit, kset = 10, include_scree = FALSE) + geom_errorbar(aes(ymin = factor_ci[1, ], ymax = factor_ci[2, ]))
 ```
 
-**Flasier second approach**
+**Flashier second approach**
 from Peter: The "second approach" we discussed is a two-stage approach: (1) use the subset of "spike-in" cells to first identify the batch effects, then (2) include these as factors in a flashier analysis of the full data. (To be safe, it may be better not to includ the spike-in cells in Step 2.) This second approach is a slightly more advanced usage of flashier and I'll put together a short script that illustrates how to do this.
 
 example code

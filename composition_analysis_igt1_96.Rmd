@@ -11,6 +11,7 @@ editor_options:
 
 ```{bash}
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
 sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 
@@ -55,19 +56,22 @@ names(mypal) = NULL
 
 Prefix
 ```{r}
-prefix = "SampleComp/20250109"
+# prefix = "SampleComp/20250109"
+prefix = "SampleComp/20250223"
 reduc = "totalvi_20241006"
-clusters = "annotation_level1"
+# clusters = "annotation_level1"
 ```
 
 **Most up-to-date data**
 
 ```{r}
 # so = readRDS("igt1_96_withtotalvi20241021.Rds")
-so = readRDS("igt1_96_withtotalvi20250109.Rds")
+# so = readRDS("igt1_96_withtotalvi20250109.Rds")
+so = readRDS("igt1_96_withtotalvi20250212.Rds")
 so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
 
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
 
 ```
 
@@ -91,14 +95,14 @@ m2 = merge(m2, stat_df_prop, by.x = "IGTHT", by.y = "IGTHT", suffixes = c(".ncel
 
 write.table(m2, file = sprintf("%s/annotation_level2_PropPerSample.csv", prefix),row.names = F, col.names = T, sep = ",", quote = F)
 
-sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+# sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
 
 m3 = merge(m2, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F)
 
-m3$sample_name_new = paste(m3$IGTHT, m3$sample_name, sep = ".")
-m3$sample_name_new = make.names(m3$sample_name_new)
+# m3$sample_code = paste(m3$IGTHT, m3$sample_name, sep = ".")
+# m3$sample_code = make.names(m3$sample_code)
 
 saveRDS(m3, file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
 
@@ -110,10 +114,10 @@ library(pheatmap)
 
 m3 = readRDS(sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
 
-m3$sample_name_new = paste(m3$IGTHT, m3$sample_name, sep = ".")
-m3$sample_name_new = make.names(m3$sample_name_new)
+# m3$sample_code = paste(m3$IGTHT, m3$sample_name, sep = ".")
+# m3$sample_code = make.names(m3$sample_code)
 
-tmp3 = m3[,c("sample_name_new", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+tmp3 = m3[,c("sample_code", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
 rownames(tmp3) = tmp3[,1]
 tmp3 = tmp3[,-1]
 colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
@@ -145,7 +149,7 @@ m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds
 # i = "CD4"
 for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
     print(i)
-    sub = c(which(grepl(sprintf("%s_",i), colnames(m3))), seq(which(colnames(m3) == "sample_name"),ncol(m3)))
+    sub = c(which(grepl(sprintf("%s_",i), colnames(m3))), seq(which(colnames(m3) == "sample_code"),ncol(m3)))
     write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerSample_withMetadata_%s.csv", prefix,i) ,row.names = F, col.names = T, sep = ",", quote = F)
 }
 ```
@@ -172,15 +176,7 @@ m2 = merge(m2, stat_df_prop, by.x = "IGTHT", by.y = "IGTHT", suffixes = c(".ncel
 
 write.table(m2, file = sprintf("%s/annotation_level1_PropPerSample.csv", prefix),row.names = F, col.names = T, sep = ",", quote = F)
 
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
-sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
-
 m3 = merge(m2, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F)
-
-m3$sample_name_new = paste(m3$IGTHT, m3$sample_name, sep = ".")
-m3$sample_name_new = make.names(m3$sample_name_new)
 
 saveRDS(m3, file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
 
@@ -194,7 +190,7 @@ library(pheatmap)
 
 m3 = readRDS( sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
 
-tmp3 = m3[,c("sample_name_new", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
+tmp3 = m3[,c("sample_code", colnames(m3)[grepl(pattern = ".prop$", colnames(m3))])]
 rownames(tmp3) = tmp3[,1]
 tmp3 = tmp3[,-1]
 colnames(tmp3) = gsub(pattern = "\\.prop", replacement = "", colnames(tmp3))
@@ -267,19 +263,19 @@ dev.off()
 ```{r}
 m = so@meta.data
 
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
-sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
-#organ_simplified
-sample_metadata$organ_simplified = sample_metadata$organ
-sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
-sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
-sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
-sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
-sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
-sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
-sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+# sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+# #organ_simplified
+# sample_metadata$organ_simplified = sample_metadata$organ
+# sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
+# sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
+# sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
+# sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
+# sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
+# sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
+# sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
 
 m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
 
@@ -335,13 +331,13 @@ split by annotation_level1
 ```{r}
 m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerOrgan.Rds", prefix))
 
-# which(colnames(m3) == "sample_name")
-# i = "CD4"
-for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for( i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
     print(i)
-    sub = c(which("organ_simplified",which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3))))
+    sub = c(which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3))))
     write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerOrgan_%s.csv", prefix,i) ,row.names = F, col.names = T, sep = ",", quote = F)
 }
+
+
 ```
 
 
@@ -350,19 +346,19 @@ for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
 ```{r}
 m = so@meta.data
 
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
-sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
-sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
-#organ_simplified
-sample_metadata$organ_simplified = sample_metadata$organ
-sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
-sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
-sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
-sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
-sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
-sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
-sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
+# sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+# #organ_simplified
+# sample_metadata$organ_simplified = sample_metadata$organ
+# sample_metadata$organ_simplified[grep(pattern = "lymph node", sample_metadata$organ)] = "LN"
+# sample_metadata$organ_simplified[grep(pattern = "skin|Skin", sample_metadata$organ)] = "skin"
+# sample_metadata$organ_simplified[grep(pattern = "colon", sample_metadata$organ)] = "colon"
+# sample_metadata$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", sample_metadata$organ)] = "small intestine"
+# sample_metadata$organ_simplified[sample_metadata$organ %in% c("CNS", "brain")] = "CNS"
+# sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
+# sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
 
 m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
 
@@ -411,17 +407,16 @@ dev.off()
 set.seed(1)
 library(uwot)
 df = readRDS(sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
-df$organ_simplified = df$organ
-df$organ_simplified[grep(pattern = "lymph node", df$organ)] = "LN"
-df$organ_simplified[grep(pattern = "skin|Skin", df$organ)] = "skin"
-df$organ_simplified[grep(pattern = "colon", df$organ)] = "colon"
-df$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", df$organ)] = "small intestine"
-df$organ_simplified[df$organ_simplified %in% c("CNS", "brain")] = "CNS"
-df$organ_simplified[df$organ_simplified %in% c("lamina propria", "gut")] = "small intestine"
-df$organ_simplified[grep(pattern = "salivary|submandibular", df$organ_simplified)] = "submandibular salivary gland"
-table(df$organ, df$organ_simplified)
-table(df$organ_simplified)
-
+# df$organ_simplified = df$organ
+# df$organ_simplified[grep(pattern = "lymph node", df$organ)] = "LN"
+# df$organ_simplified[grep(pattern = "skin|Skin", df$organ)] = "skin"
+# df$organ_simplified[grep(pattern = "colon", df$organ)] = "colon"
+# df$organ_simplified[grep(pattern = "duoden|ileal|ileum|jejun|small intestine", df$organ)] = "small intestine"
+# df$organ_simplified[df$organ_simplified %in% c("CNS", "brain")] = "CNS"
+# df$organ_simplified[df$organ_simplified %in% c("lamina propria", "gut")] = "small intestine"
+# df$organ_simplified[grep(pattern = "salivary|submandibular", df$organ_simplified)] = "submandibular salivary gland"
+# table(df$organ, df$organ_simplified)
+# table(df$organ_simplified)
 
 props = df[,grepl("prop", colnames(df))]
 
