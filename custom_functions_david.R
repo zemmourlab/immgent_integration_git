@@ -298,6 +298,14 @@ MyplotDAbeeswarm = function (da.res, group.by = NULL, alpha = 0.1, subset.nhoods
 }
 
 ### To run limma-trend DGE, VPlot and FCFCplot
+ensure_directory <- function(path) {
+    if (!dir.exists(path)) {
+        dir.create(path, recursive = TRUE)
+        message(paste("Directory created:", path))
+    } else {
+        message(paste("Directory already exists:", path))
+    }
+}
 
 run_limmatrend_contrasts_counfoundings = function(tmm = tmm, group = group, confoundings = confoundings, formula.mod.matrix = formula.mod.matrix, contrasts =contrasts, gene_symbol= gene_symbol) { #count = count, dge = dge, 
     suppressPackageStartupMessages(library(limma))

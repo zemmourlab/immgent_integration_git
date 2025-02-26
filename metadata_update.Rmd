@@ -13,7 +13,9 @@ Most uptodate seurat object
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241028.Rds")
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241101.Rds")
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
+
 
 ```
 
@@ -25,7 +27,7 @@ cell cycle file: Prolif_scores.csv
 TG by TCR: allTGcells.csv
 
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 so = so_orig
 
 so@meta.data = data.frame(IGT_cellID = colnames(so))
@@ -373,8 +375,6 @@ saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt
 
 
 ```
-
-
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 # so = so_orig
@@ -384,6 +384,55 @@ so$annotation_level2_parent1 = NULL
 so$annotation_level2.IGTHT = NULL
 
 annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250109.csv",header = T, sep = ",", row.names = 1)
+all(rownames(annotl1) == colnames(so))
+colnames(annotl1)
+so$annotation_level1 = annotl1[colnames(so),"level1"]
+so$annotation_level2 = annotl1[colnames(so),"level2"]
+so$annotation_level2_group = annotl1[colnames(so),"level2.group"]
+
+so$annotation_level2_group[grepl("miniverse",so$annotation_level2 )] = "miniverse"
+so$annotation_level2_group[grepl("prolif",so$annotation_level2 )] = "proliferating"
+so$annotation_level2_group[grepl("unclear",so$annotation_level2 )] = "other"
+so$annotation_level2_group[is.na(so$annotation_level2_group)] = "other"
+
+annotation_level2_order = so@meta.data %>%
+    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
+    ) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
+    pull(annotation_level2) %>%
+    unique() %>%
+    as.character()
+
+test = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(test))
+
+so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(so$annotation_level2))
+
+so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+
+# so_orig = so
+# so$annotation_level2 = as.character(so$annotation_level2)
+# so$annotation_level2[so$annotation_level2 == "DNcl29"] = "DN_cl29"
+
+```
+
+
+add annotation_table_history_20250226.csv
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+# so = so_orig
+so$annotation_level1 = NULL
+so$annotation_level2 = NULL
+so$annotation_level2_parent1 = NULL
+so$annotation_level2.IGTHT = NULL
+
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20250226.csv",header = T, sep = ",", row.names = 1)
 all(rownames(annotl1) == colnames(so))
 colnames(annotl1)
 so$annotation_level1 = annotl1[colnames(so),"level1"]
@@ -466,7 +515,9 @@ Load metadata csv file
 #m = read.table("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Sample_metadata_david_20240520_v5.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20240920_v6.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",", row.names = 1)
-m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
+# m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
+
 
 # changing here and not in the original file to keep consistent with the database
 colnames(m)
@@ -482,7 +533,7 @@ m$count_unique = NULL
 colnames(m)
 ```
 
-code version with V7, easier
+code version with V7+, easier
 ```{r}
 tmp = merge(so@meta.data, m, by = "IGTHT", all.x = T, all.y = F)
 rownames(tmp) = tmp$IGT_cellID
@@ -495,6 +546,7 @@ so@meta.data = tmp
 #Any missing data in sample_metadata?
 tmp$IGT[which(is.na(tmp$exp_number))] %>% unique()
 tmp$IGTHT[which(is.na(tmp$exp_number))] %>% unique()
+any(apply(tmp,2, function(x) any(is.na(x))))
 
 all(rownames(tmp) == colnames(so))
 tmp = tmp[rownames(so@meta.data),]
@@ -701,6 +753,7 @@ so[['ADT']]$data = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241113.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241201.Rds")
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250226.Rds")
 
 ```
 
