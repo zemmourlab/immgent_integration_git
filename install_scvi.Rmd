@@ -75,6 +75,19 @@ module load hdf5/1.12.0 #for BPCells but also others
 
 ```
 
+```{bash}
+module load python/anaconda-2022.05
+source activate /project/zemmour/david/envs/scvi_20240315
+
+cd /project/zemmour/david/envs/
+conda env export > scvi_20240315.yml
+
+source activate mamba-env  
+mamba env create -p /project/zemmour/david/envs/R_20250227 -f scvi_20240315.yml
+
+conda activate /project/zemmour/david/envs/R_20250227
+conda install conda-forge::r-lme4
+```
 
 
 **Install scvi-tools 1.1.2 for HotSpot --> /project/zemmour/david/envs/scvi_20240315**

@@ -19,6 +19,7 @@ module load python/anaconda-2022.05
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
 source activate /project/zemmour/david/envs/scvi_20240315
+source activate /project/zemmour/david/envs/R_20250227
 module load openblas/0.3.13
 
 cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
@@ -27,7 +28,8 @@ R
 
 ```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore") 
+libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
+libs = c( "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
@@ -54,21 +56,6 @@ names(mypal) = NULL
 
 ```
 
-Prefix
-```{r}
-# prefix = "SampleComp/20250109"
-prefix = "SampleComp/20250226"
-# reduc = "totalvi_20241006"
-# clusters = "annotation_level1"
-
-if (!dir.exists(prefix)) {
-    dir.create(prefix, recursive = TRUE)
-    cat("Folder created:", prefix, "\n")
-} else {
-    cat("Folder already exists:", prefix, "\n")
-}
-```
-
 **Most up-to-date data**
 
 ```{r}
@@ -84,9 +71,894 @@ sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integ
 
 prefix = "SampleComp/20250226"
 
+if (!dir.exists(prefix)) {
+    dir.create(prefix, recursive = TRUE)
+    cat("Folder created:", prefix, "\n")
+} else {
+    cat("Folder already exists:", prefix, "\n")
+}
+
 ```
 
-**LIMMA Tregs**
+**lme4 model**
+
+```{r}
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+# mdata_orig$IGTHT = sprintf("%s%s", gsub(pattern = "IGT",replacement = "I",mdata_orig$IGT), gsub(pattern = "HT",replacement = "H",mdata_orig$HT))
+
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+dim(mdata0)
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
+# dim(mdata0)
+mdata = mdata0
+# mdata = mdata0 %>% select(matches("ncells")) %>% mutate(totcells = rowSums(.)) %>% mutate(across(-totcells, ~ . / totcells, .names = "{.col}_prop"))
+# colnames(mdata) = gsub(pattern = "ncells_prop", replacement = "prop", colnames(mdata))
+# mdata = data.frame(mdata, mdata0 %>% select(sample_name:last_col()) %>% as.data.frame())
+# all(mdata$Treg_cl1.ncells == mdata0$Treg_cl1.ncells)
+# mdata = mdata %>% filter(totcells >= 10) %>% as.data.frame()
+
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+# contrasts(mdata$organ_simplified) <- contr.sum(length(unique(mdata$organ_simplified)))
+# contrasts(mdata$condition_detailed_simplified) <- contr.sum(length(unique(mdata$condition_detailed_simplified)))
+# contrasts(mdata$infection_phase) <- contr.sum(length(unique(mdata$infection_phase)))
+
+
+mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
+
+mdata_long = mdata %>% pivot_longer(cols = matches("prop"), names_to = "feature", values_to = "value")
+
+fit_lme4 = lmer( value ~ organ_simplified * condition_detailed_simplified * infection_phase + (1 | IGT),  # Random intercept for each IGTHT (sample)
+  data = mdata_long)
+summary(fit_lme4)
+
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified + condition_detailed_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
+# design = model.matrix(~ 0 + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+# fit2 = eBayes(fit)
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+```
+
+
+**Limma challenge organ time**
+
+target_cells_simplified allT or CD45p
+
+
+```{r}
+prefix3 = "limma/allT_conddetsimpl_orgsimpl_phase"
+# prefix3 = "limma/organsimplified_IGT_Treg"
+ensure_directory(sprintf("%s/%s", prefix,prefix3))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+
+```
+
+```{r}
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+# mdata_orig$IGTHT = sprintf("%s%s", gsub(pattern = "IGT",replacement = "I",mdata_orig$IGT), gsub(pattern = "HT",replacement = "H",mdata_orig$HT))
+
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+dim(mdata0)
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
+# dim(mdata0)
+mdata = mdata0
+# mdata = mdata0 %>% select(matches("ncells")) %>% mutate(totcells = rowSums(.)) %>% mutate(across(-totcells, ~ . / totcells, .names = "{.col}_prop"))
+# colnames(mdata) = gsub(pattern = "ncells_prop", replacement = "prop", colnames(mdata))
+# mdata = data.frame(mdata, mdata0 %>% select(sample_name:last_col()) %>% as.data.frame())
+# all(mdata$Treg_cl1.ncells == mdata0$Treg_cl1.ncells)
+# mdata = mdata %>% filter(totcells >= 10) %>% as.data.frame()
+
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+# contrasts(mdata$organ_simplified) <- contr.sum(length(unique(mdata$organ_simplified)))
+# contrasts(mdata$condition_detailed_simplified) <- contr.sum(length(unique(mdata$condition_detailed_simplified)))
+# contrasts(mdata$infection_phase) <- contr.sum(length(unique(mdata$infection_phase)))
+
+
+mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified + condition_detailed_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
+# design = model.matrix(~ 0 + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+# fit2 = eBayes(fit)
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+```
+
+
+
+Effect of organ
+```{r}
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified + condition_detailed_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
+design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified * infection_phase, data = mdata)
+design = model.matrix(~ 0 + infection_phase * organ_simplified * condition_detailed_simplified , data = mdata)
+design = model.matrix(~ organ_simplified + condition_detailed_simplified + infection_phase, data = mdata)
+design = model.matrix(~ 0 + organ_simplified, data = mdata)
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+# fit2 = eBayes(fit, proportion = 0.1, trend = F)
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# topTable(fit2, coef = 1, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+# plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+# text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+# plot(fit$coefficients[,"lung"], fit$coefficients[,"LN"], pch = ".")
+# text(fit$coefficients[,"lung"], fit$coefficients[,"LN"], labels = rownames(fit$coefficients), cex = 0.5)
+# 
+# plot(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], pch = ".")
+# text(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], labels = rownames(fit2$coefficients), cex = 0.5)
+
+prefix4 = "organ_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(organ_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    group1_filter <- expr(organ_simplified == cl)
+    group2_filter <- expr(!(organ_simplified %in% cl)) #expr(organ_simplified == levels(metadata$organ_simplified)[1])
+    groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+}
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    contrasts[cl] = cl
+    namescontrasts[cl] = sprintf("%s_vs_spleen", cl)
+}
+
+metadata = mdata %>% select(infection_phase) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$infection_phase)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    # contrasts[cl] = cl
+    contrasts[cl] = sprintf("%s-none", cl)
+    namescontrasts[cl] = sprintf("%s_vs_none", cl)
+}
+
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.1,0.1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+Effect of timing
+```{r}
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + infection_phase + organ_simplified + condition_detailed_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+design = model.matrix(~ infection_phase + organ_simplified + condition_detailed_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+design = model.matrix(~ 0 + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+# fit2 = eBayes(fit, proportion = 0.1, trend = F)
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# topTable(fit2, coef = 1, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+# plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+# text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+# plot(fit$coefficients[,"lung"], fit$coefficients[,"LN"], pch = ".")
+# text(fit$coefficients[,"lung"], fit$coefficients[,"LN"], labels = rownames(fit$coefficients), cex = 0.5)
+# 
+# plot(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], pch = ".")
+# text(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], labels = rownames(fit2$coefficients), cex = 0.5)
+
+prefix4 = "time_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(infection_phase) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+# for (cl in levels(metadata$organ_simplified)) {
+#     print(cl)
+#     group1_filter <- expr(organ_simplified == cl)
+#     group2_filter <- expr(organ_simplified == levels(metadata$organ_simplified)[1])
+#     groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+#     nmecontrast = sprintf("%s_vs_All", cl)
+#     group1 = groups[[1]]
+#     group2 = groups[[2]]
+#     contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+#     namescontrasts[cl] = nmecontrast
+# }
+for (cl in levels(metadata$infection_phase)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    # contrasts[cl] = cl
+    contrasts[cl] = sprintf("%s-none", cl)
+    namescontrasts[cl] = sprintf("%s_vs_none", cl)
+}
+
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.1,0.1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.5,0.5,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+plot(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"acute_vs_none"], pch = ".")
+text(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"acute_vs_none"], labels = rownames(fit2$coefficients), cex = 0.5)
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+Effect of condition
+```{r}
+design = model.matrix(~ 0 + condition_detailed_simplified + organ_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
+design = model.matrix(~ 0 + condition_detailed_simplified, data = mdata) 
+# design = model.matrix(~ 0 + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+
+prefix4 = "condition_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(condition_detailed_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+# for (cl in levels(metadata$condition_detailed_simplified)) {
+#     print(cl)
+#     group1_filter <- expr(condition_detailed_simplified == cl)
+#     group2_filter <- expr(!(condition_detailed_simplified %in% cl))
+#     groups = GetGroups(metadata, group1_filter,group2_filter, "condition_detailed_simplified")
+#     nmecontrast = sprintf("%s_vs_All", cl)
+#     # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+# 
+#     # contrasts = c()
+#     # namescontrasts = c()
+#     # # i = 1
+#     group1 = groups[[1]]
+#     group2 = groups[[2]]
+#     contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+#     namescontrasts[cl] = nmecontrast
+#     # names(contrasts) = namescontrasts
+#     # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+# }
+
+for (cl in levels(metadata$condition_detailed_simplified)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    # contrasts[cl] = cl
+    contrasts[cl] = sprintf("%s-baseline", cl)
+    namescontrasts[cl] = sprintf("%s_vs_baseline", cl)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.5,0.5,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.5,0.5,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+(model with IGTHT -- same as before pretty much and doesn't work as well --> forget)
+```{r}
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + IGTHT, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("IGTHT", "", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+fit2 = eBayes(fit, proportion = 0.1, trend = F)
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# topTable(fit2, coef = 1, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+plot(fit$coefficients[,"lung"], fit$coefficients[,"LN"], pch = ".")
+text(fit$coefficients[,"lung"], fit$coefficients[,"LN"], labels = rownames(fit$coefficients), cex = 0.5)
+# 
+# plot(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], pch = ".")
+# text(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], labels = rownames(fit2$coefficients), cex = 0.5)
+
+prefix4 = "organ_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(organ_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    group1_filter <- expr(organ_simplified == cl)
+    group2_filter <- expr(!(organ_simplified %in% cl))
+    groups = GetGroups(mdata, group1_filter,group2_filter, "IGTHT")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+}
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    contrasts[cl] = cl
+    namescontrasts[cl] = sprintf("%s_vs_spleen", cl)
+}
+
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = F, robust = F)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+
+Effect of infection_phase
+```{r}
+design = model.matrix(~ 0 + infection_phase + condition_detailed_simplified + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+# design = model.matrix(~ 0 + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+
+prefix4 = "infectionphase_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTT is the confounding)
+metadata = mdata %>% select(infection_phase) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$infection_phase)) {
+    print(cl)
+    group1_filter <- expr(infection_phase == cl)
+    group2_filter <- expr(!(infection_phase %in% cl))
+    groups = GetGroups(metadata, group1_filter,group2_filter, "infection_phase")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
+    
+    # contrasts = c()
+    # namescontrasts = c()
+    # # i = 1
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+    # names(contrasts) = namescontrasts
+    # gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
+}
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.5,0.5,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+
+
+
+**LIMMA Treg**
 
 lm with organ in healthy: ~ 0 + organ_simplified + IGT
 very similar/almost same as ~ 0 + organ_simplified !

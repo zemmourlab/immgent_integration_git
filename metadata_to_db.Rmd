@@ -1,0 +1,19 @@
+---
+title: "transfer_metadata"
+output: html_document
+date: "2023-06-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+library(xlsx)
+library(dplyr)
+
+david_table = read.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/Sample_metadata_david_20250301_V8.csv", header = T, sep = ",")
+
+david_table %>% select(exp_id, exp_number, exp_name, lab) %>% unique() %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/exptable_20250301_V8.csv", sep = ",", row.names = F)
+
+```
+
