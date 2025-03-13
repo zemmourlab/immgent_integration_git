@@ -109,6 +109,53 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
 ```
 
+Add mde_incremental in the whole object
+```{r}
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/"
+so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEachLevel1.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+### TO MAKE 20250109_mde_incremental_fromEachLevel1.csv
+
+latent_files = c("CD4/20250109_CD4/mde_incremental.csv",
+"CD8AB/20250109_CD8AB/mde_incremental.csv",
+"Treg/20250109_Treg/mde_incremental.csv",
+"gdT/20250109_gdT/mde_incremental.csv",
+"nonconv/20250109_nonconv/mde_incremental.csv",
+"abT_CD8aa/20250109_abT_CD8aa/mde_incremental.csv",
+"abT_DP/20250109_abT_DP/mde2.csv",
+"abT_DN/20250109_abT_DN/mde_incremental.csv")
+
+mde_incremental_list = list()
+for (i in 1: length(latent_files)) {
+    print(i)
+    mde_incremental_list[[i]] = read.csv(file = latent_files[i], header = T, sep = ",", row.names = 1)
+}
+
+totalvi = do.call(rbind, mde_incremental_list)
+colnames(totalvi) = as.character(seq(1:ncol(totalvi)))
+
+missing_rows = setdiff(colnames(so), rownames(totalvi))
+if (length(missing_rows) > 0) {
+  na_matrix = matrix(NA, nrow = length(missing_rows), ncol = ncol(totalvi))
+  rownames(na_matrix) <- missing_rows
+  colnames(na_matrix) <- colnames(totalvi)
+  totalvi <- rbind(totalvi, na_matrix)
+}
+totalvi = totalvi[colnames(so), , drop = FALSE]
+totalvi = as.matrix(totalvi)
+pattern = "^IGT\\d{1,2}\\.[A-Z]{16}$"
+matches = grepl(pattern, rownames(totalvi))
+if (!all(matches)) {
+    print("updating cell names in csv file, assuming same order as seurat object" )
+    #rownames(totalvi) = gsub(pattern = "(\\S*)_(\\d+)", replacement = "\\1", rownames(totalvi))
+    rownames(totalvi) = colnames(so)
+}
+totalvi = totalvi[colnames(so),]
+write.table(totalvi, file = "20250109_mde_incremental_fromEachLevel1.csv", sep = ",", row.names = T, quote = F,col.names = T)
+
+```
+
+
 **1. Add single_cell_qc.csv**
 ```{r}
 scqc = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/single_cell_qc.csv",header = T, sep = ",")

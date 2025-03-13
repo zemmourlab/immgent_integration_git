@@ -8,12 +8,25 @@ editor_options:
 
 
 ```{r}
-library(xlsx)
 library(dplyr)
 
-david_table = read.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/Sample_metadata_david_20250301_V8.csv", header = T, sep = ",")
+david_table = read.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/Sample_metadata_david_20250311_V8.csv", header = T, sep = ",")
 
 david_table %>% select(exp_id, exp_number, exp_name, lab) %>% unique() %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/exptable_20250301_V8.csv", sep = ",", row.names = F)
+
+tmp = david_table %>% select("organism_id", "organism_name", "strain", "genetics", "sex", "age_weeks", "pool_of_mice", "jax", "infection_agent", "infection_dose", "infection_mode", "treat_agent", "treat_dose","timepoint", "tumor") %>% unique()
+dpl = tmp$organism_id[which(duplicated(tmp$organism_id))]
+tmp[tmp$organism_id %in% dpl,]
+david_table %>% select("organism_id", "organism_name", "strain", "genetics", "sex", "age_weeks", "pool_of_mice", "jax", "infection_agent", "infection_dose", "infection_mode", "treat_agent", "treat_dose","timepoint", "tumor") %>% unique() %>% arrange(organism_id) %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/mouse_table_20250301_V8.csv", sep = ",", row.names = F)
+
+tmp = david_table %>% select("sample_id","cite_seq","prep_description","organ","organ_uberon_id", "t_specificity","target_cells","gating_strategy", "condition_detailed_organ", "comments") %>% unique() 
+dpl = tmp$sample_id[which(duplicated(tmp$sample_id))]
+tmp[tmp$sample_id %in% dpl,]
+# tmp %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/sample_table_20250311_V8.csv", sep = ",", row.names = F)
+sample_template = read.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250228_liang/sample_template.csv", header = T, sep = ",")
+david_table_merged = merge(sample_template, tmp, by.x = "sample_id", by.y = "sample_id",suffixes = c(".old",".new"), all = T) 
+david_table_merged %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250228_liang/sample_correction_david_20250312.csv", sep = ",", row.names = F)
+
 
 ```
 

@@ -25,6 +25,39 @@ conda remove --prefix /project/zemmour/david/envs/scvi120_test3 --all
 conda remove --prefix /project/zemmour/david/envs/scvi120_20241003 --all
 conda remove --prefix /project/zemmour/david/envs/scvi113_20240525 --all
 
+conda remove --prefix /project/zemmour/david/envs/R_20250227 --all
+
+
+
+```
+
+
+**Install R 4.4.3**
+
+```{bash}
+module load python/anaconda-2022.05
+
+source activate mamba-env  
+mamba create -p /project/zemmour/david/envs/r443 python=3.10
+conda install r-base=4.4.3
+
+module load python/anaconda-2022.05
+source activate /project/zemmour/david/envs/r443
+conda install r-base=4.4.3
+
+conda install conda-forge::r-seurat    #didn't work with CRAN
+conda install conda-forge::r-lme4 #didn't work with CRAN
+
+```
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(version = "3.20")
+
+libs = c( "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
+BiocManager::install(libs)
+
 
 
 ```
@@ -73,20 +106,6 @@ mamba install -c conda-forge r-base=4.2 r-essentials r-reticulate
 module load hdf5/1.12.0 #for BPCells but also others
 
 
-```
-
-```{bash}
-module load python/anaconda-2022.05
-source activate /project/zemmour/david/envs/scvi_20240315
-
-cd /project/zemmour/david/envs/
-conda env export > scvi_20240315.yml
-
-source activate mamba-env  
-mamba env create -p /project/zemmour/david/envs/R_20250227 -f scvi_20240315.yml
-
-conda activate /project/zemmour/david/envs/R_20250227
-conda install conda-forge::r-lme4
 ```
 
 

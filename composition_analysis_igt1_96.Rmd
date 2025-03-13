@@ -86,6 +86,45 @@ sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integ
 ```
 
 **Count number of cells for each cluster level 2 in each sample**
+
+proportion per level1 per sample
+```{r}
+m = so@meta.data
+
+ncells = m %>% group_by(IGTHT) %>% summarize(n_cells = n()) %>% as.data.frame()
+
+stat = m %>% group_by(IGTHT, annotation_level1) %>% mutate(n_sampleid = n()) %>% group_by(IGTHT, annotation_level2) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+# stat = m %>% group_by(IGTHT) %>% mutate(n_sampleid = n()) %>% group_by(IGTHT, annotation_level2) %>% summarize(ncells = n(), prop = ncells/first(n_sampleid)) %>% ungroup() %>% as.data.frame()
+
+stat_df_ncells = dcast(stat, IGTHT ~ annotation_level2, value.var = "ncells")
+stat_df_ncells[is.na(stat_df_ncells)] = 0
+stat_df_prop = dcast(stat, IGTHT ~ annotation_level2, value.var = "prop")
+stat_df_prop[is.na(stat_df_prop)] = 0
+# rowSums(stat_df_prop[,grepl("^CD4", colnames(stat_df_prop))])
+
+all(ncells$IGTHT == stat_df_ncells$IGTHT)
+
+m2 = merge(ncells, stat_df_ncells, by.x = "IGTHT", by.y = "IGTHT")
+m2 = merge(m2, stat_df_prop, by.x = "IGTHT", by.y = "IGTHT", suffixes = c(".ncells", ".prop"))
+
+write.table(m2, file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix),row.names = F, col.names = T, sep = "\t", quote = F)
+
+# sample_metadata$IGTHT = paste(sample_metadata$immgent_IGT_10xlane_id, sample_metadata$hashtag_number, sep = "")
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "IGT", replacement = "I" )
+# sample_metadata$IGTHT = gsub(x = sample_metadata$IGTHT, pattern = "HT", replacement = "H" )
+
+m3 = merge(m2, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F)
+
+# m3$sample_code = paste(m3$IGTHT, m3$sample_name, sep = ".")
+# m3$sample_code = make.names(m3$sample_code)
+
+saveRDS(m3, file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+
+write.table(m3, file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.txt", prefix) ,row.names = F, col.names = T, sep = "\t", quote = F)
+```
+
+proportion per sample
 ```{r}
 m = so@meta.data
 

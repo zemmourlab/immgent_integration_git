@@ -18,8 +18,8 @@ sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-source activate /project/zemmour/david/envs/scvi_20240315
-source activate /project/zemmour/david/envs/R_20250227
+#source activate /project/zemmour/david/envs/scvi_20240315
+source activate /project/zemmour/david/envs/r443
 module load openblas/0.3.13
 
 cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
@@ -27,9 +27,8 @@ R
 ```
 
 ```{r}
-setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
-libs = c( "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
@@ -54,6 +53,61 @@ length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 
+mypal_organ = setNames(mypal, unique(mdata$organ_simplified))
+mypal_organ["other"] = "grey"
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+
+mypal_level1 = setNames(mypal, unique(tmp$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+
+mypal_level2 = setNames(mypal, unique(tmp$annotation_level2))
+mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
+
+mypal_condition_detailed_simplified = setNames(mypal, unique(tmp$condition_detailed_simplified))
+mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
+
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+
+##########
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+# ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+# ColorRamp = colorRampPalette(c('Red'))(20)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
 ```
 
 **Most up-to-date data**
@@ -67,7 +121,8 @@ so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
 
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250301_v8.csv",header = T, sep = ",")
 
 prefix = "SampleComp/20250226"
 
@@ -80,8 +135,22 @@ if (!dir.exists(prefix)) {
 
 ```
 
-**lme4 model**
+**Model 1: Limma interaction model ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase in all T samples**
+Works but: 
+1) looking across all cells makes it complicated. Low frequency cells have smaller coefficients.
+2) missing interesting samples that were purified for T cell pops.
 
+```{r}
+prefix = "SampleComp/20250226"
+
+prefix3 = "limma/allT_conddetsimpl_orgsimpl_phase"
+# prefix3 = "limma/organsimplified_IGT_Treg"
+ensure_directory(sprintf("%s/%s", prefix,prefix3))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+
+```
+
+prepare mdata
 ```{r}
 # mdata_orig = readRDS(file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
 mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
@@ -128,30 +197,1275 @@ mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
 
 mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
 
-mdata_long = mdata %>% pivot_longer(cols = matches("prop"), names_to = "feature", values_to = "value")
+```
 
-fit_lme4 = lmer( value ~ organ_simplified * condition_detailed_simplified * infection_phase + (1 | IGT),  # Random intercept for each IGTHT (sample)
-  data = mdata_long)
-summary(fit_lme4)
-
+Model and fit ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase
+```{r}
+mdata$infection_phase_orig = mdata$infection_phase
+mdata$infection_phase = as.character(mdata$infection_phase_orig)
+mdata$infection_phase[mdata$infection_phase_orig %in% c("chronic", "cleared")] = "late"
+mdata$infection_phase[mdata$infection_phase_orig %in% c("acute")] = "early"
+mdata$infection_phase = factor(mdata$infection_phase)
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
 
 # Create the design matrix for the linear model
-design = model.matrix(~ 0 + organ_simplified + condition_detailed_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
-# design = model.matrix(~ 0 + organ_simplified, data = mdata) #make sure no empty category! otherwise creates an error during fit
-colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
-colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified * infection_phase, data = mdata)
+# colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+# colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
 # Select the columns that match "^F" in mdata (assuming these are numeric variables)
 feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
 # Fit the linear model using limma
 fit = lmFit(feature_data, design)
-saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
 # fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
-# fit2 = eBayes(fit)
-# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+fit2 = eBayes(fit, proportion = 0.1, trend = T, robust = T)
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+```
+
+Plot significant coeff for each clusters
+```{r}
+##1. for each cluster
+cl = "CD8_cl10.prop"
+categorize_condition <- function(condition, components = c("organ_simplified", "condition_detailed_simplified", "infection_phase")) {
+    # Check which components are present in the condition
+  present_components <- components[sapply(components, function(x) grepl(x, condition))]
+  
+  # Create category based on the presence of components
+  if (length(present_components) == 1) {
+    return(paste0(present_components, ""))
+  } else if (length(present_components) == 2) {
+    return(paste(present_components, collapse = ":"))
+  } else if (length(present_components) == 3) {
+    return(paste(present_components, collapse = ":"))
+  } else {
+    return("Other")  # For cases that do not fit the above patterns
+  }
+}
+
+components <- c("organ_simplified", "condition_detailed_simplified", "infection_phase")
+combinations <- unlist(lapply(1:length(components), function(i) combn(components, i, simplify = FALSE)), recursive = FALSE)
+combination_labels <- sapply(combinations, function(x) paste(x, collapse = ":"))
+combination_labels
+
+pdf(sprintf("%s/%s/batplots_by_clusters.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    coef_df <- data.frame(
+        Condition = names(coef_data),  # names of the conditions
+        Coefficient = coef_data  # values of the coefficients
+    )
+    
+    # Define a function that dynamically categorizes based on the presence of organ_simplified, condition_detailed_simplified, and infection_phase
+    
+    # Apply the function to categorize the conditions
+    coef_df$Condition_Category <- sapply(rownames(coef_df), categorize_condition)
+    coef_df$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase", replacement = "", x = coef_df$Condition)
+    
+    # Create the bar plot using ggplot2
+    # ggplot(coef_df) + 
+    #     geom_bar(aes(x = reorder(Condition, Coefficient), y = Coefficient, fill = Condition_Category), stat = "identity") +
+    #     coord_flip() +  # Horizontal bars
+    #     theme(
+    #         axis.text.y = element_text(size = 10),  # Adjust text size
+    #         axis.text.x = element_text(size = 10),  # Adjust text size
+    #         # plot.margin = margin(1, 1, 1, 10)  # Increase left margin
+    #     ) +
+    #     theme_minimal() +
+    #     labs(
+    #         x = "Conditions", 
+    #         y = "Coefficient Value", 
+    #         title = sprintf("%s Coefficients", cl)
+    #     ) #+ facet_grid(~ Condition_Category)
+    
+    coef_df1 <- coef_df %>% filter(Coefficient > 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(desc(Coefficient)) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df1$order = order(rowSums(coef_df1[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    coef_df1$Condition = factor(coef_df1$Condition, levels = coef_df1$Condition[coef_df1$order])
+    coef_df1$Condition_Category = factor(coef_df1$Condition_Category, levels = combination_labels)
+    
+    coef_df2 <- coef_df %>% filter(Coefficient < 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(Coefficient) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df2$order = order(rowSums(coef_df2[,c("pos_cumsum", "neg_cumsum")]), decreasing=F)
+    coef_df2$Condition = factor(coef_df2$Condition, levels = coef_df2$Condition[coef_df2$order])
+    coef_df2$Condition_Category = factor(coef_df2$Condition_Category, levels = combination_labels)
+    
+    coef_df = rbind(coef_df1, coef_df2)
+    coef_df$Condition = factor(coef_df$Condition, levels = c(levels(coef_df1$Condition ), levels(coef_df2$Condition )))
+    coef_df$Condition_Category = factor(coef_df$Condition_Category, levels = combination_labels)
+    
+    # coef_df <- coef_df %>%
+    # group_by(Condition_Category, Coefficient > 0) %>%
+    #   arrange(desc(Coefficient)) %>%
+    #   mutate(
+    #     pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+    #     neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+    #   ) %>%
+    #   ungroup() %>% as.data.frame()
+    # coef_df$pos_cumsum[coef_df$Coefficient<0] = 0
+    # coef_df$neg_cumsum[coef_df$Coefficient>0] = 0
+    # coef_df$order = order(rowSums(coef_df[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    # coef_df$Condition = factor(coef_df$Condition, levels = coef_df$Condition[coef_df$order])
+    
+    
+    # Plot the stacked barplot with adjusted text position
+    p = ggplot(coef_df) + 
+        geom_bar(aes(x = Condition_Category, y = Coefficient, fill = Condition), #reorder(Condition_Category, Coefficient)
+                 stat = "identity", position = "stack") +
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df1) +  # Add text labels for each condition
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df2) +
+        # coord_flip() +  # Uncomment for horizontal bars
+        theme(
+            axis.text.y = element_text(size = 10),  # Adjust text size
+            axis.text.x = element_text(size = 10),  # Adjust text size
+        ) +
+        theme_minimal() +
+        labs(
+            x = "Condition Categories", 
+            y = "Coefficient Value", 
+            title = sprintf("%s Coefficients", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+
+dev.off()
+
+```
+
+Plot sample proporions based on the coeffs found above
+```{r}
+print(cl)
+
+pdf(sprintf("%s/%s/prop_by_clusters_mostsignifsamples.pdf",  prefix, prefix3), 15,10, useDingbats = F)
+
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    tmp_list = list()
+    for (i in 1:length(names(coef_data))) {
+        tmp = mdata[which(design[,names(coef_data)[i]]==1),c(cl, "sample_code", "organ_simplified")]
+        tmp$high_low = ifelse(coef_data[i] > 0, yes = "high", no = "low")
+        tmp$Condition = names(coef_data)[i]
+        tmp_list[[i]] = tmp
+    }
+    tmp_list[["all"]] = mdata[,c(cl, "sample_code", "organ_simplified")]
+    tmp_list[["all"]]$high_low = "high"
+    tmp_list[["all"]]$Condition = "all"
+    
+    tmp = do.call(rbind, tmp_list) %>% as.data.frame()
+    tmp$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase", replacement = "", x = tmp$Condition)
+    colnames(tmp)[colnames(tmp) == cl] = "value"
+    
+    tmp_summary <- tmp %>%
+        group_by(Condition) %>%
+        summarize(mean_value = mean(value, na.rm = TRUE)) %>%
+        arrange(desc(mean_value))  # Sort by mean in descending order
+    
+    tmp$Condition <- factor(tmp$Condition, levels = c("all", setdiff(tmp_summary$Condition, "all")))
+    # tmp$Condition <- factor(tmp$Condition, levels = tmp_summary$Condition)
+    # tmp$Condition = relevel(ref = "all")
+    
+    p = ggplot(tmp) +
+        # geom_beeswarm(aes(x = Condition, y = CD8_cl10.prop, fill = Condition), cex = 2, shape = 21, size = I(2), alpha = 0.5) +
+        geom_point(aes(x = Condition, y = value, color = high_low), size = 2, alpha = 0.5) +
+        # geom_boxplot(aes(x = Condition, y = value, alpha = ifelse(Condition == "all", 1, 0))) +
+        geom_point(data = tmp_summary, 
+                   aes(x = Condition, y = mean_value, group = Condition), 
+                   shape = 95, size = 10, color = "red") +  # Mean points
+        scale_color_manual(values = c("black", "blue")) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  # Rotate x-axis labels
+            axis.text.y = element_text(size = 12),
+            axis.title = element_text(size = 14),
+            plot.title = element_text(size = 16, face = "bold")
+        ) +
+        labs(
+            x = "Condition",
+            y = "Prop of all T",
+            title = sprintf("%s of all T cells in each condition (with Mean)", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+dev.off()
+
+```
+
+heatmap of coeff
+```{r}
+
+coefs = fit2$coefficients
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# coefs[fit2$p.value >= 0.05] = 1
+pvmat = pvmat[,colSums(is.na(coefs)) < 113]
+coefs = coefs[,colSums(is.na(coefs)) < 113]
+
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+pdf(sprintf("%s/%s/heatmap_coeffs.pdf",  prefix, prefix3), 20,20, useDingbats = F)
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
 
 ```
 
 
+**Model 2: Limma interaction model taking all samples, not just allT, ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase + target_cells_simplified**
+Better:
+- includes more samples that contain subpop of T cells + adding target_cells_simplified in the model
+But: 
+- looking across all cells makes it complicated. Low frequency cells have smaller coefficients.
+
+```{r}
+prefix = "SampleComp/20250226"
+
+prefix3 = "limma/conddetsimpl_orgsimpl_phase_targetcells"
+# prefix3 = "limma/organsimplified_IGT_Treg"
+ensure_directory(sprintf("%s/%s", prefix,prefix3))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+
+```
+
+```{r}
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+# mdata_orig$IGTHT = sprintf("%s%s", gsub(pattern = "IGT",replacement = "I",mdata_orig$IGT), gsub(pattern = "HT",replacement = "H",mdata_orig$HT))
+
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45|CD44|CD4|CD8|PLZF|TFH|Treg|VP1Tetp",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+dim(mdata0)
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
+# dim(mdata0)
+mdata = mdata0
+# mdata = mdata0 %>% select(matches("ncells")) %>% mutate(totcells = rowSums(.)) %>% mutate(across(-totcells, ~ . / totcells, .names = "{.col}_prop"))
+# colnames(mdata) = gsub(pattern = "ncells_prop", replacement = "prop", colnames(mdata))
+# mdata = data.frame(mdata, mdata0 %>% select(sample_name:last_col()) %>% as.data.frame())
+# all(mdata$Treg_cl1.ncells == mdata0$Treg_cl1.ncells)
+# mdata = mdata %>% filter(totcells >= 10) %>% as.data.frame()
+
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$infection_phase_orig = mdata$infection_phase
+mdata$infection_phase = as.character(mdata$infection_phase_orig)
+mdata$infection_phase[mdata$infection_phase_orig %in% c("chronic", "cleared")] = "late"
+mdata$infection_phase[mdata$infection_phase_orig %in% c("acute")] = "early"
+mdata$infection_phase = factor(mdata$infection_phase)
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$target_cells_simplified_orig = mdata$target_cells_simplified
+mdata$target_cells_simplified[grepl("allT",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("CD45",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("^CD44p",mdata$target_cells_simplified)] = "CD44p"
+mdata$target_cells_simplified[grepl("^CD4pCD44p",mdata$target_cells_simplified)] = "CD4pCD44p"
+mdata$target_cells_simplified[grepl("^CD8pCD44p",mdata$target_cells_simplified)] = "CD8pCD44p" 
+mdata$target_cells_simplified = factor(mdata$target_cells_simplified)
+mdata$target_cells_simplified = relevel(mdata$target_cells_simplified, ref = "allT")
+
+# contrasts(mdata$organ_simplified) <- contr.sum(length(unique(mdata$organ_simplified)))
+# contrasts(mdata$condition_detailed_simplified) <- contr.sum(length(unique(mdata$condition_detailed_simplified)))
+# contrasts(mdata$infection_phase) <- contr.sum(length(unique(mdata$infection_phase)))
+
+
+mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
+
+```
+
+Model and fit ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase * 
+```{r}
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified * infection_phase + target_cells_simplified, data = mdata)
+# colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+# colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+fit2 = eBayes(fit, proportion = 0.1, trend = T, robust = T)
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+```
+
+Plot significant coeff for each clusters
+```{r}
+
+# cl = "CD8_cl10.prop"
+categorize_condition <- function(condition, components = c("organ_simplified", "condition_detailed_simplified", "infection_phase", "target_cells_simplified_orig")) {
+    # Check which components are present in the condition
+  present_components <- components[sapply(components, function(x) grepl(x, condition))]
+  
+  # Create category based on the presence of components
+  if (length(present_components) == 1) {
+    return(paste0(present_components, ""))
+  } else if (length(present_components) == 2) {
+    return(paste(present_components, collapse = ":"))
+  } else if (length(present_components) == 3) {
+    return(paste(present_components, collapse = ":"))
+  } else {
+    return("Other")  # For cases that do not fit the above patterns
+  }
+}
+
+components <- c("organ_simplified", "condition_detailed_simplified", "infection_phase", "target_cells_simplified")
+combinations <- unlist(lapply(1:length(components), function(i) combn(components, i, simplify = FALSE)), recursive = FALSE)
+combination_labels <- sapply(combinations, function(x) paste(x, collapse = ":"))
+combination_labels
+
+pdf(sprintf("%s/%s/barplots_by_clusters.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    coef_df <- data.frame(
+        Condition = names(coef_data),  # names of the conditions
+        Coefficient = coef_data  # values of the coefficients
+    )
+    
+    # Define a function that dynamically categorizes based on the presence of organ_simplified, condition_detailed_simplified, and infection_phase
+    
+    # Apply the function to categorize the conditions
+    coef_df$Condition_Category <- sapply(rownames(coef_df), categorize_condition)
+    coef_df$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase|target_cells_simplified", replacement = "", x = coef_df$Condition)
+    
+    # Create the bar plot using ggplot2
+    # ggplot(coef_df) + 
+    #     geom_bar(aes(x = reorder(Condition, Coefficient), y = Coefficient, fill = Condition_Category), stat = "identity") +
+    #     coord_flip() +  # Horizontal bars
+    #     theme(
+    #         axis.text.y = element_text(size = 10),  # Adjust text size
+    #         axis.text.x = element_text(size = 10),  # Adjust text size
+    #         # plot.margin = margin(1, 1, 1, 10)  # Increase left margin
+    #     ) +
+    #     theme_minimal() +
+    #     labs(
+    #         x = "Conditions", 
+    #         y = "Coefficient Value", 
+    #         title = sprintf("%s Coefficients", cl)
+    #     ) #+ facet_grid(~ Condition_Category)
+    
+    coef_df1 <- coef_df %>% filter(Coefficient > 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(desc(Coefficient)) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df1$order = order(rowSums(coef_df1[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    coef_df1$Condition = factor(coef_df1$Condition, levels = coef_df1$Condition[coef_df1$order])
+    coef_df1$Condition_Category = factor(coef_df1$Condition_Category, levels = combination_labels)
+    
+    coef_df2 <- coef_df %>% filter(Coefficient < 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(Coefficient) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df2$order = order(rowSums(coef_df2[,c("pos_cumsum", "neg_cumsum")]), decreasing=F)
+    coef_df2$Condition = factor(coef_df2$Condition, levels = coef_df2$Condition[coef_df2$order])
+    coef_df2$Condition_Category = factor(coef_df2$Condition_Category, levels = combination_labels)
+    
+    coef_df = rbind(coef_df1, coef_df2)
+    coef_df$Condition = factor(coef_df$Condition, levels = c(levels(coef_df1$Condition ), levels(coef_df2$Condition )))
+    coef_df$Condition_Category = factor(coef_df$Condition_Category, levels = combination_labels)
+    
+    # coef_df <- coef_df %>%
+    # group_by(Condition_Category, Coefficient > 0) %>%
+    #   arrange(desc(Coefficient)) %>%
+    #   mutate(
+    #     pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+    #     neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+    #   ) %>%
+    #   ungroup() %>% as.data.frame()
+    # coef_df$pos_cumsum[coef_df$Coefficient<0] = 0
+    # coef_df$neg_cumsum[coef_df$Coefficient>0] = 0
+    # coef_df$order = order(rowSums(coef_df[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    # coef_df$Condition = factor(coef_df$Condition, levels = coef_df$Condition[coef_df$order])
+    
+    
+    # Plot the stacked barplot with adjusted text position
+    p = ggplot(coef_df) + 
+        geom_bar(aes(x = Condition_Category, y = Coefficient, fill = Condition), #reorder(Condition_Category, Coefficient)
+                 stat = "identity", position = "stack") +
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df1) +  # Add text labels for each condition
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df2) +
+        # coord_flip() +  # Uncomment for horizontal bars
+        theme(
+            axis.text.y = element_text(size = 10),  # Adjust text size
+            axis.text.x = element_text(size = 10),  # Adjust text size
+        ) +
+        theme_minimal() +
+        labs(
+            x = "Condition Categories", 
+            y = "Coefficient Value", 
+            title = sprintf("%s Coefficients", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+
+dev.off()
+
+```
+
+Plot sample proporions based on the coeffs found above
+```{r}
+print(cl)
+
+pdf(sprintf("%s/%s/prop_by_clusters_mostsignifsamples.pdf",  prefix, prefix3), 15,10, useDingbats = F)
+
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    tmp_list = list()
+    for (i in 1:length(names(coef_data))) {
+        tmp = mdata[which(design[,names(coef_data)[i]]==1),c(cl, "sample_code", "organ_simplified")]
+        tmp$high_low = ifelse(coef_data[i] > 0, yes = "high", no = "low")
+        tmp$Condition = names(coef_data)[i]
+        tmp_list[[i]] = tmp
+    }
+    tmp_list[["all"]] = mdata[,c(cl, "sample_code", "organ_simplified")]
+    tmp_list[["all"]]$high_low = "high"
+    tmp_list[["all"]]$Condition = "all"
+    
+    tmp = do.call(rbind, tmp_list) %>% as.data.frame()
+    tmp$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase|target_cells_simplified", replacement = "", x = tmp$Condition)
+    colnames(tmp)[colnames(tmp) == cl] = "value"
+    
+    tmp_summary <- tmp %>%
+        group_by(Condition) %>%
+        summarize(mean_value = mean(value, na.rm = TRUE)) %>%
+        arrange(desc(mean_value))  # Sort by mean in descending order
+    
+    tmp$Condition <- factor(tmp$Condition, levels = c("all", setdiff(tmp_summary$Condition, "all")))
+    # tmp$Condition <- factor(tmp$Condition, levels = tmp_summary$Condition)
+    # tmp$Condition = relevel(ref = "all")
+    
+    p = ggplot(tmp) +
+        # geom_beeswarm(aes(x = Condition, y = CD8_cl10.prop, fill = Condition), cex = 2, shape = 21, size = I(2), alpha = 0.5) +
+        geom_point(aes(x = Condition, y = value, color = high_low), size = 2, alpha = 0.5) +
+        # geom_boxplot(aes(x = Condition, y = value, alpha = ifelse(Condition == "all", 1, 0))) +
+        geom_point(data = tmp_summary, 
+                   aes(x = Condition, y = mean_value, group = Condition), 
+                   shape = 95, size = 10, color = "red") +  # Mean points
+        scale_color_manual(values = c("black", "blue")) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  # Rotate x-axis labels
+            axis.text.y = element_text(size = 12),
+            axis.title = element_text(size = 14),
+            plot.title = element_text(size = 16, face = "bold")
+        ) +
+        labs(
+            x = "Condition",
+            y = "Prop of all T",
+            title = sprintf("%s of all T cells in each condition (with Mean)", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+dev.off()
+
+```
+
+heatmap of coeff
+```{r}
+
+coefs = fit2$coefficients
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# coefs[fit2$p.value >= 0.05] = 1
+pvmat = pvmat[,colSums(is.na(coefs)) < 113]
+coefs = coefs[,colSums(is.na(coefs)) < 113]
+
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+pdf(sprintf("%s/%s/heatmap_coeffs.pdf",  prefix, prefix3), 20,20, useDingbats = F)
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+
+```
+
+**Model 3 +++: Limma interaction model taking all samples, normalizing on level1 to take into account the baseline proportion ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase + target_cells_simplified**
+- includes more samples that contain subpop of T cells + adding target_cells_simplified in the model
+This time normalized the percent in each lineage to take into account the fact that some lineages have more rare (different baseline frquency)  
+
+```{r}
+prefix = "SampleComp/20250226"
+
+prefix3 = "limma/conddetsimpl_orgsimpl_phase_targetcells_level1"
+# prefix3 = "limma/organsimplified_IGT_Treg"
+ensure_directory(sprintf("%s/%s", prefix,prefix3))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+
+```
+
+```{r}
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45|CD44|CD4|CD8|PLZF|TFH|Treg|VP1Tetp",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+dim(mdata0)
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
+# dim(mdata0)
+mdata = mdata0
+# mdata = mdata0 %>% select(matches("ncells")) %>% mutate(totcells = rowSums(.)) %>% mutate(across(-totcells, ~ . / totcells, .names = "{.col}_prop"))
+# colnames(mdata) = gsub(pattern = "ncells_prop", replacement = "prop", colnames(mdata))
+# mdata = data.frame(mdata, mdata0 %>% select(sample_name:last_col()) %>% as.data.frame())
+# all(mdata$Treg_cl1.ncells == mdata0$Treg_cl1.ncells)
+# mdata = mdata %>% filter(totcells >= 10) %>% as.data.frame()
+
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$infection_phase_orig = mdata$infection_phase
+mdata$infection_phase = as.character(mdata$infection_phase_orig)
+mdata$infection_phase[mdata$infection_phase_orig %in% c("chronic", "cleared")] = "late"
+mdata$infection_phase[mdata$infection_phase_orig %in% c("acute")] = "early"
+mdata$infection_phase = factor(mdata$infection_phase)
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$target_cells_simplified_orig = mdata$target_cells_simplified
+mdata$target_cells_simplified[grepl("allT",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("CD45",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("^CD44p",mdata$target_cells_simplified)] = "CD44p"
+mdata$target_cells_simplified[grepl("^CD4pCD44p",mdata$target_cells_simplified)] = "CD4pCD44p"
+mdata$target_cells_simplified[grepl("^CD8pCD44p",mdata$target_cells_simplified)] = "CD8pCD44p" 
+mdata$target_cells_simplified = factor(mdata$target_cells_simplified)
+mdata$target_cells_simplified = relevel(mdata$target_cells_simplified, ref = "allT")
+
+# contrasts(mdata$organ_simplified) <- contr.sum(length(unique(mdata$organ_simplified)))
+# contrasts(mdata$condition_detailed_simplified) <- contr.sum(length(unique(mdata$condition_detailed_simplified)))
+# contrasts(mdata$infection_phase) <- contr.sum(length(unique(mdata$infection_phase)))
+
+
+mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
+
+```
+
+Model and fit ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase + target_cells_simplified
+```{r}
+# Create the design matrix for the linear model
+# design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified * infection_phase + target_cells_simplified, data = mdata)
+design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified + infection_phase + target_cells_simplified, data = mdata)
+# colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase|level1", "", colnames(design))
+# colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+# fit = lmFit(feature_data, design)
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix, prefix3))
+# fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
+fit2 = eBayes(fit, proportion = 0.1, trend = T, robust = T)
+fit2 = readRDS(sprintf("%s/%s/fit2.Rds",  prefix, prefix3))
+# saveRDS(fit2, file = sprintf("%s/%s/fit2.Rds",  prefix, prefix3))
+# topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+
+```
+
+Plot significant coeff for each clusters
+```{r}
+
+# cl = "CD8_cl10.prop"
+categorize_condition <- function(condition, components = c("organ_simplified", "condition_detailed_simplified", "infection_phase", "target_cells_simplified_orig")) {
+    # Check which components are present in the condition
+  present_components <- components[sapply(components, function(x) grepl(x, condition))]
+  
+  # Create category based on the presence of components
+  if (length(present_components) == 1) {
+    return(paste0(present_components, ""))
+  } else if (length(present_components) == 2) {
+    return(paste(present_components, collapse = ":"))
+  } else if (length(present_components) == 3) {
+    return(paste(present_components, collapse = ":"))
+  } else {
+    return("Other")  # For cases that do not fit the above patterns
+  }
+}
+
+components <- c("organ_simplified", "condition_detailed_simplified", "infection_phase", "target_cells_simplified")
+combinations <- unlist(lapply(1:length(components), function(i) combn(components, i, simplify = FALSE)), recursive = FALSE)
+combination_labels <- sapply(combinations, function(x) paste(x, collapse = ":"))
+combination_labels
+
+pdf(sprintf("%s/%s/barplots_by_clusters.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    coef_df <- data.frame(
+        Condition = names(coef_data),  # names of the conditions
+        Coefficient = coef_data  # values of the coefficients
+    )
+    
+    # Define a function that dynamically categorizes based on the presence of organ_simplified, condition_detailed_simplified, and infection_phase
+    
+    # Apply the function to categorize the conditions
+    coef_df$Condition_Category <- sapply(rownames(coef_df), categorize_condition)
+    coef_df$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase|target_cells_simplified", replacement = "", x = coef_df$Condition)
+    
+    # Create the bar plot using ggplot2
+    # ggplot(coef_df) + 
+    #     geom_bar(aes(x = reorder(Condition, Coefficient), y = Coefficient, fill = Condition_Category), stat = "identity") +
+    #     coord_flip() +  # Horizontal bars
+    #     theme(
+    #         axis.text.y = element_text(size = 10),  # Adjust text size
+    #         axis.text.x = element_text(size = 10),  # Adjust text size
+    #         # plot.margin = margin(1, 1, 1, 10)  # Increase left margin
+    #     ) +
+    #     theme_minimal() +
+    #     labs(
+    #         x = "Conditions", 
+    #         y = "Coefficient Value", 
+    #         title = sprintf("%s Coefficients", cl)
+    #     ) #+ facet_grid(~ Condition_Category)
+    
+    coef_df1 <- coef_df %>% filter(Coefficient > 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(desc(Coefficient)) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df1$order = order(rowSums(coef_df1[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    coef_df1$Condition = factor(coef_df1$Condition, levels = coef_df1$Condition[coef_df1$order])
+    coef_df1$Condition_Category = factor(coef_df1$Condition_Category, levels = combination_labels)
+    
+    coef_df2 <- coef_df %>% filter(Coefficient < 0) %>%
+        group_by(Condition_Category) %>%
+        arrange(Coefficient) %>%
+        mutate(
+            pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+            neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+        ) %>%
+        ungroup() %>% as.data.frame()
+    coef_df2$order = order(rowSums(coef_df2[,c("pos_cumsum", "neg_cumsum")]), decreasing=F)
+    coef_df2$Condition = factor(coef_df2$Condition, levels = coef_df2$Condition[coef_df2$order])
+    coef_df2$Condition_Category = factor(coef_df2$Condition_Category, levels = combination_labels)
+    
+    coef_df = rbind(coef_df1, coef_df2)
+    coef_df$Condition = factor(coef_df$Condition, levels = c(levels(coef_df1$Condition ), levels(coef_df2$Condition )))
+    coef_df$Condition_Category = factor(coef_df$Condition_Category, levels = combination_labels)
+    
+    # coef_df <- coef_df %>%
+    # group_by(Condition_Category, Coefficient > 0) %>%
+    #   arrange(desc(Coefficient)) %>%
+    #   mutate(
+    #     pos_cumsum = cumsum(ifelse(Coefficient > 0, Coefficient, 0)),
+    #     neg_cumsum = cumsum(ifelse(Coefficient < 0, Coefficient, 0))
+    #   ) %>%
+    #   ungroup() %>% as.data.frame()
+    # coef_df$pos_cumsum[coef_df$Coefficient<0] = 0
+    # coef_df$neg_cumsum[coef_df$Coefficient>0] = 0
+    # coef_df$order = order(rowSums(coef_df[,c("pos_cumsum", "neg_cumsum")]), decreasing=T)
+    # coef_df$Condition = factor(coef_df$Condition, levels = coef_df$Condition[coef_df$order])
+    
+    
+    # Plot the stacked barplot with adjusted text position
+    p = ggplot(coef_df) + 
+        geom_bar(aes(x = Condition_Category, y = Coefficient, fill = Condition), #reorder(Condition_Category, Coefficient)
+                 stat = "identity", position = "stack") +
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df1) +  # Add text labels for each condition
+        geom_text(aes(x = Condition_Category, 
+                      y = ifelse(Coefficient > 0, pos_cumsum - 0.5 * Coefficient, neg_cumsum - 0.5 * Coefficient), label = Condition), 
+                  # position = position_stack(vjust = 0.5),
+                  size = 3, data = coef_df2) +
+        # coord_flip() +  # Uncomment for horizontal bars
+        theme(
+            axis.text.y = element_text(size = 10),  # Adjust text size
+            axis.text.x = element_text(size = 10),  # Adjust text size
+        ) +
+        theme_minimal() +
+        labs(
+            x = "Condition Categories", 
+            y = "Coefficient Value", 
+            title = sprintf("%s Coefficients", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+
+dev.off()
+
+```
+
+Plot sample proportions based on the coeffs found above
+```{r}
+print(cl)
+
+pdf(sprintf("%s/%s/prop_by_clusters_mostsignifsamples.pdf",  prefix, prefix3), 15,10, useDingbats = F)
+
+for (cl in rownames(fit2$coefficients)) {
+    print(cl)
+    coef_data <- na.omit(fit2$coefficients[cl,][fit2$p.value[cl,] < 0.05])
+    tmp_list = list()
+    for (i in 1:length(names(coef_data))) {
+        tmp = mdata[which(design[,names(coef_data)[i]]==1),c(cl, "sample_code", "organ_simplified")]
+        tmp$high_low = ifelse(coef_data[i] > 0, yes = "high", no = "low")
+        tmp$Condition = names(coef_data)[i]
+        tmp_list[[i]] = tmp
+    }
+    tmp_list[["all"]] = mdata[,c(cl, "sample_code", "organ_simplified")]
+    tmp_list[["all"]]$high_low = "high"
+    tmp_list[["all"]]$Condition = "all"
+    
+    tmp = do.call(rbind, tmp_list) %>% as.data.frame()
+    tmp$Condition = gsub(pattern = "organ_simplified|condition_detailed_simplified|infection_phase|target_cells_simplified", replacement = "", x = tmp$Condition)
+    colnames(tmp)[colnames(tmp) == cl] = "value"
+    
+    tmp_summary <- tmp %>%
+        group_by(Condition) %>%
+        summarize(mean_value = mean(value, na.rm = TRUE)) %>%
+        arrange(desc(mean_value))  # Sort by mean in descending order
+    
+    tmp$Condition <- factor(tmp$Condition, levels = c("all", setdiff(tmp_summary$Condition, "all")))
+    # tmp$Condition <- factor(tmp$Condition, levels = tmp_summary$Condition)
+    # tmp$Condition = relevel(ref = "all")
+    
+    p = ggplot(tmp) +
+        # geom_beeswarm(aes(x = Condition, y = CD8_cl10.prop, fill = Condition), cex = 2, shape = 21, size = I(2), alpha = 0.5) +
+        geom_point(aes(x = Condition, y = value, color = high_low), size = 2, alpha = 0.5) +
+        # geom_boxplot(aes(x = Condition, y = value, alpha = ifelse(Condition == "all", 1, 0))) +
+        geom_point(data = tmp_summary, 
+                   aes(x = Condition, y = mean_value, group = Condition), 
+                   shape = 95, size = 10, color = "red") +  # Mean points
+        scale_color_manual(values = c("black", "blue")) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  # Rotate x-axis labels
+            axis.text.y = element_text(size = 12),
+            axis.title = element_text(size = 14),
+            plot.title = element_text(size = 16, face = "bold")
+        ) +
+        labs(
+            x = "Condition",
+            y = "Prop of all T",
+            title = sprintf("%s of all T cells in each condition (with Mean)", cl)
+        ) + NoLegend()
+    
+    print(p)
+}
+dev.off()
+
+```
+
+heatmap of coeff
+```{r}
+
+coefs = fit2$coefficients
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# coefs[fit2$p.value >= 0.05] = 1
+pvmat = pvmat[,colSums(is.na(coefs)) < 113]
+coefs = coefs[,colSums(is.na(coefs)) < 113]
+
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+pdf(sprintf("%s/%s/heatmap_coeffs.pdf",  prefix, prefix3), 20,20, useDingbats = F)
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(coefs, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+```
+
+Tissue effect
+```{r}
+coefs = fit2$coefficients
+pvmat = t(fit2$p.value) # pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+coefs[pvmat > 0.05] = 0
+coefs[coefs<0] = 0
+coefs[is.na(coefs)] = 0
+
+tmp = coefs[,1:21] %>% melt()
+tmp$annotation_level2 = gsub(pattern = "\\.prop", "", tmp$Var1)
+tmp$organ_simplified = gsub(pattern = "organ_simplified", "", tmp$Var2)
+tmp = tmp[!tmp$organ_simplified == "SLO",] 
+tmp$Var1 = NULL
+tmp$Var2 = NULL
+tmp$annotation_level1 = gsub("_cl.*|_prolif|_miniverse|_54.*|_52.*", "", tmp$annotation_level2)
+tmp$value[tmp$value<0] = 0
+
+summary_data = tmp %>%
+  group_by(annotation_level1, annotation_level2) %>%
+  summarize(
+    sum_value = mean(value, na.rm = TRUE),
+    var_value = var(value, na.rm = TRUE),
+    varnorm = var_value/sum_value,
+    .groups = "drop"  # To remove the grouping after summarizing
+  ) %>% as.data.frame()
+
+summary_data %>% arrange(varnorm)
+
+pdf(sprintf("%s/%s/organ_effect_scatterplot.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+p = ggplot(summary_data) + geom_point(aes(x = sum_value, y = var_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+  geom_text(aes(x = sum_value, y = var_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+    scale_color_manual(values = mypal_level1) +
+  theme_minimal() +
+  labs(
+    x = "Mean effect",
+    y = "Variance",
+    title = "Organ influence"
+  ) + NoLegend()
+print(p)
+
+p = ggplot(summary_data) + geom_point(aes(x = sum_value, y = var_value/sum_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+  geom_text(aes(x = sum_value, y = var_value/sum_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+  theme_minimal() +
+    scale_color_manual(values = mypal_level1) +
+  labs(
+    x = "Mean effect",
+    y = "Variance",
+    title = "Organ influence"
+  ) + NoLegend()
+print(p)
+
+# ggplot(summary_data, aes(x = sum_value, fill = annotation_level1)) +
+#   geom_density(alpha = 0.6, position = "stack") +  # Add density plot with transparency
+#   theme_minimal() +
+#   labs(
+#     x = "Value",
+#     y = "Density",
+#     title = "Density Plot by Annotation Level 1",
+#     fill = "Annotation Level 1"
+#   )
+
+p = ggplot(summary_data) +
+    geom_boxplot(aes(x = annotation_level1, y = sum_value, fill = annotation_level1), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    geom_jitter(aes(x = annotation_level1, y = sum_value), width = 0.2, alpha = 0.4, size = 2) +
+    geom_text(data = subset(summary_data, sum_value > 0.1), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+              size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_level1) +
+    theme_minimal() +
+    labs(
+        x = "Annotation Level 1",
+        y = "Value",
+        title = "Boxplot by Annotation Level 1",
+        fill = "Annotation Level 1"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  +# Rotate x-axis labels for better visibility
+    NoLegend()
+print(p)
+
+dev.off()
+
+# ggplot(summary_data) + geom_point(aes(x = annotation_level2, y = sum_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+#   # geom_text(aes(x = sum_value, y = var_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+#   theme_minimal() +
+#   labs(
+#     x = "Annotation Level 2",
+#     y = "Variance",
+#     title = "Organ influence"
+#   ) + NoLegend()
+
+pdf(sprintf("%s/%s/organ_effect_PiechartbyLevel2.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (cl in unique(tmp$annotation_level2)) {
+    print(cl)
+    summary_data = tmp %>% mutate(prop = value/ max(value)) %>% filter(annotation_level2 == cl) #divide effect by max effect across all cells
+    summary_data = summary_data %>% bind_rows(tibble(value = NA,
+                                                     annotation_level2 = "", 
+                                                     organ_simplified = "none", 
+                                                     annotation_level1 = "",
+                                                     prop = max(0,1 - sum(summary_data$prop)))) %>% arrange(prop) %>% as.data.frame() #normalize to have max effect of 1 by adding none if sum of effect doesn't sum to one.
+    summary_data$prop = summary_data$prop / sum(summary_data$prop)
+    # summary_data = tmp %>% mutate(prop = value/ max(value)) %>% filter(annotation_level2 == "CD4_cl16") %>% ungroup() %>% arrange(prop) %>% as.data.frame() #
+    # summary_data = rbind(summary_data, c(1-sum(summary_data$value), "CD4_cl16", "other", "CD4"))
+    # summary_data = tmp %>% group_by(annotation_level2) %>% mutate(prop = value/ sum(value)) %>% filter(annotation_level2 == "CD4_cl16") %>% ungroup() %>% arrange(prop) %>% as.data.frame() #
+    summary_data$organ_simplified = factor(summary_data$organ_simplified, levels = c("none", setdiff(summary_data$organ_simplified,"none")))
+    
+    p = ggplot(summary_data, aes(x = "", y = prop, fill = organ_simplified)) +
+        scale_fill_manual(values = mypal_organ) +
+        geom_bar(stat = "identity", width = 1) +  # Bar plot with identity stat for pie chart
+        coord_polar(theta = "y") +  # Convert the bar plot to a pie chart
+        theme_void() +  # Remove axis labels
+        labs(title = sprintf("%s Pie Chart of Proportion for Organ",cl), fill = "Annotation Level 2") +
+        theme(axis.text.x = element_blank()) +
+        geom_text(aes(label = organ_simplified), position = position_stack(vjust = 0.5), size = 5) + # Add percentage labels 
+        NoLegend()
+    print(p)
+}
+dev.off()
+
+
+```
+
+Disease effect
+```{r}
+#Filtering out the nonsignif effects
+coefs = fit2$coefficients
+pvmat = t(fit2$p.value) # pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+coefs[pvmat > 0.05] = 0
+coefs[coefs<0] = 0
+coefs[is.na(coefs)] = 0
+
+tmp = coefs[,22:70] %>% melt()
+tmp$annotation_level2 = gsub(pattern = "\\.prop", "", tmp$Var1)
+tmp$condition_detailed_simplified = gsub(pattern = "condition_detailed_simplified", "", tmp$Var2)
+tmp$Var1 = NULL
+tmp$Var2 = NULL
+tmp$annotation_level1 = gsub("_cl.*|_prolif|_miniverse|_54.*|_52.*", "", tmp$annotation_level2)
+tmp$value[tmp$value<0] = 0
+tmp$value[tmp$value<0] = 0
+
+summary_data = tmp %>%
+  group_by(annotation_level1, annotation_level2) %>%
+  summarize(
+    sum_value = mean(value, na.rm = TRUE),
+    var_value = var(value, na.rm = TRUE),
+    varnorm = var_value/sum_value,
+    .groups = "drop"  # To remove the grouping after summarizing
+  ) %>% as.data.frame()
+
+summary_data %>% arrange(desc(varnorm))
+
+pdf(sprintf("%s/%s/disease_effect_scatterplot.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+p = ggplot(summary_data) + geom_point(aes(x = sum_value, y = var_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+  geom_text(aes(x = sum_value, y = var_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+    scale_color_manual(values = mypal_level1) +
+  theme_minimal() +
+  labs(
+    x = "Mean effect",
+    y = "Variance",
+    title = "Disease influence"
+  ) + NoLegend()
+print(p)
+
+p = ggplot(summary_data) + geom_point(aes(x = sum_value, y = var_value/sum_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+  geom_text(aes(x = sum_value, y = var_value/sum_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+  theme_minimal() +
+    scale_color_manual(values = mypal_level1) +
+  labs(
+    x = "Mean effect",
+    y = "Variance",
+    title = "Disease influence"
+  ) + NoLegend()
+print(p)
+
+# ggplot(summary_data, aes(x = sum_value, fill = annotation_level1)) +
+#   geom_density(alpha = 0.6, position = "stack") +  # Add density plot with transparency
+#   theme_minimal() +
+#   labs(
+#     x = "Value",
+#     y = "Density",
+#     title = "Density Plot by Annotation Level 1",
+#     fill = "Annotation Level 1"
+#   )
+
+p = ggplot(summary_data) +
+    geom_boxplot(aes(x = annotation_level1, y = sum_value, fill = annotation_level1), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    geom_jitter(aes(x = annotation_level1, y = sum_value), width = 0.2, alpha = 0.4, size = 2) +
+    geom_text(data = subset(summary_data, sum_value > 0.02), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+              size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_level1) +
+    theme_minimal() +
+    labs(
+        x = "Annotation Level 1",
+        y = "Value",
+        title = "Disease influence",
+        fill = "Annotation Level 1"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  +# Rotate x-axis labels for better visibility
+    NoLegend()
+print(p)
+
+dev.off()
+
+# ggplot(summary_data) + geom_point(aes(x = annotation_level2, y = sum_value, color = annotation_level1), size = 4) +  # Scatter plot for the sums vs variances
+#   # geom_text(aes(x = sum_value, y = var_value, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+#   theme_minimal() +
+#   labs(
+#     x = "Annotation Level 2",
+#     y = "Variance",
+#     title = "Organ influence"
+#   ) + NoLegend()
+
+pdf(sprintf("%s/%s/disease_effect_PiechartbyLevel2.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (cl in unique(tmp$annotation_level2)) {
+    print(cl)
+    summary_data = tmp %>% mutate(prop = value/ max(value)) %>% filter(annotation_level2 == cl) #divide effect by max effect across all cells
+    summary_data = summary_data %>% bind_rows(tibble(value = NA,
+                                                     annotation_level2 = "", 
+                                                     condition_detailed_simplified = "none", 
+                                                     annotation_level1 = "",
+                                                     prop = max(0,1 - sum(summary_data$prop)))) %>% arrange(prop) %>% as.data.frame() #normalize to have max effect of 1 by adding none if sum of effect doesn't sum to one.
+    summary_data$prop = summary_data$prop / sum(summary_data$prop)
+    # summary_data = tmp %>% mutate(prop = value/ max(value)) %>% filter(annotation_level2 == "CD4_cl16") %>% ungroup() %>% arrange(prop) %>% as.data.frame() #
+    # summary_data = rbind(summary_data, c(1-sum(summary_data$value), "CD4_cl16", "other", "CD4"))
+    # summary_data = tmp %>% group_by(annotation_level2) %>% mutate(prop = value/ sum(value)) %>% filter(annotation_level2 == "CD4_cl16") %>% ungroup() %>% arrange(prop) %>% as.data.frame() #
+    summary_data$condition_detailed_simplified = factor(summary_data$condition_detailed_simplified, levels = c("none", setdiff(summary_data$condition_detailed_simplified,"none")))
+    
+    p = ggplot(summary_data, aes(x = "", y = prop, fill = condition_detailed_simplified)) +
+        scale_fill_manual(values = mypal_condition_detailed_simplified) +
+        geom_bar(stat = "identity", width = 1) +  # Bar plot with identity stat for pie chart
+        coord_polar(theta = "y") +  # Convert the bar plot to a pie chart
+        theme_void() +  # Remove axis labels
+        labs(title = sprintf("%s Pie Chart of Proportion for Disease",cl), fill = "Annotation Level 2") +
+        theme(axis.text.x = element_blank()) +
+        geom_text(aes(label = condition_detailed_simplified), position = position_stack(vjust = 0.5), size = 5) + # Add percentage labels 
+        NoLegend()
+    print(p)
+}
+dev.off()
+
+
+```
+
+plot Tissue vs Disease effect
+```{r}
+coefs = fit2$coefficients
+pvmat = t(fit2$p.value) # pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+coefs[pvmat > 0.05] = 0
+coefs[coefs<0] = 0
+coefs[is.na(coefs)] = 0
+
+organ = coefs[,1:21] %>% melt()
+organ$annotation_level2 = gsub(pattern = "\\.prop", "", organ$Var1)
+organ$organ_simplified = gsub(pattern = "organ_simplified", "", organ$Var2)
+organ = organ[!organ$organ_simplified == "SLO",] 
+organ$Var1 = NULL
+organ$Var2 = NULL
+organ$annotation_level1 = gsub("_cl.*|_prolif|_miniverse|_54.*|_52.*", "", organ$annotation_level2)
+organ$value[organ$value<0] = 0
+
+summary_organ = organ %>%
+  group_by(annotation_level1, annotation_level2) %>%
+  summarize(
+    sum_value = mean(value, na.rm = TRUE),
+    var_value = var(value, na.rm = TRUE),
+    varnorm = var_value/sum_value,
+    .groups = "drop"  # To remove the grouping after summarizing
+  ) %>% as.data.frame()
+
+disease = coefs[,22:70] %>% melt()
+disease$annotation_level2 = gsub(pattern = "\\.prop", "", disease$Var1)
+disease$condition_detailed_simplified = gsub(pattern = "condition_detailed_simplified", "", disease$Var2)
+disease$Var1 = NULL
+disease$Var2 = NULL
+disease$annotation_level1 = gsub("_cl.*|_prolif|_miniverse|_54.*|_52.*", "", disease$annotation_level2)
+disease$value[disease$value<0] = 0
+disease$value[disease$value<0] = 0
+
+summary_disease = disease %>%
+  group_by(annotation_level1, annotation_level2) %>%
+  summarize(
+    sum_value = mean(value, na.rm = TRUE),
+    var_value = var(value, na.rm = TRUE),
+    varnorm = var_value/sum_value,
+    .groups = "drop"  # To remove the grouping after summarizing
+  ) %>% as.data.frame()
+
+# summary_disease$variable = "disease"
+# summary_organ$variable = "organ"
+
+tmp = merge(summary_disease,summary_organ, by = "annotation_level2", suffixes = c(".disease",".organ"))
+
+
+pdf(sprintf("%s/%s/organ_vs_disease_effect_scatterplot.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+p = ggplot(tmp) + geom_point(aes(x = sum_value.organ, y = sum_value.disease, color = annotation_level1.organ), size = 4) +  # Scatter plot for the sums vs variances
+  geom_text(aes(x = sum_value.organ, y = sum_value.disease, label = annotation_level2), vjust = -1, size = 4) +  # Add labels for each point
+    scale_color_manual(values = mypal_level1) +
+    scale_x_continuous( limits = c(0,0.35)) +
+    scale_y_continuous( limits = c(0,0.35)) +
+  theme_minimal() +
+  labs(
+    x = "Organ effect",
+    y = "Disease effect",
+    title = "Organ vs Disease influence"
+  ) + NoLegend()
+print(p)
+
+p + facet_wrap(~annotation_level1.organ)
+
+dev.off()
+
+
+```
+
+
+Time effect
+```{r}
+contrasts = c("infection_phaseearly-infection_phaselate")
+namescontrasts = "early_v_late"
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit3 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit3 = eBayes(fit3, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+pdf(sprintf("%s/%s/early_vs_late.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+plot(fit3$coefficients[,"early_v_late"], -log10(fit3$p.value[,"early_v_late"]), pch = ".")
+text(fit3$coefficients[,"early_v_late"], -log10(fit3$p.value[,"early_v_late"]), labels = rownames(fit3$coefficients), cex = 0.5)
+dev.off()
+
+```
+
+Plot effects on MDE
+
+```{r}
+so = readRDS("igt1_96_withtotalvi20250226.Rds")
+so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
+so_orig = so
+so = so_orig
+umap_to_plot = "mde2_totalvi_20241006"
+
+coefs = fit2$coefficients
+pvmat = fit2$p.value # pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+coefs[pvmat > 0.05] = 0
+coefs[is.na(coefs)] = 0
+coefs[coefs > 1] = 1
+coefs[coefs < -1] = -1
+coefs = as.data.frame(coefs)
+
+coefs$annotation_level2 = gsub(pattern = ".prop","",rownames(coefs))
+tmp = merge(so@meta.data, coefs[,c(1:70,which(colnames(coefs) == "annotation_level2"))],by.x = "annotation_level2", by.y = "annotation_level2")
+rownames(tmp) = tmp$IGT_cellID
+tmp = tmp[colnames(so),]
+all(rownames(tmp) == colnames(so))
+so@meta.data = tmp
+
+pdf(sprintf("%s/%s/MDE_coeffs.pdf",  prefix, prefix3), 10,10, useDingbats = F)
+for (i in colnames(coefs)[1:70]) {
+    print(i)
+    p = FeaturePlot(so, reduction = umap_to_plot, features = i, raster = T, raster.dpi = c(1024,1024)) + scale_color_gradientn(colors = ColorRamp, limits = c(-1, 1))
+    print(p)
+}
+dev.off()
+
+dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/"
+so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEachLevel1.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
+
+so_split = SplitObject(so, split.by = "annotation_level1")
+names(so_split)
+
+for (j in names(so_split)) {
+    print(j)
+    pdf(sprintf("%s/%s/MDE_coeffs_%s.pdf",  prefix, prefix3, j), 10,10, useDingbats = F)
+    for (i in colnames(coefs)[1:70]) {
+        print(i)
+        p = FeaturePlot(so_split[[j]], reduction = "mde_incremental", features = i, raster = T, raster.dpi = c(512,512)) + scale_color_gradientn(colors = ColorRamp, limits = c(-1, 1))
+        print(p)
+    }
+    dev.off()
+}
+
+
+
+```
+
+
+**factor analysis of sample x proportions? like gene programs?**
+```{r}
+
+```
+
+############Other trials 
 **Limma challenge organ time**
 
 target_cells_simplified allT or CD45p
@@ -227,18 +1541,19 @@ saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
 
 ```
 
-
-
-Effect of organ
+Interaction model allT all conditions
 ```{r}
+mdata$infection_phase_orig = mdata$infection_phase
+mdata$infection_phase = as.character(mdata$infection_phase_orig)
+mdata$infection_phase[mdata$infection_phase_orig %in% c("chronic", "cleared")] = "late"
+mdata$infection_phase[mdata$infection_phase_orig %in% c("acute")] = "early"
+mdata$infection_phase = factor(mdata$infection_phase)
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
 # Create the design matrix for the linear model
-design = model.matrix(~ 0 + organ_simplified + condition_detailed_simplified + infection_phase, data = mdata) #make sure no empty category! otherwise creates an error during fit
 design = model.matrix(~ 0 + organ_simplified * condition_detailed_simplified * infection_phase, data = mdata)
-design = model.matrix(~ 0 + infection_phase * organ_simplified * condition_detailed_simplified , data = mdata)
-design = model.matrix(~ organ_simplified + condition_detailed_simplified + infection_phase, data = mdata)
-design = model.matrix(~ 0 + organ_simplified, data = mdata)
-colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
-colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+# colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+# colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
 colnames(design) = make.names(colnames(design))
 # Select the columns that match "^F" in mdata (assuming these are numeric variables)
 feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
@@ -246,7 +1561,7 @@ feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
 fit = lmFit(feature_data, design)
 # saveRDS(fit, file = sprintf("%s/%s/fit.Rds",  prefix, prefix3))
 # fit = readRDS(sprintf("%s/%s/fit.Rds",  prefix,prefix3))
-# fit2 = eBayes(fit, proportion = 0.1, trend = F)
+fit2 = eBayes(fit, proportion = 0.1, trend = T, robust = T)
 # topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
 # topTable(fit2, coef = 1, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
 # results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
@@ -258,6 +1573,17 @@ fit = lmFit(feature_data, design)
 # 
 # plot(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], pch = ".")
 # text(fit2$coefficients[,"colon"]-fit2$coefficients[,"spleen"], fit2$coefficients[,"lung"]-fit2$coefficients[,"spleen"], labels = rownames(fit2$coefficients), cex = 0.5)
+
+#Study coefficients themselves
+# barplot(sort(na.omit(fit2$coefficients[1,][fit2$p.value[1,]<0.05])))
+# barplot(sort(na.omit(fit2$coefficients[1,][fit2$p.value[1,]<0.05]), decreasing = T), las = 2)
+# par(mar = c(5, 10, 4, 2))  
+# barplot(sort(na.omit(fit2$coefficients["CD8_cl10.prop",][fit2$p.value["CD8_cl10.prop",]<0.05]), decreasing = T), las = 2, horiz = T)
+# barplot(sort(na.omit(fit2$coefficients["Treg_cl2.prop",][fit2$p.value["Treg_cl2.prop",]<0.05]), decreasing = T), las = 2, horiz = T)
+
+
+
+
 
 prefix4 = "organ_effect"
 ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
@@ -291,7 +1617,7 @@ for (cl in levels(metadata$organ_simplified)) {
     namescontrasts[cl] = sprintf("%s_vs_spleen", cl)
 }
 
-metadata = mdata %>% select(infection_phase) %>% unique()
+metadata = mdata %>% select(infection_phase) %>% unique() 
 rownames(metadata) = NULL
 contrasts = c()
 namescontrasts = c()
@@ -308,6 +1634,141 @@ for (cl in levels(metadata$infection_phase)) {
     namescontrasts[cl] = sprintf("%s_vs_none", cl)
 }
 
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+
+
+plot(fit2$coefficients[,"acute_vs_none"], fit2$coefficients[,"cleared_vs_none"], pch = ".")
+text(fit2$coefficients[,"acute_vs_none"], fit2$coefficients[,"cleared_vs_none"], labels = rownames(fit$coefficients), cex = 0.5)
+plot(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"chronic_vs_none"], pch = ".")
+text(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"chronic_vs_none"], labels = rownames(fit$coefficients), cex = 0.5)
+
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.1,0.1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+Interaction model allT healthy
+```{r}
+mdata = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & condition_broad == "healthy") %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+
+# Create the design matrix for the linear model
+design = model.matrix(~ 0 + organ_simplified, data = mdata)
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+
+prefix4 = "organ_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+#subset the metadata depending on the design above and wanted contrast, i.e. remove the confounding
+# metadata = mdata %>% select(annotation_level2, IGTHT) %>% unique() (IGTHT is the confounding)
+metadata = mdata %>% select(organ_simplified) %>% unique()
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$organ_simplified)) {
+    print(cl)
+    group1_filter <- expr(organ_simplified == cl)
+    group2_filter <- expr(!(organ_simplified %in% cl)) #expr(organ_simplified == levels(metadata$organ_simplified)[1])
+    groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    nmecontrast = sprintf("%s_vs_All", cl)
+    group1 = groups[[1]]
+    group2 = groups[[2]]
+    contrasts[cl] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
+    namescontrasts[cl] = nmecontrast
+}
 
 message("contrasts.fit...")
 cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
@@ -395,6 +1856,169 @@ write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix
 message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
 
 ```
+
+Interaction model in LCMV only
+```{r}
+# Create the design matrix for the linear model
+mdata = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & condition_detailed_simplified %in% c("baseline", "LCMVarm", "LCMVcl13")) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+# mdata = mdata_orig %>% filter(condition_detailed_simplified %in% c("baseline", "LCMVarm", "LCMVcl13")) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+
+design = model.matrix(~ 0 + infection_phase * organ_simplified * condition_detailed_simplified , data = mdata)
+colnames(design) = gsub("organ_simplified|condition_detailed_simplified|infection_phase", "", colnames(design))
+colnames(design) = gsub("IGTIGT", "IGT", colnames(design))
+colnames(design) = make.names(colnames(design))
+# Select the columns that match "^F" in mdata (assuming these are numeric variables)
+feature_data = t(mdata[, grepl("*prop", colnames(mdata))])
+# Fit the linear model using limma
+fit = lmFit(feature_data, design)
+
+plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+
+prefix4 = "organ_effect"
+ensure_directory(sprintf("%s/%s/%s", prefix,prefix3,prefix4))
+
+metadata = mdata %>% select(infection_phase) %>% unique() 
+rownames(metadata) = NULL
+contrasts = c()
+namescontrasts = c()
+for (cl in levels(metadata$infection_phase)) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    # contrasts[cl] = cl
+    contrasts[cl] = sprintf("%s-none", cl)
+    namescontrasts[cl] = sprintf("%s_vs_none", cl)
+}
+
+coeff_names = colnames(design)
+contrasts = c()
+namescontrasts = c()
+for (cl in coeff_names) {
+    print(cl)
+    # group1_filter <- expr(organ_simplified == cl)
+    # group2_filter <- expr(!(organ_simplified %in% cl))
+    # groups = GetGroups(metadata, group1_filter,group2_filter, "organ_simplified")
+    # nmecontrast = sprintf("%s_vs_spleen", cl)
+    # group1 = groups[[1]]
+    # group2 = groups[[2]]
+    # contrasts[cl] = cl
+    contrasts[cl] = sprintf("%s-none", cl)
+    namescontrasts[cl] = sprintf("%s_vs_none", cl)
+}
+
+
+
+message("contrasts.fit...")
+cont.matrix = makeContrasts( contrasts = contrasts, levels = design)
+colnames(cont.matrix) = namescontrasts
+# colnames(cont.matrix) = names(contrasts)
+fit2 = contrasts.fit(fit, cont.matrix)
+message("eBayes...")
+fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
+# saveRDS(fit2, sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+# fit2 = readRDS(sprintf("%s/%s/fit_contrast.Rds",  prefix3))
+
+plot(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], pch = ".")
+text(fit$coefficients[,"acute"], fit$coefficients[,"cleared"], labels = rownames(fit$coefficients), cex = 0.5)
+
+
+plot(fit2$coefficients[,"acute_vs_none"], fit2$coefficients[,"cleared_vs_none"], pch = ".")
+text(fit2$coefficients[,"acute_vs_none"], fit2$coefficients[,"cleared_vs_none"], labels = rownames(fit$coefficients), cex = 0.5)
+plot(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"chronic_vs_none"], pch = ".")
+text(fit2$coefficients[,"cleared_vs_none"], fit2$coefficients[,"chronic_vs_none"], labels = rownames(fit$coefficients), cex = 0.5)
+
+
+#write coefficients
+# results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
+# write.table(results, file = sprintf("%s/%s/coefficients.csv",  prefix, prefix3), quote = F, row.names = T, col.names = T, sep = ",")
+
+#Heatmap
+# Extract p-values for all comparisons
+pvmat = apply(fit2$p.value, 1, function(x) p.adjust(x, method = "BH"))
+pvmat[is.na(pvmat)] = 1
+pvmat = t(pvmat)
+# extract_numeric(rownames(pvmat)) == extract_numeric(rownames(factor_means))
+# extract_numeric(colnames(pvmat)) == extract_numeric(colnames(factor_means))
+labels_matrix = pvmat
+labels_matrix[pvmat<0.05] = "*"
+labels_matrix[pvmat<0.01] = "**"
+labels_matrix[pvmat<0.001] = "***"
+labels_matrix[pvmat>0.05] = ""
+
+pdf(sprintf("%s/%s/%s/heatmap.pdf",  prefix, prefix3, prefix4), 10,10, useDingbats = F)
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.1,0.1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, main = "fit2$coefficients")
+pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-0.2,0.2,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
+dev.off()
+
+
+#Write Tables and Volcanos
+tt_list = list()
+for (i in colnames(fit2$contrasts)) { #colnames(cont.matrix)
+    print(i)
+    tt_list[[i]] = topTable(fit2,coef = i ,n = Inf, adjust.method = "BH", sort.by = "none")
+    tt_list[[i]]$SYMBOL = rownames(tt_list[[i]])
+    # tt_list[[i]]$SYMBOL = gene_symbol
+}
+
+tmp = tt_list
+names(tmp)
+
+saveRDS(tt_list, file = sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+message("Results saved to: ", sprintf("%s/%s/%s/ttlist.Rds",  prefix,prefix3,prefix4))
+
+pdf(sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4), width = 10, height = 10)
+for (i in 1:length(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(pval < 0.05) %>% #abs(log2(fc)) > 0.5 & 
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+message("Plots saved to: ", sprintf("%s/%s/%s/DiffExpression_volcanos.pdf",  prefix,prefix3,prefix4))
+
+if (length(tt_list) > 1) {
+    tt = CollapseDiff_limmatrend(tt_list)
+} else {
+    tt = tt_list[[1]]
+}
+tt$SYMBOL = rownames(tt)
+colnames(tt) = gsub(pattern = "AveExpr", replacement = "log2AveExpr", colnames(tt))
+colnames(tt) = gsub(pattern = "logFC", replacement = "log2FC", colnames(tt))
+tt = data.frame(SYMBOL = tt$SYMBOL, tt[,!colnames(tt) %in% "SYMBOL"])
+write.table(x = tt, file = sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4), sep = "\t", quote = F)
+message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefix4))
+
+```
+
+
 
 Effect of timing
 ```{r}
@@ -686,7 +2310,7 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefi
 
 ```
 
-(model with IGTHT -- same as before pretty much and doesn't work as well --> forget)
+(model with IGTHT and call samples in contrasts -- same as before pretty much and doesn't work as well --> forget)
 ```{r}
 # Create the design matrix for the linear model
 design = model.matrix(~ 0 + IGTHT, data = mdata) #make sure no empty category! otherwise creates an error during fit
@@ -955,13 +2579,10 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt",  prefix,prefix3,prefi
 
 ```
 
-
-
-
-**LIMMA Treg**
+**limma Treg**
 
 lm with organ in healthy: ~ 0 + organ_simplified + IGT
-very similar/almost same as ~ 0 + organ_simplified !
+very similar/almost same as ~ 0 + organ_simplified ! --> no need to include IGT
 
 ```{r}
 prefix3 = "limma/organsimplified_Treg"
@@ -970,7 +2591,6 @@ ensure_directory(sprintf("%s/%s", prefix,prefix3))
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
 
 ```
-
 
 ```{r}
 prefix3 = "limma/organsimplified_Treg"
@@ -1333,52 +2953,4 @@ write.table(x = tt, file = sprintf("%s/%s/ttlist.txt",  prefix,prefix3), sep = "
 message("Table saved to: ", sprintf("%s/%s/ttlist.txt",  prefix,prefix3))
 
 ```
-
-
-
-
-To do later?
-```{r}
-##2. Composition of each organ 
-df = data.frame(cluster = factor(sprintf("cl%s",so@meta.data[,res]), levels = sprintf("cl%s",as.character(c(0:(length(unique(so@meta.data[,res]))-1))))), 
-                sample = factor(so$organ, levels = sort(unique(so$organ))) )
-tmp = table(df$cluster, df$sample)
-tmp2 = t(t(tmp) / colSums(tmp)) # normalize the number of cells per sample
-colSums(tmp2)
-tmp3 = tmp2
-rowSums(tmp3)
-tmp4 = melt(tmp3)
-head(tmp4)
-tmp4$sample = df$sample[match(tmp4$Var2, df$sample)]
-
-pdf(file = sprintf("%s_OrganComposition_%s.pdf", prefix, res), width =30, height =20)
-ColorRamp = rev(viridis(100))
-tmp3[tmp3==0] = NA
-labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)*100))
-#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
-pheatmap(mat = signif(tmp3,2)*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 15, main = "Percent of cells in each IGT", na_col = "#FDE725")
-
-ggplot(tmp4) + geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
-
-ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0 ) + 
-    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
-    scale_color_manual(values = mypal) +
-    scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
-    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
-
-ggplot(tmp4, aes(Var1, value)) + geom_boxplot(aes(fill = sample, group = Var1), outlier.alpha = 0) + 
-    geom_jitter(aes(Var1, value, color = sample), position = position_jitter(width = 0.2), size = I(5), alpha = 0.7) +
-    scale_color_manual(values = mypal) +
-    theme_bw()+ ggtitle(label = "Cluster composition in each  organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
-
-
-ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample)  + NoLegend()
-
-ggplot(tmp4) + geom_point(aes(Var1, value, color = sample), size = I(3), alpha = 0.7) + scale_color_manual(values = mypal) + theme_bw()+ ggtitle(label = "Cluster composition in each organ") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + facet_wrap(~sample) + NoLegend()
-
-dev.off()
-
-
-```
-
 
