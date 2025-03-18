@@ -1589,7 +1589,7 @@ pdf(sprintf("%s/MDE_annotation_level1.pdf", prefix), 20, 20, useDingbats = F)
 umap_to_plot = "mde_incremental"
 DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
 DimPlot(so, reduction = umap_to_plot, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)  + theme_void() + NoLegend()
-dev.off
+dev.off()
 
 pdf("notCD4CD8_plots.pdf", 15, 15, useDingbats = F)
 MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[(which(so_orig$annotation_level1 %in% c("gdT", "nonconv", "abT_CD8aa", "abT_DN", "abT_DP", "prolif" )))], highlight_column = "annotation_level1", pixels = c(512, 512), mycols = mypal)
@@ -1680,12 +1680,22 @@ for (IGT in unique(so_all$IGT)) {
     
 }
 
-
-
 ```
 
+**Sample data**
+```{r}
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316_clean.Rds")
 
+sampled_cells = so@meta.data %>%
+    group_by(annotation_level2) %>%
+    group_modify(~ slice_sample(.x, n = min(200, nrow(.x)), replace = FALSE)) %>%
+    ungroup() %>%
+    pull(cellID)
+length(sampled_cells)
 
+so[["mde2_totalvi_20241006"]]@cell.embeddings[sampled_cells,] %>% write.table("igt1_96_sampled_20K_MDE_20250316.csv", quote = F, row.names = T, col.names = T, sep = ",")
+
+```
 
 **Integration evaluation: conservation of HVG**
 Calculate mean intracluster distances in one batch before and after integration

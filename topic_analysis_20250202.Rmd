@@ -59,6 +59,7 @@ library(viridis)
 ColorRamp = rev(viridis(100))
 ColorRamp = rev(cividis(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = colorRampPalette(c('white','red'))(20)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
 # ColorRamp = colorRampPalette(c('Red'))(20)
 #image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
@@ -110,25 +111,29 @@ rm(so2)
 so$spleen_standard = so$organ_simplified == "spleen" & so$jax == T & so$condition_broad == "healthy" & so$age_weeks >= 6 & so$age_weeks <= 8 & so$target_cells_simplified %in% c("allT", "CD45p")
 spl_cells = colnames(so)[so$spleen_standard]
 
+so@meta.data %>% filter(spleen_standard == T) %>% select(IGTHT, sample_code) %>% unique()
+so@meta.data %>% filter(spleen_standard == T) %>% select(IGTHT, sample_code) %>% unique() %>% write.table(file = "export_data/spleen_standard_samples.txt", row.names = F, col.names = T, quote = F, sep = "\t")
+
 # so@meta.data %>% filter(spleen_standard == T) %>% select(IGT) %>% unique() %>% dim()
 ```
 
 
-topic_wrapper_20250203_sampleddata_nobackfit.sh -- sampled data no backfit
-topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit
-topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit
-topic_wrapper_20250203_alldata_backfit.sh -- all cells data + backfit
-
-flashier20250215_alldata_nobackfit
-flashier20250215_sampleddata_nobackfit
+topic_wrapper_20250203_sampleddata_nobackfit.sh -- sampled data no backfit + K=50
+topic_wrapper_20250203_sampleddata_backfit.sh -- sampled cells + backfit + K=50
+topic_wrapper_20250203_alldata_nobackfit.sh -- all cells no backfit + K=50
+topic_wrapper_20250203_alldata_backfit.sh -- all cells data + backfit + K=50
+flashier20250215_alldata_nobackfit -- all cells  + no backfit + K=200
+flashier20250215_sampleddata_nobackfit -- sampled cells + No backfit + K=200
+flashier20250215_alldata_backfit -- all cells data + backfit + K=200
 
 
 *Plots for flashier object*
 ```{r}
 prefix = "topic"
 # prefix2 = "flashier20250203_sampleddata_backfit"
-prefix2 = "flashier20250203_alldata_backfit"
+# prefix2 = "flashier20250203_alldata_backfit"
 # prefix2 = "flashier20250215_sampleddata_nobackfit"
+prefix2 = "flashier20250215_alldata_backfit"
 fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
 #round(fit$L_pm[1:10, ], digits = 3)
 
@@ -138,19 +143,19 @@ all(rownames(fit$L_pm) == colnames(so))
 
 scree_plot.pdf
 ```{r}
-pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 10, 5, useDingbats = F)
 # plot(fit, include_scree = T, include_pm = F, plot_type = "scree")
 plot(fit, plot_type = "scree")
 dev.off()
 
+# data.frame(factor = sprintf("F%s", 1:ncol(fit$F_pm)), pve = fit$pve) %>% write.table(sprintf("%s/%s/factor_pve.txt", prefix, prefix2), quote = F, sep = "\t", row.names = F, col.names = T)
 sum(fit$pve)
-fit$pve
 order(fit$pve, decreasing = T)
 ```
 
 histogram_loadings_plot.pdf
 ```{r}
-pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 20, 20, useDingbats = F)
+pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 40, 40, useDingbats = F)
 plot(fit,
      # include_scree = F,
      # include_pm = T,
@@ -247,13 +252,13 @@ for (i in 1:fit$n_factors) {
 dev.off()
 
 message("factors_heatmap.pdf")
-pdf(sprintf("%s/%s/factors_heatmap.pdf", prefix, prefix2), 10,60, useDingbats = F)
+pdf(sprintf("%s/%s/factors_heatmap.pdf", prefix, prefix2), 10,40, useDingbats = F)
 tmp3 = F1[top_genes,]
 tmp3[tmp3>3] = 3
 tmp3[tmp3 < -3] = -3
-ColorRamp = viridis(100)
+# ColorRamp = viridis(100)
 colnames(tmp3) = sprintf("factor%s", 1:ncol(F1))
-pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "FC in top 20 genes in topics")
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 1, fontsize_col = 1,  main = "FC in top 20 genes in topics")
 dev.off()
 
 
@@ -293,7 +298,7 @@ for (i in colnames(mdata)[grepl("^F",colnames(mdata))]) {
     print(i)
     p = ggplot(mdata[mdata$spleen_standard == T,], aes(IGT, !!sym(i))) + 
         geom_boxplot(aes(fill = IGT, group = IGT) ) + 
-        ylim(0,ceiling(max(mdata[mdata$spleen_standard == T,grepl("^F",colnames(mdata))]))) +
+        # ylim(0,ceiling(max(mdata[mdata$spleen_standard == T,grepl("^F",colnames(mdata))]))) +
         scale_fill_manual(values = mypal_igt) + theme_bw() + 
         ggtitle(label = sprintf("%s", i)) # + theme_bw()+ ggtitle(label = "F1 IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)
     print(p)
@@ -329,13 +334,13 @@ labels_matrix = pvmat
 labels_matrix[pvmat<0.05] = "*"
 labels_matrix[pvmat>0.05] = ""
 
-pdf(sprintf("%s/%s/spleenctrl_factors_heatmap.pdf", prefix, prefix2), 10,10, useDingbats = F)
-pheatmap(factor_means, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, main = "mean from LD")
+pdf(sprintf("%s/%s/spleenctrl_factors_heatmap.pdf", prefix, prefix2), 20,20, useDingbats = F)
+# pheatmap(factor_means, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, main = "mean from LD")
 pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, main = "fit2$coefficients")
 dev.off()
 
 
-#### former code without limma - useless
+######### former code without limma - useless
 factor_means = mdata %>% filter(mdata$spleen_standard == T) %>% group_by(IGT) %>% summarize_at(vars(matches("^F")), mean) %>% as.data.frame()
 factor_means = factor_means[order(extract_numeric(factor_means$IGT)),]
 rownames(factor_means) = factor_means$IGT
@@ -1219,13 +1224,6 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, pref
 
 
 ```
-
-
-
-
-
-
-
 
 
 structure_plot.pdf

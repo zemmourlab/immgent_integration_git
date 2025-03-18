@@ -53,17 +53,17 @@ length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 
-mypal_organ = setNames(mypal, unique(mdata$organ_simplified))
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
 mypal_organ["other"] = "grey"
 mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 
-mypal_level1 = setNames(mypal, unique(tmp$annotation_level1))
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
 
-mypal_level2 = setNames(mypal, unique(tmp$annotation_level2))
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
 mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
 
-mypal_condition_detailed_simplified = setNames(mypal, unique(tmp$condition_detailed_simplified))
+mypal_condition_detailed_simplified = setNames(mypal, unique(so$condition_detailed_simplified))
 mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
 
 mypal_igt = setNames(mypal, unique(so$IGT))
@@ -1460,10 +1460,6 @@ for (j in names(so_split)) {
 ```
 
 
-**factor analysis of sample x proportions? like gene programs?**
-```{r}
-
-```
 
 ############Other trials 
 **Limma challenge organ time**

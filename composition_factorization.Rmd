@@ -1,0 +1,624 @@
+---
+title: "composition_analysis"
+output: html_document
+date: "2024-10-24"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443 -->
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+R
+```
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("fastTopics", "flashier", "Seurat", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+mypal_organ = setNames(mypal, unique(mdata$organ_simplified))
+# mypal_organ["other"] = "grey"
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
+
+mypal_condition_detailed_simplified = setNames(mypal, unique(so$condition_detailed_simplified))
+mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
+
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+
+##########
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+# ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+# ColorRamp = colorRampPalette(c('Red'))(20)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+**Most up-to-date data**
+
+```{r}
+
+so = readRDS("igt1_96_withtotalvi20250226.Rds")
+so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
+
+prefix = "SampleComp/20250226"
+
+if (!dir.exists(prefix)) {
+    dir.create(prefix, recursive = TRUE)
+    cat("Folder created:", prefix, "\n")
+} else {
+    cat("Folder already exists:", prefix, "\n")
+}
+
+```
+
+**factor analysis of sample x clusters? like gene programs, here "immune response"?**
+
+do it from the model?
+PCA: no reason to think orthogonality of responses. Could be a mixture. But maybe? e.g. Th1, Th2
+NMF: no resons to impose Non neg
+Sparsity, yes: responses shared across a few tissues, clusters involved in a few responses --> point_normal
+
+
+```{r}
+# prefix2 = "flashier/20250312"
+prefix2 = "flashier/20250313_normal"
+prefix2 = "flashier/20250313_laplace"
+prefix2 = "flashier/20250313_expoPropInLevel1"
+prefix2 = "flashier/20250313_pca"
+prefix2 = "flashier/20250313_semiNMF"
+prefix2 = "flashier/20250314_allT_semiNMF"
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+
+```
+
+```{r}
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45|CD44|CD4|CD8|PLZF|TFH|Treg|VP1Tetp",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+dim(mdata0)
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
+# dim(mdata0)
+mdata = mdata0
+# mdata = mdata0 %>% select(matches("ncells")) %>% mutate(totcells = rowSums(.)) %>% mutate(across(-totcells, ~ . / totcells, .names = "{.col}_prop"))
+# colnames(mdata) = gsub(pattern = "ncells_prop", replacement = "prop", colnames(mdata))
+# mdata = data.frame(mdata, mdata0 %>% select(sample_name:last_col()) %>% as.data.frame())
+# all(mdata$Treg_cl1.ncells == mdata0$Treg_cl1.ncells)
+# mdata = mdata %>% filter(totcells >= 10) %>% as.data.frame()
+
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
+
+mdata$organ_simplified = make.names(mdata$organ_simplified)
+mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+mdata$infection_phase = make.names(mdata$infection_phase)
+mdata$infection_phase =  factor(mdata$infection_phase, levels = names(which(!table( mdata$infection_phase)==0)))
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$infection_phase_orig = mdata$infection_phase
+mdata$infection_phase = as.character(mdata$infection_phase_orig)
+mdata$infection_phase[mdata$infection_phase_orig %in% c("chronic", "cleared")] = "late"
+mdata$infection_phase[mdata$infection_phase_orig %in% c("acute")] = "early"
+mdata$infection_phase = factor(mdata$infection_phase)
+mdata$infection_phase = relevel(mdata$infection_phase, ref = "none")
+
+mdata$target_cells_simplified_orig = mdata$target_cells_simplified
+mdata$target_cells_simplified[grepl("allT",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("CD45",mdata$target_cells_simplified)] = "allT"
+mdata$target_cells_simplified[grepl("^CD44p",mdata$target_cells_simplified)] = "CD44p"
+mdata$target_cells_simplified[grepl("^CD4pCD44p",mdata$target_cells_simplified)] = "CD4pCD44p"
+mdata$target_cells_simplified[grepl("^CD8pCD44p",mdata$target_cells_simplified)] = "CD8pCD44p" 
+mdata$target_cells_simplified = factor(mdata$target_cells_simplified)
+mdata$target_cells_simplified = relevel(mdata$target_cells_simplified, ref = "allT")
+
+# contrasts(mdata$organ_simplified) <- contr.sum(length(unique(mdata$organ_simplified)))
+# contrasts(mdata$condition_detailed_simplified) <- contr.sum(length(unique(mdata$condition_detailed_simplified)))
+# contrasts(mdata$infection_phase) <- contr.sum(length(unique(mdata$infection_phase)))
+
+
+mdata$IGTHT =  factor(mdata$IGTHT, levels = names(which(!table( mdata$IGTHT)==0)))
+
+```
+
+```{r}
+feature_data = mdata[, grepl("*prop", colnames(mdata))]
+rownames(feature_data) = mdata$sample_code
+feature_data = as.matrix(feature_data)
+
+message("Variance regularization")
+n = nrow(feature_data)
+x = rpois(1e7, 1/n)
+s1 = sd(log(x + 1))
+
+```
+
+c(ebnm_point_exponential, ebnm_point_exponential) --> prefix2 = "flashier/20250312"
+```{r}
+message("Fitting")
+fit = flash(feature_data, 
+            ebnm_fn = c(ebnm_point_exponential, ebnm_point_exponential),
+            var_type = 2, 
+            S = s1,
+            backfit = T,
+            greedy_Kmax = 200L)
+
+# saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix, prefix2))
+
+
+```
+
+c(ebnm_point_normal, ebnm_point_normal) --> prefix2 = "flashier/20250313_normal"
+```{r}
+message("Fitting")
+fit = flash(feature_data, 
+            ebnm_fn = c(ebnm_point_normal, ebnm_point_normal),
+            var_type = 2, 
+            S = s1,
+            backfit = T,
+            greedy_Kmax = 200L)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix, prefix2))
+```
+
+c(ebnm_point_laplace, ebnm_point_laplace) --> prefix2 = "flashier/20250313_laplace"
+```{r}
+message("Fitting")
+fit = flash(feature_data, 
+            ebnm_fn = c(ebnm_point_laplace, ebnm_point_laplace),
+            var_type = 2, 
+            S = s1,
+            backfit = T,
+            greedy_Kmax = 200L)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix, prefix2))
+```
+
+c(ebnm_point_exponential, ebnm_point_laplace) --> prefix2 = "flashier/20250313_semiNMF"
+```{r}
+message("Fitting")
+fit = flash(feature_data, 
+            ebnm_fn = c(ebnm_point_exponential, ebnm_point_laplace),
+            var_type = 2, 
+            S = s1,
+            backfit = T,
+            greedy_Kmax = 200L)
+
+saveRDS(fit, file = sprintf("%s/%s/fit.Rds", prefix, prefix2))
+```
+
+
+PCA -->  prefix2 = "flashier/20250313_pca"
+```{r}
+props_scaled = t(scale(t(feature_data)))
+
+mypca = prcomp(props_scaled, center = F, scale. = F)
+
+explained_variance = mypca$sdev^2
+proportion_variance = explained_variance / sum(explained_variance)
+elbow_df = data.frame(
+  PC = seq_along(proportion_variance),
+  VarianceExplained = proportion_variance
+)
+
+pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+ggplot(elbow_df, aes(x = PC, y = VarianceExplained)) +
+  geom_point(size = 2) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "Elbow Plot",
+    x = "Principal Component (PC)",
+    y = "Proportion of Variance Explained"
+  )
+dev.off()
+
+
+```
+
+
+*Plots *
+```{r}
+# fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+cluster_meta = data.frame(annotation_level2 = gsub(".prop", "", rownames(fit$F_pm)), annotation_level1 = gsub("_.*", "", rownames(fit$F_pm)))
+cluster_meta$annotation_level1 = factor(cluster_meta$annotation_level1)
+cluster_meta$annotation_level2 = factor(cluster_meta$annotation_level2, levels = levels(so$annotation_level2))
+
+```
+
+scree_plot.pdf
+```{r}
+pdf(sprintf("%s/%s/scree_plot.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+# plot(fit, include_scree = T, include_pm = F, plot_type = "scree")
+plot(fit, plot_type = "scree")
+dev.off()
+
+sum(fit$pve)
+fit$pve
+order(fit$pve, decreasing = T)
+```
+
+histogram_loadings_plot.pdf
+```{r}
+pdf(sprintf("%s/%s/histogram_loadings_plot.pdf", prefix, prefix2), 10, 10, useDingbats = F)
+plot(fit,
+     # include_scree = F,
+     # include_pm = T,
+     plot_type = "histogram",
+     pm_which = "loadings",
+     pm_groups = mdata$organ_simplified,
+     bins = 20,
+     pm_colors = mypal_organ) #+ NoLegend()
+     # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
+
+plot(fit,
+     plot_type = "histogram",
+     pm_which = "factors",
+     pm_groups = cluster_meta$annotation_level1,
+     bins = 20,
+     pm_colors = mypal_level1) #+ NoLegend()
+     # pm_colors = mypal[1:length(unique(so$organ_simplified))]) #+ NoLegend()
+
+dev.off()
+
+pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 10, 8, useDingbats = F)
+plot(fit,
+     plot_type = "structure",
+     pm_which = "loadings",
+     pm_groups = mdata$organ_simplified,
+     pm_colors = mypal,
+     gap = 5) #+ NoLegend()
+
+plot(fit,
+     include_scree = F,
+     plot_type = "structure",
+     pm_which = "factors",
+     pm_groups = cluster_meta$annotation_level1,
+     pm_colors = mypal,
+     gap = 5) #+ NoLegend()
+
+dev.off()
+
+```
+
+loadings_heatmap_samples.pdf
+```{r}
+message("loadings_heatmap")
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+# L1 = mypca$x[,1:30]
+
+pdf(sprintf("%s/%s/loadings_heatmap_samples.pdf", prefix, prefix2), 5,30, useDingbats = F)
+tmp3 = L1
+ColorRamp = colorRampPalette(c('white','red'))(20)
+# ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, fontsize_row = 3, fontsize_col = 10,  main = "Loadings")
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, fontsize_row = 3, fontsize_col = 10,  main = "Loadings")
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = F, col = ColorRamp, fontsize_row = 3, fontsize_col = 10,  main = "Loadings")
+dev.off()
+```
+
+factors_volcano.pdf
+factors_heatmap.pdf
+de_genes_factors.txt
+```{r}
+message("factors_volcano.pdf")
+res = ldf(fit, type = "i")
+F1 = with(res, F %*% diag(D)) #same as res$F %*% diag(res$D)
+# rownames(F1) = colnames(shifted_log_counts)
+head(sort(F1[,6], decreasing = TRUE), n = 16)
+colnames(F1) = sprintf("F%s", 1:ncol(F1))
+# F1 = F1[,order(fit$pve, decreasing = T)]
+F1 %>% write.table(sprintf("%s/%s/de_factors.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+# genes = apply(F1, 2, order, decreasing = TRUE)[1:10, 2:fit$n_factors]
+# top_genes = rownames(F1)[genes]
+# top_genes_m  = matrix(rownames(F1)[genes], nrow = nrow(genes), byrow = TRUE)
+
+# F1 = mypca$rotation[,1:30]
+
+pdf(sprintf("%s/%s/factors_volcano.pdf", prefix, prefix2), 5, 5, useDingbats = F)
+for (i in 1:fit$n_factors) {
+    print(i)
+    p = plot(fit,
+             include_scree = F,
+             plot_type = "scatter",
+             pm_which = "factors",
+             kset = i,
+             labels = T,
+             n_labels = 10,
+             label_size = 2.5) +
+        labs(x = "increase in proportion",
+             y = "mean proportion") +
+        ggtitle(sprintf("k = %s",i))
+    print(p)
+}
+dev.off()
+
+message("factors_heatmap.pdf")
+pdf(sprintf("%s/%s/factors_heatmap.pdf", prefix, prefix2), 10,20, useDingbats = F)
+tmp3 = F1
+# ColorRamp = colorRampPalette(c('white','red'))(20)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, col = ColorRamp, breaks = seq(-max(abs(tmp3)),max(abs(tmp3)),length.out = length(ColorRamp)+1), fontsize_row = 10, fontsize_col = 10,  main = "Factors")
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, breaks = seq(-max(abs(tmp3)),max(abs(tmp3)),length.out = length(ColorRamp)+1), fontsize_row = 10, fontsize_col = 10,  main = "Factors")
+dev.off()
+
+
+```
+
+
+UMAP
+```{r}
+library(uwot)
+message("factors_volcano.pdf")
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+# L1 = mypca$x[, 1:30]
+
+#cluster the samples
+library(igraph)
+library(FNN)
+k = 15  # Number of neighbors for KNN
+knn = get.knn(L1, k = k)
+adj_matrix <- matrix(0, nrow = nrow(L1), ncol = nrow(L1))
+for (i in 1:nrow(knn$nn.index)) {
+  neighbors <- knn$nn.index[i, ]
+  adj_matrix[i, neighbors] <- 1
+}
+g <- graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+louvain_result <- cluster_louvain(g, resolution = 1)
+clusters <- membership(louvain_result)
+table(clusters)
+
+umap_result = umap(L1, n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
+umap_df = as.data.frame(umap_result)
+colnames(umap_df) = c("UMAP_1", "UMAP_2")
+rownames(umap_df) = rownames(L1)
+umap_df$sample_code = rownames(umap_df)
+umap_df = merge(mdata, umap_df, by = "sample_code")
+all(umap_df$sample_code == rownames(L1))
+umap_df = data.frame(umap_df, L1)
+# umap_df = data.frame(umap_df, df)
+umap_df$clusters = factor(clusters)
+
+# #Add annotation level 1 prop to dataframe
+# m3 = readRDS(sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
+# umap_df = merge(umap_df, m3[,grepl(".ncells|.prop|sample_code", colnames(m3))], by = "sample_code", all.x = T)
+
+umap_df %>% filter(clusters == "2") %>% pull(sample_code)
+
+# umap_df = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20250226/flashier/20250312/UMAP_samples.Rds')
+
+pdf(sprintf("%s/%s/umap_samples.pdf",prefix, prefix2), 20, 20,useDingbats = F)
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+        scale_color_manual(values = mypal)+
+  theme_void() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+LabelClusters(p, id = "clusters")
+
+bkgrd = ggplot(umap_df[,c("UMAP_1", "UMAP_2")],aes(x = UMAP_1, y = UMAP_2)) + geom_point(alpha = 0.1, size = 1, color = "grey50")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters), alpha = 1, size = 2)
+bkgrd + p + facet_wrap(~organ_simplified) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df[umap_df$organ_simplified == "spleen",], aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + facet_wrap(~condition_detailed) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "Spleen Only", x = "UMAP 1", y = "UMAP 2")
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+  scale_color_manual(values = mypal) +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+LabelClusters(p, id = "clusters")
+
+for (i in colnames(L1)) {
+    print(i)
+    p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = !!sym(i), size = !!sym(i))) +
+        geom_point(alpha = 0.8) +
+        scale_color_gradient(low = "grey", high = "red") +
+        theme_minimal() +
+        labs(title = sprintf("%s expression", i), x = "UMAP 1", y = "UMAP 2")
+    print(p)
+}
+dev.off()
+
+pdf(sprintf("%s/%s/umap_samples_clusterprop.pdf",prefix, prefix2), 10, 10,useDingbats = F)
+for ( i in colnames(umap_df)[grepl("prop", colnames(umap_df))] ) {
+    print(i)
+    p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = !!sym(i), size = !!sym(i))) +
+        geom_point(alpha = 0.8) +
+        scale_color_gradient(low = "grey", high = "red") +
+        theme_minimal() +
+        labs(title = i, x = "UMAP 1", y = "UMAP 2")
+    print(p)
+}
+
+dev.off()
+
+pdf(sprintf("%s/%s/umap_samples_organ_healhty.pdf",prefix, prefix2), 20, 20,useDingbats = F)
+bkgrd = ggplot(umap_df[,c("UMAP_1", "UMAP_2")],aes(x = UMAP_1, y = UMAP_2)) + geom_point(alpha = 0.1, size = 1, color = "grey50")
+tmp = umap_df %>% filter(condition_broad == "healthy")
+p = geom_point(data = tmp, aes(x = UMAP_1, y = UMAP_2, color = organ_simplified), alpha = 0.8, size = 2)
+bkgrd + p + scale_color_manual(values = mypal_organ) + theme_minimal() + labs(title = "Healthy samples only", x = "UMAP 1", y = "UMAP 2")
+bkgrd + p + facet_wrap(~organ_simplified) + scale_color_manual(values = mypal_organ) + theme_minimal() + labs(title = "Healthy samples only", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = tmp, aes(x = UMAP_1, y = UMAP_2, color = organ), alpha = 0.8, size = 2)
+bkgrd + p + scale_color_manual(values = mypal_organ) + theme_minimal() + labs(title = "Healthy samples only", x = "UMAP 1", y = "UMAP 2")
+bkgrd + p + facet_wrap(~organ_simplified) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "Healthy samples only", x = "UMAP 1", y = "UMAP 2")
+
+dev.off()
+
+for ( i in unique(umap_df$organ_simplified) ) {
+    print(i)
+    p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = !!sym(i), size = !!sym(i))) +
+        geom_point(alpha = 0.8) +
+        scale_color_gradient(low = "grey", high = "red") +
+        theme_minimal() +
+        labs(title = i, x = "UMAP 1", y = "UMAP 2")
+    print(p)
+}
+
+dev.off()
+
+saveRDS(umap_df, file = sprintf("%s/%s/UMAP_samples.Rds", prefix, prefix2))
+
+```
+
+```{r}
+# umap_df = readRDS(sprintf("%s/%s/UMAP_samples.Rds", prefix, prefix2))
+umap_df = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20250226/flashier/20250314_allT_semiNMF/UMAP_samples.Rds')
+
+
+library(tidygate)
+gating <- 
+  umap_df |>
+  mutate(gated = gate(x = UMAP_1, y = UMAP_2, colour = CD4_cl17.prop) ) 
+
+gating |> filter(gated == "4") %>% pull(sample_code)
+gating %>% filter(!is.na(gated)) %>% select(sample_code, CD4_cl17.prop,CD4_cl18.prop, organ_simplified)
+
+```
+
+
+```{r}
+library(uwot)
+message("factors_volcano.pdf")
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+tmp = cor(t(L1))
+# tmp = dist(L1, "euclidian")
+# rownames(tmp) = mdata$sample_code
+# colnames(tmp) = mdata$sample_code
+
+pdf(sprintf("%s/%s/heatmap_cor_clusterprop.pdf",prefix, prefix2), 30, 30,useDingbats = F)
+pheatmap(tmp, color = ColorRamp, cluster_rows = T, cluster_cols = T)
+dev.off()
+
+```
+
+**correlation heatmap**
+```{r}
+feature_data = mdata[, grepl("*prop", colnames(mdata))]
+rownames(feature_data) = mdata$sample_code
+feature_data = as.matrix(feature_data)
+
+tmp = cor(t(feature_data))
+
+pdf(sprintf("%s/heatmap_cor_clusterprop.pdf",prefix), 20, 20,useDingbats = F)
+pheatmap(tmp, color = ColorRamp, cluster_rows = T, cluster_cols = T, fontsize_row = 2, fontsize_col = 2)
+dev.off()
+```
+
+
+
+
+
+
+
+

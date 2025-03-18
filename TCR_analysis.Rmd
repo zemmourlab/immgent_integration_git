@@ -83,6 +83,170 @@ mypal_tg = setNames(mypal, unique(so$transgenic))
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 ```
 
+
+
+**Compile the Ag spe from all 3 methods
+By TCR, by CITEseq, by Sort
+List of IGT1-96 that have TCRtg or tet+.
+•	IGT33 and IGT77: Andrea is looking. CITEseq not working in IGT33
+•	IGT35,36,38,40: Giovanni did it
+•	IGT43: samples are Tet+ sorted cells
+•	IGT45: samples are Tet+ sorted cells
+•	IGT48: Giovanni/Anna done
+•	IGT52: Tetramer had a CITEseq barcode. Derek done 
+•	IGT55: can you look using congenic marker? (not expecting much though)
+•   IGT58:samples are Tet+ sorted cells
+•	IGT59: samples are Tet+ sorted cells
+•   IGT60: samples are Tet+ sorted cells
+•	IGT79: samples are Tet+ sorted cells
+•	IGT80: samples are Tet+ sorted cells
+•	IGT81: samples are Tet+ sorted cells
+•	IGT95-96: done
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
+so = so_orig
+```
+
+
+Identify OT1 in IGT95-96 using CITEseq
+```{r}
+library(Seurat)
+
+# so = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20240822_exp_id_80_Spranger/IGT96/dataset_clean.Rds')
+so = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20240822_exp_id_80_Spranger/IGT95/dataset_clean.Rds')
+
+tg = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic/transgenic_cells/allTGcells.csv', sep = ",", header = T, as.is = T)
+rownames(tg) = tg$IGT.cellID
+so$transgenic_byTCR = NA
+# all(colnames(so) == tg$cellID[match(colnames(so),tg$cellID)])
+so$transgenic_byTCR = tg$TG[match(colnames(so),tg$IGT.cellID)]
+so$transgenic_byTCR[is.na(so$transgenic_byTCR)] = F
+all(so$transgenic_byTCR[tg$cellID] == tg$TG)
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+FeatureScatter(so, feature1 = "THY1.2", feature2 = "THY1.1.CD90.1", group.by = "transgenic_byTCR") + scale_color_manual(values = c("grey", "red"))
+
+df = data.frame(so@meta.data, t(so[["ADT"]]@data[c("THY1.2","THY1.1.CD90.1"),]))
+
+library(tidygate)
+gating <- 
+  df |>
+  mutate(gated = gate(x = THY1.2, y = THY1.1.CD90.1) ) 
+
+tg_byCITEseq = gating %>% filter(!is.na(gated)) %>% pull(cell_barcode)
+
+so$tg_byCITEseq = colnames(so) %in% tg_byCITEseq
+FeatureScatter(so, feature1 = "THY1.2", feature2 = "THY1.1.CD90.1", group.by = "tg_byCITEseq") + scale_color_manual(values = c("grey", "red"))
+
+table(so$tg_byCITEseq, so$transgenic_byTCR)
+
+tg_byCITEseq %>% write.table("~/Desktop/IGT95_OT1_byCITEseq.csv", sep = ",", quote = F, row.names = F, col.names = F)
+# tg_byCITEseq %>% write.table("~/Desktop/IGT96_OT1_byCITEseq.csv", sep = ",", quote = F, row.names = F, col.names = F)
+
+
+
+```
+
+List of sorted samples (tet or tg)
+```{r}
+so$t_specificity[so$t_specificity == ""] = NA
+so@meta.data %>%
+  filter(!is.na(t_specificity) & !grepl("allT", target_cells_simplified) & !(IGT %in% c("IGT48","IGT95", "IGT96"))) %>%
+  select( gating_strategy, sample_code, IGTHT) %>%
+  unique() #target_cells_simplified, t_specificity,
+
+so@meta.data %>%
+  filter(!is.na(t_specificity) & !grepl("allT", target_cells_simplified) & !(IGT %in% c("IGT48","IGT95", "IGT96"))) %>%
+  select( gating_strategy, sample_code, IGTHT) %>%
+  unique() %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/IGT1-96_samples_withAgSpe_sorted.txt", sep = "\t", quote = F, row.names = F)
+
+so@meta.data %>% filter(!is.na(t_specificity)) %>% select(target_cells_simplified, t_specificity, sample_code) %>% unique()
+```
+
+Combine all in single cell metadata
+
+4 cells in IGT77 double labeled as NR1 and NR23.4 because Andrea used CD45.2 for both markers and CD4 or CD8 to label NR1 or NR23.4. But by TCRseq, some NR1 or NR23.4 can be of the different lineage..
+tmp[tmp[,1] %in% tmp[duplicated(tmp[,1]),1],]
+11098 IGT77.AGGCCACGTCGGCATC NR23.4
+11111 IGT77.CGGGTCAGTATATGGA NR23.4
+11122 IGT77.GAAATGATCGGCGCAT NR23.4
+11140 IGT77.GTGAAGGAGGTAGCCA NR23.4
+11209 IGT77.AGGCCACGTCGGCATC    NR1
+11323 IGT77.CGGGTCAGTATATGGA    NR1
+11373 IGT77.GAAATGATCGGCGCAT    NR1
+11469 IGT77.GTGAAGGAGGTAGCCA    NR1
+```{r}
+#so$transgenic_byTCR
+tg = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/allTGcells_byTCRseq.csv", sep = ",", header = T, as.is = T)
+rownames(tg) = tg$IGT.cellID
+so$transgenic_byTCR = NA
+# all(colnames(so) == tg$cellID[match(colnames(so),tg$cellID)])
+so$transgenic_byTCR = tg$TG[match(colnames(so),tg$IGT.cellID)]
+all(so$transgenic_byTCR[tg$cellID] == tg$TG)
+table(so$transgenic_byTCR)
+
+#transgenic_tet_bySorting
+sorted = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/IGT1-96_samples_withAgSpe_sorted.txt", header = T,sep = "\t")
+so$transgenic_tet_bySorting = so$IGTHT %in% sorted$IGTHT
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGT %in% c("IGT43")] = "2WTetp"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGT %in% c("IGT45")] = "GP33GP276NP396Tetp"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGTHT %in% c("I58H5", "I58H7", "I58H3","I60H2", "I60H3", "I60H13" )] = "OT1"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGTHT %in% c("I58H11", "I58H21", "I58H13","I60H6", "I60H7", "I60H5" )] = "OT2"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGT %in% c("IGT59")] = "AS15Tetp"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGT %in% c("IGT79", "IGT80")] = "VP1Tetp"
+so$transgenic_tet_bySorting[so$IGTHT %in% sorted$IGTHT & so$IGT %in% c("IGT81")] = "Derp1Tetp"
+so$transgenic_tet_bySorting[so$transgenic_tet_bySorting == F] = NA
+
+#so$transgenic_tet_byCITEseq
+fls = list.files("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/", pattern = "byCITEseq.csv")
+tmp = lapply(fls, function(x) read.table(sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/%s",x), header = F, sep = ",", as.is = T))
+lapply(tmp, dim)
+tmp = Reduce(rbind, tmp)
+tmp = tmp[!tmp[,1] %in% tmp[duplicated(tmp[,1]),1],]
+rownames(tmp) = tmp[,1]
+so$transgenic_tet_byCITEseq = NA
+all(na.omit(colnames(so) == tmp[match(colnames(so), rownames(tmp)),1]))
+so$transgenic_tet_byCITEseq = tmp[match(colnames(so), rownames(tmp)),2]
+table(so$transgenic_tet_byCITEseq, so$target_cells_simplified)
+
+so$transgenic_byTCR = gsub("smarta|Smarta|SMARTA", replacement = "SMARTA", so$transgenic_byTCR)
+so$transgenic_tet_byCITEseq = gsub("smarta|Smarta|SMARTA", replacement = "SMARTA", so$transgenic_tet_byCITEseq)
+so$transgenic_tet_bySorting = gsub("smarta|Smarta|SMARTA", replacement = "SMARTA", so$transgenic_tet_bySorting)
+
+#Coalesce the columns
+tmp = data.frame(so$transgenic_byTCR, so$transgenic_tet_bySorting, so$transgenic_tet_byCITEseq)
+range(rowSums(!is.na(tmp)))
+tmp[which(rowSums(!is.na(tmp)) == 2),]
+
+tmp = so@meta.data %>% mutate(Ag_spe = coalesce(transgenic_byTCR, transgenic_tet_bySorting, transgenic_tet_byCITEseq))
+tmp %>% select(Ag_spe, transgenic_byTCR, transgenic_tet_bySorting, transgenic_tet_byCITEseq) %>% unique() %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/crosscheck.tsv", row.names = T, col.names = T, sep = "\t")
+
+inconsistent_list = list()
+inconsistent_list[["IGT45"]] = tmp %>% filter(IGT %in% c("IGT45"), transgenic_byTCR %in% c("pmel", "P14")) %>% select(Ag_spe, transgenic_byTCR, transgenic_tet_bySorting, transgenic_tet_byCITEseq, IGTHT, cellID, target_cells_simplified, sample_code) %>% unique() 
+inconsistent_list[["IGT45"]] %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/crosscheck_IGT45_inconsistencies.tsv", row.names = T, col.names = T, sep = "\t")
+
+inconsistent_list[["IGT60_OT1"]] = tmp %>% filter(IGT %in% c("IGT60") & transgenic_byTCR == "OT1" & transgenic_tet_bySorting == "OT2") %>% select(Ag_spe, transgenic_byTCR, transgenic_tet_bySorting, transgenic_tet_byCITEseq, IGTHT, cellID, target_cells_simplified, sample_code) %>% unique() 
+inconsistent_list[["IGT60_OT1"]] %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/crosscheck_IGT60_OT1_inconsistencies.tsv", row.names = T, col.names = T, sep = "\t")
+
+inconsistent_list[["IGT60_OT2"]] = tmp %>% filter(IGT %in% c("IGT60") & transgenic_byTCR == "OT2" & transgenic_tet_bySorting == "OT1") %>% select(Ag_spe, transgenic_byTCR, transgenic_tet_bySorting, transgenic_tet_byCITEseq, IGTHT, cellID, target_cells_simplified, sample_code) %>% unique() 
+inconsistent_list[["IGT60_OT2"]] %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/crosscheck_IGT60_OT2_inconsistencies.tsv", row.names = T, col.names = T, sep = "\t")
+
+#remove the contaminant/inconsistent cells
+inconsistent = Reduce(rbind, inconsistent_list)
+
+tmp$Ag_spe[tmp$cellID %in% inconsistent$cellID] = NA
+
+tmp2 = tmp[!is.na(tmp$Ag_spe),c("cellID","Ag_spe", "transgenic_byTCR", "transgenic_tet_bySorting", "transgenic_tet_byCITEseq")]
+tmp2  %>% write.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TCR/transgenic_tetramer_cells/antigen_specific_cells.tsv", row.names = F, col.names = T, sep = "\t")
+
+
+
+```
+
+
+
 **Prepare Seurat objects**
 
 ```{r}
@@ -101,8 +265,6 @@ tg = tg[tg != "not_tg"]
 
 so2 = so[,!so$organ %in% "thymus"]
 ```
-
-
 
 **Check transgenic cells**
 
