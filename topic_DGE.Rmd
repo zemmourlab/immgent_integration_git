@@ -1,0 +1,463 @@
+---
+title: "topic_analysis"
+output: html_document
+date: "2024-04-30"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+#srun --pty --jobid 21908677 -w midway3-0291 /bin/bash
+
+R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize in R: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+# setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+# ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = colorRampPalette(c('white','red'))(20)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+# ColorRamp = colorRampPalette(c('Red'))(20)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+```
+
+**DGE using flashier**
+
+(FYI shifted log count)
+```{r}
+message("loading seurat object")
+so = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
+
+message("log1p with scale factor as the average rowSums(counts)")
+norm_fac = mean(so$nCount_RNA)
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", scale.factor = norm_fac)
+counts = so[['RNA']]$counts
+shifted_log_counts = so[['RNA']]$data
+
+#transpose!
+counts = t(counts)
+shifted_log_counts = t(shifted_log_counts)
+
+message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
+tcr_genes = grepl(x = rownames(so), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
+gm_rik_genes = grepl(x = rownames(so), pattern = "Gm|Rik$|\\-ps$")
+ribo_genes = grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")
+mt_genes = grepl(x = rownames(so), pattern = "^mt-")
+genes_not_expressed = rowSums(so[["RNA"]]$counts) == 0
+genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
+cat("Number of genes to keep:", sum(genes_to_keep), "\n")
+
+shifted_log_counts = shifted_log_counts[,genes_to_keep]
+counts = counts[,genes_to_keep]
+
+```
+
+Load model and export F1
+```{r}
+prefix = "topic"
+prefix2 = "flashier20250215_alldata_backfit"
+prefix3 = "limma/20250323_level1_IGT"
+
+# fit_flash = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+# fit = fit_flash
+# res = ldf(fit, type = "i")
+# saveRDS(res, sprintf("%s/%s/ldf.Rds", prefix,prefix2))
+res = readRDS(sprintf("%s/%s/ldf.Rds", prefix,prefix2))
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(res$D)
+colnames(L1) = sprintf("F%s", 1:ncol(L1))
+write.table(L1, sprintf("%s/%s/cell_factor_matrix.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+F1 = with(res, F) #same as res$F %*% diag(res$D)
+write.table(F1, sprintf("%s/%s/gene_factor_matrix.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+
+F1 = read.table(sprintf("%s/%s/gene_factor_matrix.txt", prefix, prefix2), header = T, sep = "\t") %>% as.matrix()
+
+```
+
+Export loadings with metadata
+```{r}
+# so = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
+# L1 = L1[colnames(so),]
+# all(rownames(L1) == colnames(so))
+# mdata_orig = data.frame(so@meta.data, so[["mde2_totalvi_20241006"]]@cell.embeddings, so[["mde_incremental"]]@cell.embeddings, L1)
+# write.table(mdata_orig, sprintf("%s/%s/mdata_mde_L1.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+
+mdata_orig = read.table(sprintf("%s/%s/mdata_mde_L1.txt", prefix, prefix2), header = T, sep = "\t")
+L1 = mdata_orig[,grep("^F[0-9]+$", colnames(mdata_orig), value = TRUE)]
+
+mdata_orig %>% select(IGT, exp_name) %>% unique()
+```
+
+```{r}
+
+TopicDGEPlots = function(F1, L1, group1, group2, mdata_orig, title_plot = "") {
+    
+    require(ggplot2)
+    require(ggrepel)
+    require(dplyr)
+    require(scattermore)
+    
+    # Calculate the loadings
+    loadings_group1 = colMeans(L1[group1,])
+    loadings_group2 = colMeans(L1[group2,])
+    loadings_groups = colMeans(L1[c(group1, group2),])
+    
+    # Mean genes for each group
+    mean_genes_group1 = F1 %*% loadings_group1
+    mean_genes_group2 = F1 %*% loadings_group2
+    mean_genes = F1 %*% colMeans(L1[c(group1, group2),])
+    
+    # Fold Change between the two groups
+    fc_loadings = loadings_group1 - loadings_group2
+    fc_genes = F1 %*% fc_loadings %>% as.data.frame()  # take exp to have the actual FC
+    
+    # Create vplot for fold changes (MA plot of factors)
+    vplot = data.frame(SYMBOL = names(fc_loadings), log2FC = fc_loadings / log(2), AveExpr = loadings_groups)
+    
+    # Maximum FC for symmetrical x-axis range
+    max_fc = ceiling(max(abs(vplot$log2FC)))  # Get the max of the absolute FC values and round up
+    top_genes = vplot %>%
+        arrange(desc(abs(log2FC))) %>%
+        head(50)
+    
+    # MA Plot (Factors)
+    p1 = ggplot(data = vplot) + 
+        geom_point(aes(x = log2FC, y = AveExpr), colour = "black", alpha = I(1), size = I(1)) +
+        xlim(-max_fc, max_fc) +  # Set symmetrical x-axis range
+        geom_text_repel(data = top_genes, aes(x = log2FC, y = AveExpr, label = SYMBOL), 
+                        size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+        theme_minimal() +
+        labs(
+            x = "Fold Change (log2)",
+            y = "Average Expression",
+            title = title_plot
+        )
+    
+    # Create vplot for gene expression (MA plot of genes)
+    vplot_genes = data.frame(SYMBOL = rownames(fc_genes), log2FC = fc_genes[,1] / log(2), AveExpr = mean_genes[,1])
+    
+    # Maximum FC for symmetrical x-axis range (for genes)
+    max_fc_genes = ceiling(max(abs(vplot_genes$log2FC)))  # Get the max of the absolute FC values and round up
+    top_genes_genes <- vplot_genes %>%
+        arrange(desc(abs(log2FC))) %>%
+        head(50)
+    
+    # MA Plot (Genes)
+    p2 <- ggplot(data = vplot_genes) + 
+        geom_scattermore(aes(x = log2FC, y = AveExpr), colour = "black", alpha = I(1), size = I(1), pixels = c(512, 512)) +
+        xlim(-max_fc_genes, max_fc_genes) +  # Set symmetrical x-axis range
+        geom_text_repel(data = top_genes_genes, aes(x = log2FC, y = AveExpr, label = SYMBOL), 
+                        size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+        theme_minimal() +
+        labs(
+            x = "Fold Change (log2)",
+            y = "Average Expression",
+            title = title_plot
+        )
+    
+    # Return the plots and vplot tables
+    list(p1 = p1, p2 = p2, diff_factors = vplot, diff_genes = vplot_genes)
+}
+
+# Example usage
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter( !(annotation_level1 %in% c("Treg")) & condition_broad == "healthy") %>% pull(cellID)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg vs all in healthy")
+
+# results$p1  # First plot (MA plot of factors)
+# results$p2  # Second plot (MA plot of genes)
+# results$diff_factors  # vplot for fold changes
+results$diff_genes %>% arrange(desc(log2FC)) # vplot for gene expression
+
+# Call the function with F1, L1, and group data
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 vs Treg_cl2 in colon healthy")
+
+# Access the plots and data
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+results$diff_factors  # vplot for fold changes
+results$diff_genes  # vplot for gene expression
+
+
+
+#######
+loadings_group1 = colMeans(L1[group1,])
+loadings_group2 = colMeans(L1[group2,])
+loadings_groups = colMeans(L1[c(group1,group2),])
+
+mean_genes_group1 = F1 %*% loadings_group1
+mean_genes_group2 = F1 %*% loadings_group2
+mean_genes = F1 %*% colMeans(L1[c(group1,group2),])
+
+fc_loadings = loadings_group1 - loadings_group2
+fc_genes = F1 %*% fc_loadings %>% as.data.frame() #take exp to have the actual FC)
+
+##MA plot factors
+
+vplot = data.frame(SYMBOL = names(fc_loadings), fc = fc_loadings, AveExpr = loadings_groups)
+# plot(vplot$fc,vplot$AveExpr, pch = ".")
+
+library(ggplot2)
+library(ggrepel)
+library(scattermore)
+
+max_fc = ceiling(max(abs(vplot$fc)))  # Get the max of the absolute FC values and round up
+top_genes <- vplot %>%
+  arrange(desc(abs(fc))) %>%
+  head(50)
+
+# Create the plot
+ggplot(data = vplot) + 
+    geom_point(aes(x = fc, y = AveExpr), colour = "black", alpha = I(1), size = I(1)) +
+    xlim(-max_fc, max_fc) +  # Set symmetrical x-axis range
+    geom_text_repel(data = top_genes, aes(x = fc, y = AveExpr, label = SYMBOL), 
+                    size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+    theme_minimal() +
+    # scale_x_continuous(trans = "log10",   # Log scale (base 10)
+    #                    limits = c(1e-2, max_fc),  # Set limits (you can adjust the lower limit as needed)
+    #                    breaks = c(1/50, 1/40, 1/30, 1/20, 1/10, 1/5, 1/2, 1, 2, 5, 10, 20, 30, 40, 50), 
+    #                    labels = c("1/50", "1/40", "1/30", "1/20", "1/10", "1/5", "1/2", "1", "2", "5", "10", "20", "30", "40", "50")) +
+    labs(
+        x = "Fold Change (log2)",
+        y = "Average Expression",
+        title = "Top 50 Genes: FC vs. Average Expression"
+    )
+
+
+
+##MA plot genes
+vplot = data.frame(SYMBOL = rownames(fc_genes), fc = fc_genes[,1] / log(2), AveExpr = mean_genes[,1])
+# plot(vplot$fc,vplot$AveExpr, pch = ".")
+
+library(ggplot2)
+library(ggrepel)
+
+max_fc = ceiling(max(abs(vplot$fc)))  # Get the max of the absolute FC values and round up
+top_genes <- vplot %>%
+  arrange(desc(abs(fc))) %>%
+  head(50)
+
+# Create the plot
+ggplot(data = vplot) + 
+    geom_scattermore(aes(x = fc, y = AveExpr), colour = "black", alpha = I(1), size = I(1), pixels = c(512, 512)) +
+    xlim(-max_fc, max_fc) +  # Set symmetrical x-axis range
+    geom_text_repel(data = top_genes, aes(x = fc, y = AveExpr, label = SYMBOL), 
+                    size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+    theme_minimal() +
+    # scale_x_continuous(trans = "log10",   # Log scale (base 10)
+    #                    limits = c(1e-2, max_fc),  # Set limits (you can adjust the lower limit as needed)
+    #                    breaks = c(1/50, 1/40, 1/30, 1/20, 1/10, 1/5, 1/2, 1, 2, 5, 10, 20, 30, 40, 50), 
+    #                    labels = c("1/50", "1/40", "1/30", "1/20", "1/10", "1/5", "1/2", "1", "2", "5", "10", "20", "30", "40", "50")) +
+    labs(
+        x = "Fold Change (log2)",
+        y = "Average Expression",
+        title = "Top 50 Genes: FC vs. Average Expression"
+    )
+
+fc_genes %>% arrange(desc(fc_genes)) %>% head(50)
+fc_genes %>% arrange(desc(fc_genes)) %>% tail(50)
+
+exp(fc_genes["Rorc",])
+
+```
+
+compare with FindMarkers
+```{r}
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") & IGT == "IGT67" & organ_simplified == "colon" ) %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") & IGT == "IGT67" & organ_simplified == "colon" ) %>% pull(cellID)
+length(group1)
+length(group2)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 vs Treg_cl2 in colon healthy in IGT67")
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+
+mean_group1 = colMeans(shifted_log_counts[group1,])
+mean_group2 = colMeans(shifted_log_counts[group2,])
+log2FC = (mean_group1 - mean_group2) / log(2)
+log2FC = log2FC[results$diff_genes$SYMBOL]
+plot(log2FC, results$diff_genes$log2FC, pch = 16)
+
+so$groups = NA
+so$groups[colnames(so) %in% group1] = "gp1"
+so$groups[colnames(so) %in% group2] = "gp2"
+so$groups = factor(so$groups)
+Idents(so) = "groups"
+tmp = FindMarkers(so, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
+tmp2 = tmp[rownames(results$diff_genes),] #%>% filter(p_val_adj < 0.05) %>% arrange(desc(avg_log2FC))
+all(rownames(tmp2) == results$diff_genes$SYMBOL)
+plot(tmp2$avg_log2FC, results$diff_genes$log2FC, pch = 16)
+sub = tmp2 %>% filter(pct.1 > 0.1 | pct.2 > 0.1) %>% row.names()
+plot(tmp2[sub,"avg_log2FC"], results$diff_genes[sub,"log2FC"], pch = 16)
+sub = tmp2 %>% filter(pct.1 > 0.2 | pct.2 > 0.2) %>% row.names()
+plot(tmp2[sub,"avg_log2FC"], results$diff_genes[sub,"log2FC"], pch = 16)
+
+sub = results$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(500) %>% pull(SYMBOL)
+plot(tmp2$avg_log2FC, -log10(tmp2$p_val))
+points(tmp2[sub,"avg_log2FC"], -log10(tmp2[sub,"p_val"]), col = "red")
+
+
+tmp2 %>% filter(pct.1 > 0.2 | pct.2 > 0.2) %>% arrange(desc(avg_log2FC)) 
+
+```
+
+compare with limma
+
+```{r}
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") ) %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & !(annotation_level2 %in% c("Treg_cl2")) ) %>% pull(cellID)
+length(group1)
+length(group2)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl2 vs all")
+results$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+
+
+#cl8
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") ) %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & !(annotation_level2 %in% c("Treg_cl8")) ) %>% pull(cellID)
+length(group1)
+length(group2)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 vs all")
+results$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+
+```
+
+Now much easier to do any comparison
+
+```{r}
+#1
+group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & organ_simplified %in% c("lung") & condition_detailed %in% c("baseline")) %>% pull(cellID) #c("HDM", "HDM_primaryD5", "HDM_secondaryD3")
+group2 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & organ_simplified %in% c("colon") & condition_detailed %in% c("baseline")) %>% pull(cellID)
+length(group1)
+length(group2)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 lung vs colon")
+results$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+
+#2
+group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & organ_simplified %in% c("lung") & condition_detailed %in% c("HDM", "HDM_primaryD5", "HDM_secondaryD3")) %>% pull(cellID) #
+group2 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & organ_simplified %in% c("colon") & condition_detailed %in% c("baseline")) %>% pull(cellID)
+length(group1)
+length(group2)
+
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 lung vs colon")
+results$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+
+
+#2 comparison with FindMarkers
+so$groups = NA
+so$groups[colnames(so) %in% group1] = "gp1"
+so$groups[colnames(so) %in% group2] = "gp2"
+so$groups = factor(so$groups)
+Idents(so) = "groups"
+tmp = FindMarkers(so, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
+tmp2 = tmp[tmp$SYMBOL %in% results$diff_genes$SYMBOL,]
+vplot_genes = data.frame(SYMBOL = rownames(tmp), log2FC = tmp$avg_log2FC, p_val = tmp$p_val)
+
+# Maximum FC for symmetrical x-axis range (for genes)
+max_fc_genes = ceiling(max(abs(vplot_genes$log2FC)))  # Get the max of the absolute FC values and round up
+top_genes_genes <- vplot_genes %>%
+    arrange(desc(abs(log2FC))) %>%
+    head(50)
+
+p2 <- ggplot(data = vplot_genes) + 
+    geom_scattermore(aes(x = log2FC, y = -log10(p_val)), colour = "black", alpha = I(1), size = I(1), pixels = c(512, 512)) +
+    xlim(-max_fc_genes, max_fc_genes) +  # Set symmetrical x-axis range
+    geom_text_repel(data = top_genes_genes, aes(x = log2FC, y =  -log10(p_val), label = SYMBOL), 
+                    size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+    theme_minimal() +
+    labs(
+        x = "Fold Change (log2)",
+        y = "-log10(p_val)",
+        title = "Treg_cl8 lung HDM vs colon baseline"
+    )
+p2
+
+
+```
+
+
+

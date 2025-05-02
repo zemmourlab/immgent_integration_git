@@ -30,3 +30,30 @@ david_table_merged %>% write.table("/Users/david/Library/CloudStorage/GoogleDriv
 
 ```
 
+V9 IGT97-104
+```{r}
+library(dplyr)
+
+david_table = read.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250421_forLiang/Sample_metadata_david_20250419_v9_IGT97-104.csv", header = T, sep = ",")
+
+tmp = david_table %>% select(exp_id, exp_number, exp_name, lab) %>% unique() 
+dpl = tmp$exp_id[which(duplicated(tmp$exp_id))]
+tmp[tmp$exp_id %in% dpl,] %>% arrange(exp_id) 
+tmp %>% arrange(exp_id) 
+tmp %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250421_forLiang/exptable_20250421_V9.csv", sep = ",", row.names = F)
+
+tmp = david_table %>% select("organism_id", "organism_name", "strain", "genetics", "sex", "age_weeks", "pool_of_mice", "jax", "infection_agent", "infection_dose", "infection_mode", "treat_agent", "treat_dose","timepoint", "tumor") %>% unique()
+dpl = tmp$organism_id[which(duplicated(tmp$organism_id))]
+tmp[tmp$organism_id %in% dpl,] %>% arrange(organism_id) 
+tmp %>% arrange(organism_id) 
+tmp %>% arrange(organism_id) %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250421_forLiang/mousetable_20250421_V9.csv", sep = ",", row.names = F)
+
+tmp = david_table %>% select("sample_id","cite_seq","prep_description","organ","organ_uberon_id", "t_specificity","target_cells","gating_strategy", "condition_detailed_organ", "comments") %>% unique() 
+dpl = tmp$sample_id[which(duplicated(tmp$sample_id))]
+tmp[tmp$sample_id %in% dpl,] %>% arrange(sample_id) 
+tmp %>% arrange(sample_id) 
+tmp %>% arrange(sample_id) %>% write.table("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/20250421_forLiang/sampletable_20250421_V9.csv", sep = ",", row.names = F)
+
+
+```
+

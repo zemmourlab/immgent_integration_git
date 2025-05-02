@@ -1,0 +1,188 @@
+---
+title: "composition_analysis"
+output: html_document
+date: "2024-10-24"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("ggplot2", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+# source("~/google_drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+# mypal_organ = setNames(mypal, unique(mdata$organ_simplified))
+# # mypal_organ["other"] = "grey"
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# 
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# 
+# mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+# mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
+# 
+# mypal_condition_detailed_simplified = setNames(mypal, unique(so$condition_detailed_simplified))
+# mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
+# 
+# mypal_igt = setNames(mypal, unique(so$IGT))
+# mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+
+
+```
+
+UMAP
+```{r}
+umap_df = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20250226/flashier/20250313_semiNMF/UMAP_samples.Rds')
+
+```
+
+```{r}
+library(tidygate)
+gating <- 
+  umap_df |>
+  mutate(gated = gate(x = UMAP_1, y = UMAP_2, size = 1), .keep = "all") 
+
++ theme(
+    aspect.ratio = 1, # Makes the plot square
+    plot.margin = margin(10, 10, 10, 10), # Adds margin for spacing
+    text = element_text(size = 16), # Increases text size
+    axis.title = element_text(size = 18), # Increases axis title size
+    axis.text = element_text(size = 14) # Increases axis label size
+  ) 
+
+gating %>% filter(!is.na(gated)) %>% pull(sample_code)
+```
+
+
+```{r}
+
+# pdf(sprintf("%s/%s/umap_samples.pdf",prefix, prefix2), 8, 8,useDingbats = F)
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+        scale_color_manual(values = mypal)+
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+p
+# LabelClusters(p, id = "clusters")
+
+bkgrd = ggplot(umap_df[,c("UMAP_1", "UMAP_2")],aes(x = UMAP_1, y = UMAP_2)) + geom_point(alpha = 0.1, size = 1, color = "grey50")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters), alpha = 1, size = 2)
+bkgrd + p + facet_wrap(~organ_simplified) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+p = geom_point(data = umap_df[umap_df$organ_simplified == "spleen",], aes(x = UMAP_1, y = UMAP_2, color = condition_broad), alpha = 0.8, size = 2)
+bkgrd + p + facet_wrap(~condition_detailed) + scale_color_manual(values = mypal) + theme_minimal() + labs(title = "In Spleen", x = "UMAP 1", y = "UMAP 2")
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
+  geom_point(alpha = 0.8, size = 2) +
+  scale_color_manual(values = mypal) +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+# LabelClusters(p, id = "clusters")
+
+for (i in colnames(L1)) {
+    print(i)
+    p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = !!sym(i), size = !!sym(i))) +
+        geom_point(alpha = 0.8) +
+        scale_color_gradient(low = "grey", high = "red") +
+        theme_minimal() +
+        labs(title = sprintf("%s expression", i), x = "UMAP 1", y = "UMAP 2")
+    print(p)
+}
+
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8_cl15.prop, size = CD8_cl15.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8_cl10.prop, size = CD8_cl10.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8_cl7.prop, size = CD8_cl7.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD8_cl12.prop, size = CD8_cl12.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl23.prop, size = CD4_cl23.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl15.prop, size = CD4_cl15.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl17.prop, size = CD4_cl18.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl18.prop, size = CD4_cl18.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = CD4_cl20.prop, size = CD4_cl20.prop)) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  labs(title = "", x = "UMAP 1", y = "UMAP 2")
+
+dev.off()
+
+
+
+
+
+```
+
+=
+
+

@@ -56,12 +56,23 @@ names(mypal) = NULL
 mypal_organ = setNames(mypal, unique(so$organ_simplified))
 mypal_organ["other"] = "grey"
 mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_organ = setNames(mypal, unique(mdata_orig$organ_simplified))
+mypal_organ["other"] = "grey"
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
 
 mypal_level2 = setNames(mypal, unique(so$annotation_level2))
 mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
+
+mypal_condition_broad = setNames(mypal, unique(so$condition_broad))
+mypal_condition_broad = mypal_condition_broad[!is.na(names(mypal_condition_broad))]
+
+mypal_condition_broad = setNames(mypal, unique(mdata_orig$condition_broad))
+mypal_condition_broad = mypal_condition_broad[!is.na(names(mypal_condition_broad))]
+mypal_condition_broad["healthy"] = "black"
+mypal_condition_broad["allergy"] = mypal[60]
 
 mypal_condition_detailed_simplified = setNames(mypal, unique(so$condition_detailed_simplified))
 mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
@@ -134,6 +145,96 @@ if (!dir.exists(prefix)) {
 }
 
 ```
+
+**Plot top % samples for each cluster**
+
+```{r}
+prefix = "SampleComp/20250226"
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+# mdata = mdata_orig %>% select(matches("CD8"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+mdata = mdata_orig
+
+myclusters = colnames(mdata)[grepl("ncells",colnames(mdata))] %>% gsub(pattern = ".ncells", replacement = "")
+
+pdf(sprintf("%s/scatterplot_clusters_prop_by_ncells.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    p = ggplot(mdata, aes(x = !!sym(nc), y = !!sym(np), color = organ_simplified)) +
+        geom_point() +
+        theme_minimal() +
+        scale_color_manual(values = mypal_organ) +
+        # geom_text(data = top20, aes(label = sample_type), size = 3, vjust = -0.5)
+        geom_text_repel(data = top20, aes(label = sample_type),
+                        size = 3, 
+                        box.padding = 0.35, 
+                        point.padding = 0.5, 
+                        segment.color = 'grey50')
+    print(p)
+    
+}
+dev.off()
+
+pdf(sprintf("%s/scatterplot_clusters_nprop_organ.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7, color = "black") +
+        geom_text_repel(data = top20, aes(label = sample_type), 
+                        size = 3, vjust = -0.5, color = "red") +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10, color = condition_broad)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7) +
+        scale_color_manual(values = mypal_condition_broad) +
+        geom_text_repel(data = top20, aes(label = sample_type, color = condition_broad), 
+                        size = 3, vjust = -0.5) +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+}
+dev.off()
+
+
+
+
+```
+
 
 **Model 1: Limma interaction model ~ 0 + organ_simplified * condition_detailed_simplified * infection_phase in all T samples**
 Works but: 
@@ -1455,10 +1556,28 @@ for (j in names(so_split)) {
     dev.off()
 }
 
-
-
 ```
 
+**Plot top % samples for each cluster**
+
+```{r}
+prefix = "SampleComp/20250226"
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+mdata = mdata_orig %>% select(matches("CD8"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+
+p = ggplot(mdata) + geom_point(aes(CD8_cl26.prop, CD8_cl26.ncells, color = organ_simplified)) + theme_bw() + scale_color_manual(value = mypal)
+
+```
 
 
 ############Other trials 
