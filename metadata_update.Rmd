@@ -15,7 +15,7 @@ Most uptodate seurat object
 # so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
 
 ```
 
@@ -43,6 +43,20 @@ so = readRDS(file = sprintf("/project/jfkfloor2/zemmourlab/david/immgent/analysi
 # so = readRDS(file = sprintf("~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/%s/bpcells/totalvi_igt1_56_allgenes_%s_20240306_counts/totalvi_igt1_56_allgenes_%s_20240306_BPCells_so.Rds", to_subset, to_subset, to_subset))
 so = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56/Treg/totalvi_igt1_56_allgenes_Treg_20240528_so.Rds")
 so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/igt1_96_20241006_inmemory_diet_seurat.Rds")
+```
+
+**Add ADT feature metadata**
+```{r}
+# metaf = read.table("export_data/citeseq_qc_leon_nov2024.csv", header = T, sep = ",", as.is = T, row.names = 1)
+metaf = read.table("export_data/citeseq_qc_20250513.csv", header = T, sep = ",", as.is = T, row.names = 1)
+rownames(metaf)[!rownames(metaf) %in% rownames(so@assays$ADT)]
+metaf = metaf[match(rownames(so@assays$ADT),rownames(metaf)),]
+data.frame(rownames(metaf), rownames(so@assays$ADT), matched = rownames(metaf) == rownames(so@assays$ADT)) %>% arrange(matched)
+rownames(metaf) = rownames(so@assays$ADT)
+so@assays$ADT@meta.features = metaf
+so@assays$ADT@meta.features$IGT1only[is.na(so@assays$ADT@meta.features$IGT1only)] = T
+table(so@assays$ADT@meta.features$IGT1only)
+
 ```
 
 **Add latent spaces, umaps**
@@ -108,7 +122,7 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 so = AddLatentData(so, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241008_rmIGTsample", calculate_umap = F)
 ```
 
-Add mde_incremental in the whole object
+Add mde_incremental in the whole object --> only possible in the cleaned version, so do at the end
 ```{r}
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/"
 so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEachLevel1.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
@@ -563,8 +577,8 @@ Load metadata csv file
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250311_v8.csv",header = T, sep = ",")
-m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250317_v8.csv",header = T, sep = ",")
-
+# m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250317_v8.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
 
 # changing here and not in the original file to keep consistent with the database
 colnames(m)
@@ -809,7 +823,8 @@ so[['ADT']]$data = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250226.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513.Rds")
 
 ```
 
@@ -822,9 +837,20 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEachLevel1.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
 
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316_clean.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317_clean.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317_clean.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds")
 
 ```
+
+**Save version with CITEseq only**
+```{r}
+DefaultAssay(so) = "ADT"
+so[['RNA']] = NULL
+
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+```
+
+
 
 **if needed, small adjustments**
 ```{r}
