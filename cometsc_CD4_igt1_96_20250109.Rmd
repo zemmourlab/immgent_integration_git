@@ -370,7 +370,7 @@ DefaultAssay(so) = "ADT"
 on Midway
 ```{r}
 setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc")
-so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean.Rds")
+so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
 so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD4" &  !(so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif"))]
 
 so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
@@ -649,7 +649,7 @@ pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 
 thresholds = read.table("gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
 plots = read.table("gating_plots.csv", header = T, sep = ",",  row.names = 1)
 
-for (i in 1:nrow(pops)) {
+for (i in 15:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     toplots = colnames(toplot)[!is.na(toplot[pop,])]
@@ -704,9 +704,9 @@ for (i in 1:nrow(pops)) {
     message(sprintf("%s: %s cells",pop, length(cells)))
 }
 
-saveRDS(gate_list, file = "GatedCells.Rds")
+# saveRDS(gate_list, file = "GatedCells.Rds")
 
-pdf("gated_cells_inMDE.pdf", 15, 15, useDingbats = F)
+pdf("gated_cells_inMDE.pdf", 10, 10, useDingbats = F)
 for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
@@ -715,7 +715,7 @@ for (i in 1:nrow(pops)) {
     so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]] #so@meta.data[,sprintf("is_%s", cl)] =
     p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% pop_split)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", pop))
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop))
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.1, highlight_alpha = 0.1)
     print(p)
 }
 
