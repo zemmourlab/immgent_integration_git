@@ -64,11 +64,11 @@ so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
 so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
 so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
 
-i="IGT37"
+# i="IGT37"
 level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
 
 message("One file per sample, with labels only")
-# for (i in unique(so_orig$IGT)) {
+for (i in unique(so_orig$IGT)) {
     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
     for (s in samples) {
         print(s)
@@ -90,10 +90,10 @@ message("One file per sample, with labels only")
         # grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
         dev.off()
     }
-# }
+}
 
 message("One file per sample in separate IGT folders, with and without labels")
-# for (i in unique(so_orig$IGT)) {
+for (i in unique(so_orig$IGT)) {
     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
     for (s in samples) {
         print(s)
@@ -115,7 +115,7 @@ message("One file per sample in separate IGT folders, with and without labels")
         grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
         dev.off()
     }
-# }
+}
 
 # message("One file with all plots")
 # pdf(sprintf("%s/IGT1-96_MDEs",output_dir), width = 20, height = 20, useDingbats = F)
