@@ -29,7 +29,7 @@ source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/cust
 
 
 message("loading seurat object")
-so = readRDS(file = path_to_seurat_object)
+so_orig = readRDS(file = path_to_seurat_object)
 
 message("Set color palette")
 library("pals")
