@@ -2,8 +2,6 @@
 # R
 # usage: Rscript mde_plots_per_sample.R [path_to_seurat_object] [output_dir]
 
-options(max.print=1000)
-
 # Parse arguments
 args = commandArgs(TRUE)
 if (length(args) < 3) {
