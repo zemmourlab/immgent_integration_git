@@ -4,7 +4,7 @@
 
 # Parse arguments
 args = commandArgs(TRUE)
-if (length(args) < 3) {
+if (length(args) < 2) {
     stop("Usage: Rscript mde_plots_per_sample.R [path_to_seurat_object] [output_dir]")
 }
 path_to_seurat_object = args[1]
