@@ -61,63 +61,14 @@ so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
 
 level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
 
-message("One file with all plots")
-pdf(sprintf("%s/IGT1-96_MDEs",output_dir), width = 20, height = 20, useDingbats = F)
-for (i in unique(so_orig$IGT)) {
-    samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
-    for (s in samples) {
-        print(s)
-        ensure_directory(sprintf("MDE_InEachSample/%s/", i))
-        # pdf(sprintf("MDE_InEachSample/%s/%s_MDEs.pdf", i, s), width = 20, height = 20, useDingbats = F)
-        ps2 = list()
-        ps3 = list()
-        p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-        ps2[["all"]] =  p$plot2
-        ps3[["all"]] =  p$plot3
-        for (l in level1) {
-            # print(l)
-            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-            ps2[[l]] = p$plot2
-            ps3[[l]] = p$plot3 #to get plot with labels
-        }
-        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
-        # grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-        # dev.off()
-    }
-}
-dev.off()
-
-message("One file per sample in separate IGT folders, with and without labels")
+message("One file per sample, with labels only")
 for (i in unique(so_orig$IGT)) {
     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
     for (s in samples) {
         print(s)
         ensure_directory(sprintf("%s/%s/", i))
-        pdf(sprintf("%s/%s/%s_MDEs.pdf", output_dir, i, s), width = 20, height = 20, useDingbats = F)
-        ps2 = list()
-        ps3 = list()
-        p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-        ps2[["all"]] =  p$plot2
-        ps3[["all"]] =  p$plot3
-        for (l in level1) {
-            # print(l)
-            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-            ps2[[l]] = p$plot2
-            ps3[[l]] = p$plot3 #to get plot with labels
-        }
-        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
-        grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-        dev.off()
-    }
-}
-
-message("One file per sample in separate IGT folders, withoutlabels")
-for (i in unique(so_orig$IGT)) {
-    samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
-    for (s in samples) {
-        print(s)
-        ensure_directory(sprintf("%s/%s/", i))
-        pdf(sprintf("%s/%s/%s_MDEsWithLabels.pdf", output_dir, i, s), width = 20, height = 20, useDingbats = F)
+        pdf(sprintf("%s/tmp/%s_MDEsWithLabels.pdf", output_dir, s), width = 20, height = 20, useDingbats = F)
+        message(sprintf("PDF IN %s/tmp/%s_MDEsWithLabels.pdf", output_dir, s))
         ps2 = list()
         ps3 = list()
         p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
@@ -135,6 +86,55 @@ for (i in unique(so_orig$IGT)) {
     }
 }
 
+message("One file per sample in separate IGT folders, with and without labels")
+for (i in unique(so_orig$IGT)) {
+    samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
+    for (s in samples) {
+        print(s)
+        ensure_directory(sprintf("%s/%s/", i))
+        pdf(sprintf("%s/%s/%s_MDEs.pdf", output_dir, i, s), width = 20, height = 20, useDingbats = F)
+        message(sprintf("PDF IN %s/%s/%s_MDEs.pdf", output_dir, i, s))
+        ps2 = list()
+        ps3 = list()
+        p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+        ps2[["all"]] =  p$plot2
+        ps3[["all"]] =  p$plot3
+        for (l in level1) {
+            # print(l)
+            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+            ps2[[l]] = p$plot2
+            ps3[[l]] = p$plot3 #to get plot with labels
+        }
+        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
+        grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
+        dev.off()
+    }
+}
 
+# message("One file with all plots")
+# pdf(sprintf("%s/IGT1-96_MDEs",output_dir), width = 20, height = 20, useDingbats = F)
+# for (i in unique(so_orig$IGT)) {
+#     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
+#     for (s in samples) {
+#         print(s)
+#         ensure_directory(sprintf("MDE_InEachSample/%s/", i))
+#         # pdf(sprintf("MDE_InEachSample/%s/%s_MDEs.pdf", i, s), width = 20, height = 20, useDingbats = F)
+#         ps2 = list()
+#         ps3 = list()
+#         p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+#         ps2[["all"]] =  p$plot2
+#         ps3[["all"]] =  p$plot3
+#         for (l in level1) {
+#             # print(l)
+#             p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+#             ps2[[l]] = p$plot2
+#             ps3[[l]] = p$plot3 #to get plot with labels
+#         }
+#         grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
+#         # grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
+#         # dev.off()
+#     }
+# }
+# dev.off()
 
 
