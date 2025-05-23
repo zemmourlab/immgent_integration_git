@@ -39,14 +39,14 @@ mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 mypal1 = mypal1[-4]
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
-mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = setNames(mypal, unique(so_orig$organ_simplified))
 mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
-mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
-mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2 = setNames(mypal, unique(so_orig_orig$annotation_level2))
 mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
 mypal_level2["CD4_cl18"] = "blue"
-mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
 mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
 
