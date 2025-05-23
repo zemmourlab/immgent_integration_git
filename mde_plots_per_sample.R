@@ -72,7 +72,7 @@ message("One file per sample, with labels only")
     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
     for (s in samples) {
         print(s)
-        ensure_directory(sprintf("%s/tmp/%s/", output_dir,i))
+        ensure_directory(sprintf("%s/tmp/", output_dir))
         pdf(sprintf("%s/tmp/%s_MDEsWithLabels.pdf", output_dir, s), width = 20, height = 20, useDingbats = F)
         message(sprintf("PDF IN %s/tmp/%s_MDEsWithLabels.pdf", output_dir, s))
         ps2 = list()
