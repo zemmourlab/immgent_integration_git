@@ -45,7 +45,7 @@ options(max.print=1000)
 # setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2","scattermore", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -79,6 +79,9 @@ mypal_organ = setNames(mypal, unique(so$organ_simplified))
 mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_level2["CD4_cl18"] = "blue"
 mypal_igt = setNames(mypal, unique(so$IGT))
 mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
@@ -90,7 +93,10 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 https://willwerscheid.github.io/flashier/articles/flashier_intro.html
 
 ```{r}
-so = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
+# so_orig = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
+so_orig = readRDS(file = "igt1_96_withtotalvi20250513_clean.Rds")
+so = so_orig
+
 
 sampled_cellID = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_sampledcells200K.csv", header = F, as.is = T)[,1]
 # sampled_cellID %>% write.table("igt1_96_sampledcells200K.csv", quote = F, row.names = F, col.names = F, sep = ",")
@@ -270,7 +276,7 @@ plot(L1[,1], L1[,162], pch = ".", log = "x"  )
 
 
 **Flagging batch specific topics **
-4, 49, 171
+9, 49, 171
 Limma with spleen control
 ```{r}
 library(limma)
@@ -718,7 +724,6 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, pref
 
 ```
 
-
 **Limma with annotation level2**
 ~ 0 + annotation_level2 + IGT
 
@@ -1027,6 +1032,221 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, pref
 
 
 ```
+
+**Topics in CD4**
+
+Th1 topics
+26: Ifng, ccl5 etc
+X10
+X26
+
+Th2 topics
+56: IL4, il13
+159: Il1rl1 gata3 areg
+X25
+
+Th17 topics
+152: Treg_cl8 (Maf, Il10, Ctla4)
+161: Il17a (PD1, Nr4a1)
+72: IL22, Bhlh240, Odc1
+36
+
+```{r}
+so = so_orig[,so_orig$annotation_level1 == "CD4" & !so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif")]
+L1 = with(ldf(fit, type = "i"), L) #same as res$F %*% diag(res$D)
+
+cd4_l1 = data.frame(so@meta.data,L1[colnames(so),])
+cd4_l1 = cd4_l1 %>% mutate(th1 = X10+X25+X26,th2 = X56+X159+X25, th17 = X161+X72+X36+X13)
+cd4_l1 = cd4_l1 %>% mutate(th1 = X26+X10,th2 = X56, th17 = X161)
+
+
+# p = ggplot(cd4_l1) + geom_scattermore(aes(X10, X159, color = annotation_level2), pointsize = 1, alpha = 1, pixels = c(512,512)) + scale_color_manual(values = mypal_level2) + ggtitle("") + theme_minimal() + NoLegend()
+# p
+
+# p = ggplot(cd4_l1 %>% filter(annotation_level2_group %in% c("activated") )) + geom_point(aes(X10, X159, color = annotation_level2), size = 0.1,alpha = 0.5) + xlim(c(0,0.0025)) + scale_color_manual(values = mypal_level2) + ggtitle("") + theme_minimal() + NoLegend()
+# p + facet_wrap(~annotation_level2)
+
+# pdf(sprintf("%s/%s/CD4_th_topics_scatter.pdf", prefix, prefix2), 6, 6, useDingbats = F)
+pdf(sprintf("%s/%s/CD4_th_topics_scatter_split.pdf", prefix, prefix2), 20, 20, useDingbats = F)
+p = ggplot(cd4_l1) + 
+    geom_jitter(aes(log(th1 + 0.01), log(th2 + 0.01), color = annotation_level2), 
+                size = 0.5, alpha = 0.5, width = 0.1, height = 0.1) +  # Add jitter with specified width and height
+    scale_color_manual(values = mypal_level2) + 
+    xlim(c(min(log(cd4_l1$th1+0.01)),-2)) +
+    ggtitle("") + 
+    theme_minimal() 
+# p 
+# p + NoLegend()
+p+facet_wrap(~annotation_level2)
+
+p = ggplot(cd4_l1) + 
+    geom_jitter(aes(log(th1 + 0.01), log(th17 + 0.01), color = annotation_level2), 
+                size = 0.5, alpha = 0.5, width = 0.1, height = 0.1) +  # Add jitter with specified width and height
+    scale_color_manual(values = mypal_level2) + 
+    xlim(c(min(log(cd4_l1$th1+0.01)),-2)) +
+    ggtitle("") + 
+    theme_minimal() + 
+    NoLegend()
+# p
+p+facet_wrap(~annotation_level2)
+
+
+p = ggplot(cd4_l1) + 
+    geom_jitter(aes(log(th17 + 0.01), log(th2 + 0.01), color = annotation_level2), 
+                size = 0.5, alpha = 0.5, width = 0.1, height = 0.1) +  # Add jitter with specified width and height
+    scale_color_manual(values = mypal_level2) + 
+    ggtitle("") + 
+    theme_minimal() + 
+    NoLegend()
+# p
+p+facet_wrap(~annotation_level2)
+dev.off()
+
+
+pdf(sprintf("%s/%s/CD4_th_topics_violin.pdf", prefix, prefix2), 10, 7, useDingbats = F)
+p = ggplot(cd4_l1) + 
+  geom_violin(aes(x = annotation_level2, y = log(th17 + 0.01), fill = annotation_level2), 
+              alpha = 0.5, trim = TRUE) +  # Violin plot with filling and transparency
+  geom_jitter(aes(x = annotation_level2, y = log(th17 + 0.01), color = annotation_level2), 
+              size = 1, alpha = 0.5, width = 0.1, height = 0.1) +  # Scatter plot with jitter
+  scale_color_manual(values = mypal_level2) +  # Color scale for points
+  scale_fill_manual(values = mypal_level2) +  # Color scale for violins
+  ggtitle("") + 
+  theme_minimal() + 
+  NoLegend()  # Remove legend
+p
+
+p = ggplot(cd4_l1) + 
+  geom_violin(aes(x = annotation_level2, y = log(th1 + 0.01), fill = annotation_level2), 
+              alpha = 0.5, trim = TRUE) +  # Violin plot with filling and transparency
+  geom_jitter(aes(x = annotation_level2, y = log(th1 + 0.01), color = annotation_level2), 
+              size = 1, alpha = 0.5, width = 0.1, height = 0.1) +  # Scatter plot with jitter
+  scale_color_manual(values = mypal_level2) +  # Color scale for points
+  scale_fill_manual(values = mypal_level2) +  # Color scale for violins
+  ggtitle("") + 
+  theme_minimal() + 
+  NoLegend()  # Remove legend
+p
+
+p = ggplot(cd4_l1) + 
+  geom_violin(aes(x = annotation_level2, y = log(th2 + 0.01), fill = annotation_level2), 
+              alpha = 0.5, trim = TRUE) +  # Violin plot with filling and transparency
+  geom_jitter(aes(x = annotation_level2, y = log(th2 + 0.01), color = annotation_level2), 
+              size = 1, alpha = 0.5, width = 0.1, height = 0.1) +  # Scatter plot with jitter
+  scale_color_manual(values = mypal_level2) +  # Color scale for points
+  scale_fill_manual(values = mypal_level2) +  # Color scale for violins
+  ggtitle("") + 
+  theme_minimal() + 
+  NoLegend()  # Remove legend
+p
+dev.off()
+
+
+
+
+```
+
+Gene dot plot
+```{r}
+F1 = with(ldf(fit, type = "i"), F)
+colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+top_genes = apply(F1, 2, order, decreasing = TRUE)[1:10, c("F26","F56","F161")]
+top_genes = unique(c("Ifng",rownames(fit$F_pm)[top_genes]))
+top_genes
+
+
+plot_data = melt(F1[top_genes,c("F26","F56","F161")], varnames = c("Gene", "Factor"), value.name = "Expression")
+
+# Create the dot plot
+
+pdf(sprintf("%s/%s/CD4_genematrix_topicsTh1217.pdf", prefix, prefix2), 3, 7, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = Gene, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+  scale_fill_gradient(low = "white", high = "brown") +  # Adjust color gradient
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Gene))) + 
+  coord_fixed(ratio = 1) +  # Ensure tiles are square
+  labs(title = "Dot Plot (Squares) of Gene Expression", x = "Layer", y = "Gene")
+print(p)
+dev.off()
+```
+
+Tfh/Tex FC FC plot
+```{r}
+source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R')
+
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20250109/ttlist_OneVsAll.Rds')
+
+names(tt_list)
+
+vplot = data.frame(fc1 = exp(tt_list$CD4_cl14_vs_All$logFC), fc2 = exp(tt_list$CD4_cl13_vs_All$logFC))
+
+FCFCplot(vplot)
+genes_to_plot = abs(tt_list$CD4_cl14_vs_All$logFC >2 | tt_list$CD4_cl13_vs_All$logFC >2)
+plot(tt_list$CD4_cl14_vs_All$logFC, tt_list$CD4_cl13_vs_All$logFC, pch = ".")
+
+# Load necessary libraries
+library(ggplot2)
+library(scales)  # For log transformation
+library(ggrepel)
+
+# Define the FCFCplot function
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, 
+                    xlimits = c(0.1, 10), ylimits = c(0.1, 10), genes_to_label = NULL) {
+    # Create the base plot
+    p = ggplot(data = vplot) + 
+        geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+        scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
+                           labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+        scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
+                           labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+        geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+        geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+        annotation_logticks(sides = "bl") +
+        xlab(xlab) +
+        ylab(ylab) +
+        ggtitle(main) +
+        theme_bw() +
+        theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), 
+              axis.text.y  = element_text(size=15), 
+              legend.text=element_text(size=20), 
+              axis.title.x = element_text(size=20) , 
+              axis.title.y = element_text(size=20))
+    
+    # Add labels for specific genes if requested
+    if (printgeomtext & !is.null(genes_to_label)) {
+        p = p + geom_text_repel(data = genes_to_label, aes(x = fc1, y = fc2, label = SYMBOL), 
+                                 size = 3, color = "red", box.padding = 0.35, 
+                                 point.padding = 0.5, segment.color = 'grey50', max.overlaps = 20)
+    }
+    
+    return(p)
+}
+
+# Create the vplot dataframe with fold changes
+vplot = data.frame(fc1 = exp(tt_list$CD4_cl14_vs_All$logFC), fc2 = exp(tt_list$CD4_cl13_vs_All$logFC), SYMBOL = tt_list$CD4_cl14_vs_All$SYMBOL)
+
+# Identify genes with large fold changes (>2)
+genes_to_plot = abs(tt_list$CD4_cl14_vs_All$logFC) > 0.69 | abs(tt_list$CD4_cl13_vs_All$logFC) > 0.69
+genes_to_label = vplot[genes_to_plot, ]
+
+# Create the plot
+FCFCplot(vplot, 
+         xlab = "FC for CD4_cl14", 
+         ylab = "FC for CD4_cl13", 
+         main = "Fold Change vs Fold Change", 
+         printgeomtext = T, 
+         genes_to_label = genes_to_label)
+
+
+```
+
+
 
 
 

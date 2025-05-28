@@ -89,12 +89,17 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 ```
 
+sbatch $SCRIPT_DIR/mde_plots_wrapper.sh
+mde_plots_per_sample.R
+```{r}
+```
+
+
+
 **Load dataset**
 
 ```{r}
-
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
-
 
 ```
 
@@ -178,9 +183,29 @@ for (i in unique(so_orig$IGT)) {
 
 ```
 
-Same for Ag-specific cells only
+
+
+
+For Ag-specific cells only
 
 ```{r}
+library(gridExtra)
+
+so_orig$is_agspe = !is.na(so_orig$Ag_spe)
+
+so = list()
+so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
+so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
+so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
+so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
+so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
+so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
+so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
+so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
+
+
+# i = "IGT37"
+level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
 
 igts = so_orig@meta.data %>% filter(is_agspe == T) %>% pull(IGT) %>% unique()
 
@@ -222,66 +247,38 @@ dev.off()
 ```
 
 
+**Export images for movie**
 ```{r}
-library(gridExtra)
 
-so_orig$is_agspe = !is.na(so_orig$Ag_spe)
+dir.create("MDE_InEachSample/frames_all")
 
-so = list()
-so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
-so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
-so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
-so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
-so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
-so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
-so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
-so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
-so$is_
+samples = so_orig@meta.data %>% pull(sample_code) %>% unique()
+l = "all"
 
-print(s)
-        ensure_directory(sprintf("MDE_InEachSample/%s/", i))
-        pdf(sprintf("MDE_InEachSample/%s/%s_MDEs.pdf", i, s), width = 20, height = 20, useDingbats = F)
-        ps2 = list()
-        ps3 = list()
-        for (l in level1) {
-            # print(l)
-            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "Ag_spe", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-            ps2[[l]] = p$plot2
-            ps3[[l]] = p$plot3 #to get plot with labels
-        }
-        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
-        grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-        dev.off()
-
-
-i = "IGT39"
-level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
-
-# pdf("MDE_InEachSample/IGT1-96_MDEs.pdf", width = 20, height = 20, useDingbats = F)
-for (i in unique(so_orig$IGT)) {
-    samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
-    for (s in samples) {
-        print(s)
-        ensure_directory(sprintf("MDE_InEachSample/%s/", i))
-        pdf(sprintf("MDE_InEachSample/%s/%s_MDEs.pdf", i, s), width = 20, height = 20, useDingbats = F)
-        ps2 = list()
-        ps3 = list()
-        for (l in level1) {
-            # print(l)
-            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
-            ps2[[l]] = p$plot2
-            ps3[[l]] = p$plot3 #to get plot with labels
-        }
-        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
-        grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-        dev.off()
-    }
+for (i in 1:length(samples)) {
+    print(samples[i])
+    p = MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(so_orig)[which(so_orig$sample_code == samples[i])], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s",samples[i]), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+    # p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+    ggsave(sprintf("MDE_InEachSample/frames_all/frame_%03d.png", i), plot = p$plot2, width = 5, height = 5, bg = "white")
 }
-dev.off()
+
+
 
 ```
 
+```{r}
+##On my desktop (couldn't install av on midway3)
+library(av)
+setwd('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/MDE_InEachSample')
 
+# Create a video from the PNG frames
+av_encode_video(
+  list.files("frames_all", full.names = TRUE), 
+  framerate = 10,           # 10 frames per second
+  output = "immgenT_movie_all.mp4"
+)
+
+```
 
 
 

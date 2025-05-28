@@ -234,6 +234,51 @@ dev.off()
 
 ```
 
+**FCFC plots for giovanni**
+```{r}
+source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R')
+
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD8/DGE_limma/20250109/ttlist_OneVsAll.Rds')
+
+names(tt_list)
+
+
+# Create the vplot dataframe with fold changes
+vplot = data.frame(fc1 = exp(tt_list$CD8_cl10_vs_All$logFC), fc2 = exp(tt_list$CD8_cl11_vs_All$logFC), SYMBOL = tt_list$CD8_cl10_vs_All$SYMBOL)
+
+# Identify genes with large fold changes (>2)
+genes_to_plot = abs(tt_list$CD8_cl10_vs_All$logFC) > 0.69 | abs(tt_list$CD8_cl11_vs_All$logFC) > 0.69
+# genes_to_label = vplot[genes_to_plot, ]
+genes_to_label = vplot$SYMBOL[genes_to_plot]
+
+# Create the plot
+FCFCplot(vplot, 
+         xlab = "FC for CD8_cl10", 
+         ylab = "FC for CD8_cl11", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = genes_to_label)
+
+FCFCplot(vplot, 
+         xlab = "FC for CD8_cl10", 
+         ylab = "FC for CD8_cl11", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = NULL)
+
+vplot = data.frame(fc1 = exp(tt_list$CD8_cl10_vs_All$logFC), fc2 = exp(tt_list$CD8_cl7_vs_All$logFC), SYMBOL = tt_list$CD8_cl10_vs_All$SYMBOL)
+# Identify genes with large fold changes (>2)
+genes_to_plot = abs(tt_list$CD8_cl10_vs_All$logFC) > 0.69 | abs(tt_list$CD8_cl7_vs_All$logFC) > 0.69
+genes_to_label = vplot[genes_to_plot, ]
+# Create the plot
+FCFCplot(vplot, 
+         xlab = "FC for CD8_cl10", 
+         ylab = "FC for CD8_cl7", 
+         main = "Fold Change vs Fold Change", 
+         printgeomtext = T, 
+         genes_to_label = genes_to_label)
+
+
+
+```
 
 
 

@@ -604,19 +604,36 @@ VplotAddSig = function(p, vplot, y_text = 10^-100) {
     
 }
 
-FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
-    p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
-        scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
-        scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", 
+                    xlimits = c(0.1, 10), ylimits = c(0.1, 10), genes_to_label = NULL) {
+    # Create the base plot
+    p = ggplot(data = vplot) + 
+        geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+        scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
+                           labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+        scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
+                           labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
         geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
         geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
-        #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
         annotation_logticks(sides = "bl") +
         xlab(xlab) +
         ylab(ylab) +
         ggtitle(main) +
         theme_bw() +
-        theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+        theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), 
+              axis.text.y  = element_text(size=15), 
+              legend.text=element_text(size=20), 
+              axis.title.x = element_text(size=20) , 
+              axis.title.y = element_text(size=20))
+    
+    # Add labels for specific genes if requested
+    if (!is.null(genes_to_label)) {
+        vplot2 = vplot[vplot$SYMBOL %in% genes_to_label,]
+        p = p + geom_text_repel(data = vplot2, aes(x = fc1, y = fc2, label = SYMBOL), 
+                                size = 3, color = "red", box.padding = 0.35, 
+                                point.padding = 0.5, segment.color = 'grey50', max.overlaps = 20)
+    }
+    
     return(p)
 }
 

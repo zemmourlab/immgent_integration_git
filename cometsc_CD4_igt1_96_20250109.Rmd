@@ -645,7 +645,10 @@ Plots from gating strategy
 #DO NOT USE SO_SUB!
 
 toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
+toplot = read.table("gating_toplot20250527.csv", header = T, sep = ",", row.names = 1)
 pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
+pops = read.table("gating_populations20250527.csv", header = T, sep = ",",  row.names = 1)
+
 thresholds = read.table("gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
 plots = read.table("gating_plots.csv", header = T, sep = ",",  row.names = 1)
 
