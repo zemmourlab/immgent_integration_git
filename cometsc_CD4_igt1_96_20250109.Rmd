@@ -272,7 +272,7 @@ Comet input_data.txt input_umap.txt input_clusters.txt k2 -C 36 -K 2 # -C is for
 ```
 
 
-**Find gating strategy**
+Plots
 back to source activate /project/zemmour/david/envs/scvi_20240315
 Prefix
 ```{r}
@@ -351,8 +351,8 @@ dev.off()
 
 ```
 
-**Loading data**
-
+**Exploring the data with subset of cells for finding the gates**
+*Loading data*
 on desktop
 ```{r}
 setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc/")
@@ -384,7 +384,7 @@ DefaultAssay(so) = "ADT"
 
 
 
-**Exploring the data with subset of cells for finding the gates: CD62L-**
+*Exploring the data with subset of cells for finding the gates*
 CD62L- might be enough (vs using also CD44). 
     CD62L+ CD44- fine: for all resting
     CD62L- CD44+: fine: clean for 15,16,17,18,21,22,23
@@ -639,25 +639,26 @@ dev.off()
 
 ```
 
-Plots from gating strategy
+
+*Plots from gating strategy*
 ```{r}
 
 #DO NOT USE SO_SUB!
 
-toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
+# toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
+# pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
 toplot = read.table("gating_toplot20250527.csv", header = T, sep = ",", row.names = 1)
-pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
 pops = read.table("gating_populations20250527.csv", header = T, sep = ",",  row.names = 1)
-
 thresholds = read.table("gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
 plots = read.table("gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "20250527"
 
-for (i in 15:nrow(pops)) {
+for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     toplots = colnames(toplot)[!is.na(toplot[pop,])]
     # j = toplots[2]
-    pdf(sprintf("gating_strategy_%s.pdf", pop), 6, 6, useDingbats = F)
+    pdf(sprintf("gating_strategy_%s_%s.pdf", pop,prefix3), 6, 6, useDingbats = F)
     for (j in toplots) {
         print(j)
         features = colnames(plots)[!is.na(plots[j,])]
@@ -677,7 +678,7 @@ for (i in 15:nrow(pops)) {
 
 ```
 
-**Calculate Se,Sp etc per cluster and sample**
+*Calculate Se,Sp etc per cluster and sample*
 --> GatedCells.Rds, SeSpPPVNPV_ClusterBySample.tsv
 
 cellid in each gate --> GatedCells.Rds
@@ -686,7 +687,7 @@ pops[is.na(pops) | pops == "" ] = NA
 
 gate_list = list()
 
-for (i in 1:nrow(pops)) {
+for (i in 7:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     mrks = na.omit(unlist(pops[i,]))
@@ -707,10 +708,11 @@ for (i in 1:nrow(pops)) {
     message(sprintf("%s: %s cells",pop, length(cells)))
 }
 
-# saveRDS(gate_list, file = "GatedCells.Rds")
+# saveRDS(gate_list, file = "GatedCells_20250527.Rds")
+saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
 
-pdf("gated_cells_inMDE.pdf", 10, 10, useDingbats = F)
-for (i in 1:nrow(pops)) {
+pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 10, 10, useDingbats = F)
+for (i in 7:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
@@ -763,6 +765,7 @@ m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.e
 stats = merge(stats, m, by = "sample_code", all.x = T, all.y = F)
 
 # write.table(stats, file = "SeSpPPVNPV_ClusterBySample.tsv", quote = F, row.names = F, col.names = T, sep = "\t")
+# write.table(stats, file = sprintf("SeSpPPVNPV_ClusterBySample_%s.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
 
 ```
 
@@ -773,7 +776,8 @@ Plots
 for (i in c("se", "sp", "ppv", "npv")) {
     print(i)
     
-    pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
+    # pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
+    pdf(sprintf("stats_%s_SummaryPlot_%s.pdf", i, prefix3),15,10, useDingbats = F)
     
     p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
         geom_jitter(data = stats, aes(pop, !!(sym(i)), color = pop, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +

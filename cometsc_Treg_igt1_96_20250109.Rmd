@@ -8,6 +8,8 @@ Continuation from clustering_Treg_igt_1_96.Rmd
 
 ```{bash}
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
@@ -20,10 +22,11 @@ R
 ```
 
 ```{r}
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+libs = c("Seurat", "ggplot2", "dplyr","scattermore", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 options(Seurat.object.assay.version = 'v5')
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
 
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
@@ -33,18 +36,23 @@ ColorRamp = brewer.pal(9, "Blues")
 
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
 
+#Large Color palette
+library("pals")
 n = 70
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
 mypal1 = mypal1[-4]
-
-library("pals")
-parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
-
-length(glasbey())
-length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
 ```
 
@@ -177,7 +185,7 @@ protein_list = rownames(so[["ADT"]])
 write.table(protein_list, file = sprintf("%s/input_markers.txt",prefix), sep = "\t", row.names = F, col.names = F, quote = F)
 ```
 
-**Run COMETSC**
+**RUN COMETSC**
 Comet tabmarker.txt tabvis.txt tabcluster.txt output/ -skipvis True
 
 ```{bash}
@@ -213,9 +221,493 @@ Comet input_data.txt input_umap.txt input_clusters.txt k2 -C 36 -K 2 # -C is for
 
 ```
 
-**Find gating strategy**
+
+Plots
 back to source activate /project/zemmour/david/envs/scvi_20240315
 Prefix
+```{r}
+prefix = prefix
+prefix2 = "k2_logdata" # prefix2 = "k2data"
+# prefix3 = "markers_level2"
+```
+
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg")
+so = readRDS(sprintf("%s/igt1_96_Treg_filteredforCometsc.Rds", prefix))
+
+```
+
+```{r}
+
+singleton_list = list()
+files = list.files(path = sprintf("%s/%s", prefix, prefix2), pattern = "singleton_all_ranked.csv")
+# cluster_ids = gsub(".*_(cl\\d+)_.*", "\\1", files)
+cluster_ids = gsub("cluster_|_singleton_all_ranked.csv", "", files)
+for (i in 1:length(files)) {
+    singleton_list[[files[i]]] = read.table(file = sprintf("%s/%s/%s", prefix, prefix2, files[i]), header = T, as.is = T, sep = ",")
+    if(nrow(singleton_list[[files[i]]]) != 0) {
+        singleton_list[[files[i]]][,"cluster"] = cluster_ids[i]
+    }
+}
+singleton_list = Reduce(f = rbind, singleton_list)
+
+singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice_head(n = 5) %>% as.data.frame() %>% write.table(sprintf("%s/%s/singleton_all_ranked_top5percluster.csv", prefix, prefix2), sep = ",", quote = F, row.names = F, col.names = T)
+
+singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice_head(n = 10) %>% as.data.frame() %>% write.table(sprintf("%s/%s/singleton_all_ranked_top10percluster.csv", prefix, prefix2), sep = ",", quote = F, row.names = F, col.names = T)
+
+```
+
+**Exploring the data with subset of cells for finding the gates**
+Loading data on desktop
+```{r}
+setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/Treg/cometsc/")
+so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "Treg" &  !(so_orig$annotation_level2 %in% c("Treg_miniverse", "Treg_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+```
+
+Loading data on Midway
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/cometsc")
+so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "Treg" &  !(so_orig$annotation_level2 %in% c("Treg_miniverse", "Treg_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+```
+
+Plot CITEseq on MDE
+```{r}
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+# prots = sort(rownames(so)[so@assays$ADT@meta.features$IGT1only == F])
+prots = so@assays$ADT@meta.features %>% filter(IGT1only == F) %>% select(classification) %>% arrange(classification) %>% row.names()
+umap_to_plot = "mde_incremental"
+pdf(sprintf("%s/MDE_proteins_CLR.pdf", "."), 10,10, useDingbats = F)
+for (f in prots) {
+    print(f)
+    print(FeaturePlot(so, reduction = umap_to_plot, features = f, raster = T, order = F, raster.dpi = c(1024,1024)))
+}
+dev.off()
+
+so@assays$ADT@meta.features %>% filter(IGT1only == F) %>% select(classification) %>% arrange(classification) %>% row.names()
+
+```
+
+Heatmap
+```{r}
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+adt = as.matrix(so[["ADT"]]$data)
+markers = c("CD62L", "KLRG1", "CD49B","CD29", "FR4", "SCA1", "NEUROPILIN1.CD304", "CD69", "CD45RB", "CD120B")
+adt = adt[markers,]
+tmp = melt(adt)
+tmp$cluster = so$annotation_level2[tmp$Var2]
+tmp2 = tmp %>% group_by(cluster, Var1) %>% summarize(mean(value))
+tmp3 = dcast(data = tmp2, Var1 ~ cluster)
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+#labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)))
+# tmp4 = t(tmp3 / colMeans(tmp3))
+tmp4 = tmp3 - rowMeans(tmp3)
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+
+pdf(sprintf("%s/heatmap.pdf", "."), 5,5)
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "log10+1 geom mean ADT", na_col = "grey") #display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), fontsize = 10,
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "log10+1 geom mean ADT", na_col = "grey") #display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), fontsize = 10,
+pheatmap(mat = tmp4, cluster_rows = T, cluster_cols = T, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "log10+1 geom mean ADT (rowMean normalized)", na_col = "grey")
+pheatmap(mat = tmp4, cluster_rows = T, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "log10+1 geom mean ADT (rowMean normalized)", na_col = "grey")
+
+dev.off()
+```
+
+
+Scatterplots
+--> use these plots to update gating.xlsx (then export each sheet for downstream analysis)
+```{r}
+
+# ## Subset data to plot and analyze faster
+# so@meta.data %>% group_by(annotation_level2) %>% summarize(n()) %>% as.data.frame()
+# sub = so@meta.data %>% group_by(annotation_level2) %>% sample_n(ifelse(test = n() < 1000, yes = n(), no = 1000)) %>% pull(cellID)
+# so_sub = so[,sub]
+# so_sub@meta.data %>% group_by(annotation_level2) %>% summarize(n()) %>% as.data.frame()
+# so = so_sub
+
+features_list = list(c("CD62L", "CD44"),
+                     c("CD62L", "KLRG1"),
+                     c("FR4", "NEUROPILIN1.CD304"),
+                     c("CD49B", "CD29"),
+                     c("CD120B", "CD69"),
+                     c("CD62L", "CD45RB"),
+                     c("SCA1", "NEUROPILIN1.CD304"),
+                     c("SCA1", "KLRG1"),
+                     c("CD49B", "KLRG1"),
+                     c("CD49B", "SCA1"),
+                     c("FR4", "CD73.5NTD"),
+                     c("CXCR5", "PDCD1.PD1.CD279"),
+                     c("SCA1", "ICOS.CD278"),
+                     c("CD8B", "PD1L1.CD274"),
+                     c("CD69", "CD137"),
+                     c("CD69", "OX40.CD134"),
+                     c("CD69", "CD200")
+                     )
+
+pdf("all_pops_gates_facetted.pdf", 15,15, useDingbats = F)
+i = 1
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 5
+# FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2_group") + scale_color_manual(values = mypal_level2) #+ ggtitle(sprintf("is_%s", cl))
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown") 
+
+i = 2
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+# FeatureScatter(so[,so$annotation_level2_group == "activated"],slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) #+ ggtitle(sprintf("is_%s", cl))
+# FeatureScatter(so[,so$annotation_level2_group == "activated"],slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl))
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 3
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 6
+th2 = 5
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 4
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 5
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 5
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 5
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 6
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 6
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 7
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 5
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+##
+i = 8
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 5
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 9
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 10
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 5
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 11
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 6
+th2 = 6
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 12
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 3
+th2 = 5
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 13
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 14
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+
+i = 15
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 16
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+i = 17
+feature1 = features_list[[i]][1]
+feature2 = features_list[[i]][2]
+th1 = 4
+th2 = 4
+FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 3, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown")#+ ggtitle(sprintf("is_%s", cl)) 
+
+
+dev.off()
+
+```
+
+*Plots from gating strategy*
+```{r}
+
+#DO NOT USE SO_SUB!
+toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "20250604"
+
+for (i in 1:nrow(pops)) {
+    pop = rownames(pops)[i]
+    print(pop)
+    toplots = colnames(toplot)[!is.na(toplot[pop,])]
+    # j = toplots[2]
+    pdf(sprintf("gating_strategy_%s_%s.pdf", pop,prefix3), 6, 6, useDingbats = F)
+    for (j in toplots) {
+        print(j)
+        features = colnames(plots)[!is.na(plots[j,])]
+        feature1 = features[1]
+        feature2 = features[2]
+        feature1_th1 = thresholds[features[1],"th1"]
+        feature1_th2 = thresholds[features[2],"th1"]
+        pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
+        so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split) #so@meta.data[,sprintf("is_%s", cl)] =
+        p = MyFeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", pop),split.by = NULL, raster = F) + geom_vline(aes(xintercept = feature1_th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = feature1_th2), linetype="dashed", color = "brown") + ggtitle(sprintf("is_%s", pop))
+        print(p)
+        
+    }
+    dev.off()
+    
+}
+
+```
+
+*Calculate Se,Sp etc per cluster and sample*
+--> GatedCells.Rds, SeSpPPVNPV_ClusterBySample.tsv
+
+cellid in each gate --> GatedCells.Rds
+```{r}
+pops[is.na(pops) | pops == "" ] = NA
+
+gate_list = list()
+
+for (i in 1:nrow(pops)) {
+    pop = rownames(pops)[i]
+    print(pop)
+    mrks = na.omit(unlist(pops[i,]))
+    ths = thresholds[rownames(thresholds) %in% names(mrks),"th1"]
+    names(ths) = names(mrks)
+    ths
+    
+    cells = colnames(so)
+    for (m in names(mrks)) { 
+        print(m)
+        if (mrks[m] == "p") {
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[m])))
+        } else {
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] < ths[m])))
+        }
+    }
+    gate_list[[pop]] = cells
+    message(sprintf("%s: %s cells",pop, length(cells)))
+}
+
+# saveRDS(gate_list, file = "GatedCells_20250527.Rds")
+saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
+
+pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 5, 5, useDingbats = F)
+for (i in 1:nrow(pops)) {
+    pop = rownames(pops)[i]
+    print(pop)
+    pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
+    so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+    so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]]
+    so$density = "grey"
+    so$density[so@meta.data[,sprintf("is_gated_%s", pop)]] = densCols(so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 1], so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 2], colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% pop_split)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", pop))
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.5, highlight_alpha = 0.5)
+    print(p)
+    p = MyDimPlotHighlightDensity(so, umap_to_plot = "mde_incremental",group.by = sprintf("is_gated_%s", pop), split.by = NULL, raster = F, highlight_size = 0.5, highlight_alpha = 0.5)
+    print(p) + ggtitle(sprintf("%s", pop))
+    p = DimPlot(so,reduction = "mde_incremental", group.by= "density", raster = F) + scale_color_identity()
+    print(p) + ggtitle(sprintf("%s", pop))
+}
+
+dev.off()
+
+MyDimPlotHighlightDensity = function(seurat_object = so, umap_to_plot = "mde_incremental",group.by = sprintf("is_%s", cl), split.by = NULL, raster = T, highlight_size = 0.5, highlight_alpha = 0.5) {
+    require(scattermore)
+    df = data.frame(feature1 = seurat_object[[umap_to_plot]]@cell.embeddings[, 1], feature2 = seurat_object[[umap_to_plot]]@cell.embeddings[, 2], group.by = seurat_object@meta.data[,group.by])
+    df$split.by = seurat_object@meta.data[,split.by]
+    df2 = df[df$group.by == T,]
+    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    
+    p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
+    # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
+    if (raster == T ){
+        p2 = geom_scattermore(data = df2, aes(feature1, feature2, color = density),  pixels = c(216, 216)) 
+    } else {
+        p2 = geom_point(data = df2, aes(feature1, feature2, color = density), size = highlight_size, alpha = highlight_alpha) 
+    }
+    if(is.null(split.by)) {
+        p3 = p1 + p2  +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+    } else {
+        p3 = p1 + p2 +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + facet_wrap(~split.by)
+    }
+    return(p3)
+}
+
+
+
+```
+
+SeSpPPVNPV_ClusterBySample.tsv by comparing gated cells and true clusters
+```{r}
+stats_list = list()
+for (i in 1:nrow(pops)) {
+    pop = rownames(pops)[i]
+    print(pop)
+    pop_split = strsplit(pop, split = ",") %>% unlist() 
+    so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+    stats = list()
+    tmp = so@meta.data
+    # s = "I39H3_decidua_E12.5_SFB_allT_mouse0135"
+    for (s in unique(so$sample_code)) {
+        # print(s)
+        tmp = so@meta.data %>% filter(sample_code == s)
+        cont_table = TpTnFpFn(x = factor(rownames(tmp) %in% gate_list[[pop]], levels = c("TRUE", "FALSE")), y = factor(tmp[,sprintf("is_%s", pop)],levels = c("TRUE", "FALSE")))
+        stats[[s]] = SeSpPPVNPV(tp = cont_table["tp"], tn = cont_table["tn"], fp = cont_table["fp"], fn=  cont_table["fn"])
+        stats[[s]]["ncells"] = length(which(tmp[,sprintf("is_%s", pop)] == "TRUE"))
+        stats[[s]]["prevalence"] = stats[[s]]["ncells"] / nrow(tmp)
+    }
+    stats_list[[pop]] = do.call(rbind, stats) %>% as.data.frame
+    stats_list[[pop]][,"pop"] = pop
+    stats_list[[pop]][,"sample_code"] = rownames(stats_list[[pop]])
+    
+}
+
+
+stats = Reduce(f = rbind, stats_list) %>% as.data.frame()
+
+# m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
+
+stats = merge(stats, m, by = "sample_code", all.x = T, all.y = F)
+
+# write.table(stats, file = "SeSpPPVNPV_ClusterBySample.tsv", quote = F, row.names = F, col.names = T, sep = "\t")
+write.table(stats, file = sprintf("SeSpPPVNPV_ClusterBySample_%s.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
+
+```
+
+Plots
+```{r}
+
+# i = "npv"
+for (i in c("se", "sp", "ppv", "npv")) {
+    print(i)
+    
+    # pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
+    pdf(sprintf("stats_%s_SummaryPlot_%s.pdf", i, prefix3),15,10, useDingbats = F)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = pop, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        # geom_jitter(aes(pop, ppv, color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        # geom_jitter(data = stats, aes(pop, ppv, color = pop, size = prevalence>0.1 & ncells > 50), width = 0.2, height = 0) +
+        geom_jitter(aes(pop, !!(sym(i)), color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nsamples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+    print(p)
+    
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = organ_simplified, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(aes(pop, !!(sym(i)), color = organ_simplified), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations, Boxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+    print(p)
+    
+    dev.off()
+    
+}
+
+
+
+```
+
+
+
+######## OLD/DELETE
+PLOTS
+back to source activate /project/zemmour/david/envs/scvi_20240315
+Prefix
+
 ```{r}
 prefix = prefix
 prefix2 = "k2_logdata" # prefix2 = "k2data"

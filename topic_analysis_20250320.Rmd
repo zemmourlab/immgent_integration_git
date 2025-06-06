@@ -1146,7 +1146,7 @@ dev.off()
 
 ```
 
-Gene dot plot
+Gene tile plot
 ```{r}
 F1 = with(ldf(fit, type = "i"), F)
 colnames(F1) = paste("F", 1:ncol(F1), sep = "")
@@ -1176,75 +1176,11 @@ print(p)
 dev.off()
 ```
 
-Tfh/Tex FC FC plot
+Are all topic orthogonal?
 ```{r}
-source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R')
-
-tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20250109/ttlist_OneVsAll.Rds')
-
-names(tt_list)
-
-vplot = data.frame(fc1 = exp(tt_list$CD4_cl14_vs_All$logFC), fc2 = exp(tt_list$CD4_cl13_vs_All$logFC))
-
-FCFCplot(vplot)
-genes_to_plot = abs(tt_list$CD4_cl14_vs_All$logFC >2 | tt_list$CD4_cl13_vs_All$logFC >2)
-plot(tt_list$CD4_cl14_vs_All$logFC, tt_list$CD4_cl13_vs_All$logFC, pch = ".")
-
-# Load necessary libraries
-library(ggplot2)
-library(scales)  # For log transformation
-library(ggrepel)
-
-# Define the FCFCplot function
-FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, 
-                    xlimits = c(0.1, 10), ylimits = c(0.1, 10), genes_to_label = NULL) {
-    # Create the base plot
-    p = ggplot(data = vplot) + 
-        geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
-        scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
-                           labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
-        scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  
-                           labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
-        geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
-        geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
-        annotation_logticks(sides = "bl") +
-        xlab(xlab) +
-        ylab(ylab) +
-        ggtitle(main) +
-        theme_bw() +
-        theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), 
-              axis.text.y  = element_text(size=15), 
-              legend.text=element_text(size=20), 
-              axis.title.x = element_text(size=20) , 
-              axis.title.y = element_text(size=20))
-    
-    # Add labels for specific genes if requested
-    if (printgeomtext & !is.null(genes_to_label)) {
-        p = p + geom_text_repel(data = genes_to_label, aes(x = fc1, y = fc2, label = SYMBOL), 
-                                 size = 3, color = "red", box.padding = 0.35, 
-                                 point.padding = 0.5, segment.color = 'grey50', max.overlaps = 20)
-    }
-    
-    return(p)
-}
-
-# Create the vplot dataframe with fold changes
-vplot = data.frame(fc1 = exp(tt_list$CD4_cl14_vs_All$logFC), fc2 = exp(tt_list$CD4_cl13_vs_All$logFC), SYMBOL = tt_list$CD4_cl14_vs_All$SYMBOL)
-
-# Identify genes with large fold changes (>2)
-genes_to_plot = abs(tt_list$CD4_cl14_vs_All$logFC) > 0.69 | abs(tt_list$CD4_cl13_vs_All$logFC) > 0.69
-genes_to_label = vplot[genes_to_plot, ]
-
-# Create the plot
-FCFCplot(vplot, 
-         xlab = "FC for CD4_cl14", 
-         ylab = "FC for CD4_cl13", 
-         main = "Fold Change vs Fold Change", 
-         printgeomtext = T, 
-         genes_to_label = genes_to_label)
-
 
 ```
+
 
 
 

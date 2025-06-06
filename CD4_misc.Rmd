@@ -1,0 +1,198 @@
+---
+title: "CD4_misc"
+output: html_document
+date: "2025-05-28"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+#source activate /project/zemmour/david/envs/scvi_20240315
+source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8
+R
+```
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+
+```
+
+**Most up-to-date data**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+
+so = list()
+so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
+so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
+so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
+so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
+so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
+so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
+so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
+so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
+
+
+```
+
+**FCFC plots**
+Tfh/Tex
+```{r}
+source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R')
+
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20250109/ttlist_OneVsAll.Rds')
+
+names(tt_list)
+
+
+# Create the vplot dataframe with fold changes
+vplot = data.frame(fc1 = exp(tt_list$CD4_cl13_vs_All$logFC), fc2 = exp(tt_list$CD4_cl14_vs_All$logFC), SYMBOL = tt_list$CD4_cl13_vs_All$SYMBOL)
+
+# Identify genes with large fold changes (>2)
+genes_to_plot = abs(tt_list$CD4_cl13_vs_All$logFC) > 0.69 | abs(tt_list$CD4_cl14_vs_All$logFC) > 0.69
+# genes_to_label = vplot[genes_to_plot, ]
+genes_to_label = vplot$SYMBOL[genes_to_plot]
+
+# Create the plot
+FCFCplot(vplot, 
+         xlab = "FC for CD4_cl13", 
+         ylab = "FC for CD4_cl14", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = genes_to_label)
+
+FCFCplot(vplot, 
+         xlab = "FC for CD4_cl13", 
+         ylab = "FC for CD4_cl14", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = NULL)
+
+vplot = data.frame(fc1 = exp(tt_list$CD8_cl10_vs_All$logFC), fc2 = exp(tt_list$CD8_cl7_vs_All$logFC), SYMBOL = tt_list$CD8_cl10_vs_All$SYMBOL)
+# Identify genes with large fold changes (>2)
+genes_to_plot = abs(tt_list$CD8_cl10_vs_All$logFC) > 0.69 | abs(tt_list$CD8_cl7_vs_All$logFC) > 0.69
+genes_to_label = vplot[genes_to_plot, ]
+# Create the plot
+FCFCplot(vplot, 
+         xlab = "FC for CD8_cl10", 
+         ylab = "FC for CD8_cl7", 
+         main = "Fold Change vs Fold Change", 
+         printgeomtext = T, 
+         genes_to_label = genes_to_label)
+
+
+
+```
+
+
+
+**MDE plots**
+```{r}
+so = so_orig[,so_orig$annotation_level1 == "CD4"]
+
+pdf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/MDE_clusters_20250527.pdf", width = 10, height = 10, useDingbats = F)
+p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = NULL, raster = T, raster.dpi = c(512,512), label = T, pt.size = 1) + scale_color_manual(values = mypal_level2)
+p
+p + NoLegend()
+
+p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = NULL, raster = T, raster.dpi = c(512,512), label = F, pt.size = 1) + scale_color_manual(values = mypal_level2)
+p + NoLegend()
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl1","CD4_cl2","CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD4_cl12"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl2"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl5", "CD4_cl7"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9", "CD4_cl10", "CD4_cl13", "CD4_cl14"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9","CD4_cl21","CD4_cl10","CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl21", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9","CD4_cl21"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl10","CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+dev.off()
+```
+
+**Feature plots**
+```{r}
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tox", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Gata3", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tbx21", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Rorc", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tox2", order = T, raster = T, raster.dpi = c(1024,1024))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

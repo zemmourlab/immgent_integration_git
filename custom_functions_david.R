@@ -308,7 +308,28 @@ MyDimPlotHighlight <- function(seurat_object = so,
 #     invisible(NULL)
 # }
 
-
+#MyDimPlot shwoing density of highlited cells
+MyDimPlotHighlightDensity = function(seurat_object = so, umap_to_plot = "mde_incremental",group.by = sprintf("is_%s", cl), split.by = NULL, raster = T, highlight_size = 0.5, highlight_alpha = 0.5) {
+    require(scattermore)
+    df = data.frame(feature1 = seurat_object[[umap_to_plot]]@cell.embeddings[, 1], feature2 = seurat_object[[umap_to_plot]]@cell.embeddings[, 2], group.by = seurat_object@meta.data[,group.by])
+    df$split.by = seurat_object@meta.data[,split.by]
+    df2 = df[df$group.by == T,]
+    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    
+    p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
+    # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
+    if (raster == T ){
+        p2 = geom_scattermore(data = df2, aes(feature1, feature2, color = density),  pixels = c(216, 216)) 
+    } else {
+        p2 = geom_point(data = df2, aes(feature1, feature2, color = density), size = highlight_size, alpha = highlight_alpha) 
+    }
+    if(is.null(split.by)) {
+        p3 = p1 + p2  +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+    } else {
+        p3 = p1 + p2 +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + facet_wrap(~split.by)
+    }
+    return(p3)
+}
 
 #Functions for integration_midway3.Rmd
 
@@ -717,6 +738,54 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 #     }
 # }
 
+
+#Functions to flow-like plots, highlighting specific populations as density plot on top of grey background (see cometsc_CD4_igt1_96_20250109.Rmd)
+
+MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", cl), split.by = NULL, raster = T) {
+    require(scattermore)
+    df = data.frame(feature1 = so[[assay]][slot][feature1,],feature2 = so[[assay]][slot][feature2,], group.by = so@meta.data[,group.by])
+    df$split.by = so@meta.data[,split.by]
+    df2 = df[df$group.by == T,]
+    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    
+    p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
+    # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
+    if (raster == T ){
+        p2 = geom_scattermore(data = df2, aes(feature1, feature2, color = density),  pixels = c(216, 216)) 
+    } else {
+        p2 = geom_point(data = df2, aes(feature1, feature2, color = density)) 
+    }
+    if(is.null(split.by)) {
+        p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+    } else {
+        p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + facet_wrap(~split.by)
+    }
+    return(p3)
+}
+
+#Functions to calculate Se, Sp, PPV, NPV (see cometsc_CD4_igt1_96_20250109.Rmd)
+TpTnFpFn = function(x = colnames(so) %in% gate_list[["cl2"]], y = so$is_cl2) { 
+    tmp = table(x,y)
+    #rownames(tmp) = c("gate_neg", "gate_pos")
+    #colnames(tmp) = c("notcluster", "cluster")
+    tp = tmp["TRUE","TRUE"]
+    tn = tmp["FALSE","FALSE"]
+    fp = tmp["TRUE","FALSE"]
+    fn = tmp["FALSE","TRUE"]
+    return(c(tp = tp, tn = tn, fp=fp, fn=fn))
+}
+
+SeSpPPVNPV = function(tp = tmp["tp"], tn = tmp["tn"], fp=tmp["fp"], fn=tmp["fn"]) {
+    se = tp / (tp+fn)
+    sp = tn / (fp+tn)
+    ppv = tp / (tp+fp)
+    npv = tn / (tn+fn)
+    res = c(se, sp, ppv, npv)
+    names(res) =  c("se", "sp", "ppv", "npv")
+    return(res)
+}
+
+
 # MyDimPlotHighlight <- function(seurat_object = so, 
 #                                umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
 #                                cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
@@ -791,51 +860,5 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 #     # Prevent implicit return
 #     invisible(NULL)
 # }
-
-#Functions to flow-like plots, highlighting specific populations as density plot on top of grey background (see cometsc_CD4_igt1_96_20250109.Rmd)
-
-MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", cl), split.by = NULL, raster = T) {
-    require(scattermore)
-    df = data.frame(feature1 = so[[assay]][slot][feature1,],feature2 = so[[assay]][slot][feature2,], group.by = so@meta.data[,group.by])
-    df$split.by = so@meta.data[,split.by]
-    df2 = df[df$group.by == T,]
-    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
-    
-    p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
-    # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
-    if (raster == T ){
-        p2 = geom_scattermore(data = df2, aes(feature1, feature2, color = density),  pixels = c(216, 216)) 
-    } else {
-        p2 = geom_point(data = df2, aes(feature1, feature2, color = density)) 
-    }
-    if(is.null(split.by)) {
-        p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
-    } else {
-        p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + facet_wrap(~split.by)
-    }
-    return(p3)
-}
-
-#Functions to calculate Se, Sp, PPV, NPV (see cometsc_CD4_igt1_96_20250109.Rmd)
-TpTnFpFn = function(x = colnames(so) %in% gate_list[["cl2"]], y = so$is_cl2) { 
-    tmp = table(x,y)
-    #rownames(tmp) = c("gate_neg", "gate_pos")
-    #colnames(tmp) = c("notcluster", "cluster")
-    tp = tmp["TRUE","TRUE"]
-    tn = tmp["FALSE","FALSE"]
-    fp = tmp["TRUE","FALSE"]
-    fn = tmp["FALSE","TRUE"]
-    return(c(tp = tp, tn = tn, fp=fp, fn=fn))
-}
-
-SeSpPPVNPV = function(tp = tmp["tp"], tn = tmp["tn"], fp=tmp["fp"], fn=tmp["fn"]) {
-    se = tp / (tp+fn)
-    sp = tn / (fp+tn)
-    ppv = tp / (tp+fp)
-    npv = tn / (tn+fn)
-    res = c(se, sp, ppv, npv)
-    names(res) =  c("se", "sp", "ppv", "npv")
-    return(res)
-}
 
 
