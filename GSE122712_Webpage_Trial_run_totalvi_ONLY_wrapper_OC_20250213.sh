@@ -6,7 +6,9 @@
 #SBATCH -o wrapper_totalvi.log
 #SBATCH -e wrapper_totalvi.err
 #SBATCH --mail-type=END,FAIL
-# Run as sbatch run_totalvi_wrapper_OC_20250213.sh .
+# Run as:
+#EXCLUDE=$(sinfo -N -h -o "%n" -p medium | grep '^compute-a-' | paste -sd, -)
+#sbatch --exclude="$EXCLUDE" GSE122712_Webpage_Trial_run_totalvi_ONLY_wrapper_OC_20250213.sh .
 # from working directory
 
 module load gcc/9.2.0 python/3.9.14 R/4.1.2

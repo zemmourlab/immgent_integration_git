@@ -224,14 +224,14 @@ query_mask = mdata.obs["origin"] == "query"
 ## level1
 ## Training scanvi model on scvi model
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level1")
-level1_model = scvi.model.SCANVI.from_scvi_model(scvi_model, , "Unknown")
+level1_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown")
 level1_model.train(25)
 level1_model.save(prefix+"/scanvi_level1_model/") #, save_anndata=True)
 
 ## level2
 ## Training scanvi model on scvi model
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level2")
-level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, ,"Unknown")
+level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown")
 level2_model.train(25)
 level2_model.save(prefix+"/scanvi_level2__model/") #, save_anndata=True)
 
