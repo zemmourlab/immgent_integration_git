@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description="run TOTALVI from a MuData object s
 parser.add_argument('--working_dir', help='Working directory')
 parser.add_argument('--path_to_ImmgenT', help='Path to ImmgenT MuData object')
 parser.add_argument('--path_to_query', help='Path to query MuData object')
+parser.add_argument('--path_to_anndata', help='Path to combined AnnData object')
 parser.add_argument('--prefix', default='myprefix', 
                     help='Prefix for the output files (default: myprefix)')
 parser.add_argument('--batchkey', default=None, help='Batch key for analysis')
@@ -24,6 +25,7 @@ args = parser.parse_args()
 working_dir = args.working_dir
 path_to_ImmgenT = args.path_to_ImmgenT
 path_to_query = args.path_to_query
+path_to_anndata = args.path_to_anndata
 prefix = args.prefix
 batchkey = args.batchkey
 #confoundings = args.confoundings
@@ -56,6 +58,7 @@ mde_ref_file = args.mde_ref_file
 print(f"Working Directory: {working_dir}")
 print(f"Path to ImmgenT AnnData: {path_to_ImmgenT}")
 print(f"Path to query AnnData: {path_to_query}")
+print(f"Path to combined AnnData: {path_to_anndata}")
 print(f"Prefix: {prefix}")
 print(f"Batch Key: {batchkey}")
 print(f"categorical_covariate_keys: {categorical_covariate_keys}")
@@ -100,44 +103,45 @@ if torch.cuda.is_available():
 
 print("Reading mudata")
 os.chdir(working_dir)
-#mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
-#print(mdata)
-#mdata = AnnData.read(working_dir+"/MERGED_RNA_Manual_GSE182509_samples_processed.h5ad") #load this one (results of this block)
-ImmgenT_mdata = AnnData.read(path_to_ImmgenT)
-ImmgenT_mdata.X = ImmgenT_mdata.X.copy()
-ImmgenT_mdata.layers["counts"] = ImmgenT_mdata.X.copy()
-print(ImmgenT_mdata)
+##mdata = mu.read(path_to_mudata) #totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu") #mu.read("totalvi_igt1_56_allgenes_Treg_20240306/adata.h5mu
+##print(mdata)
+mdata = AnnData.read(path_to_anndata) #load this one (results of this block)
+mdata.raw = None
+#ImmgenT_mdata = AnnData.read(path_to_ImmgenT)
+#ImmgenT_mdata.X = ImmgenT_mdata.X.copy()
+#ImmgenT_mdata.layers["counts"] = ImmgenT_mdata.X.copy()
+#print(ImmgenT_mdata)
 ## Read in query Anndata object
-query_mdata = AnnData.read(path_to_query)
-query_mdata.X = query_mdata.X.copy()
-query_mdata.layers["counts"] = query_mdata.X.copy()
-print(query_mdata)
+#query_mdata = AnnData.read(path_to_query)
+#query_mdata.X = query_mdata.X.copy()
+#query_mdata.layers["counts"] = query_mdata.X.copy()
+#print(query_mdata)
 
-#full.mod['RNA'].obs_names = full_RNA.obs_names.astype(str)
-#full.mod['RNA'].var_names = genes['x'].astype(str)
-#full.mod['ADT'].obs_names = full_ADT.obs_names.astype(str)
-#full.mod['ADT'].var_names = proteins.astype(str)
+##full.mod['RNA'].obs_names = full_RNA.obs_names.astype(str)
+##full.mod['RNA'].var_names = genes['x'].astype(str)
+##full.mod['ADT'].obs_names = full_ADT.obs_names.astype(str)
+##full.mod['ADT'].var_names = proteins.astype(str)
 
-#ImmgenT_IGTHT = pd.read_csv(working_dir+"ImmgenT_IGTHT.csv", delimiter = ",")
-#ImmgenT_IGTHT.index = ImmgenT_IGTHT['Unnamed: 0'].values
-#ImmgenT_IGTHT = ImmgenT_IGTHT.drop(columns = "Unnamed: 0")
-#ImmgenT_mdata.obs['IGTHT'] = ImmgenT_IGTHT["IGTHT"].astype(str)
-#ImmgenT_mdata.obs['IGT'] = ImmgenT_IGTHT["IGT"].astype(str)
+##ImmgenT_IGTHT = pd.read_csv(working_dir+"ImmgenT_IGTHT.csv", delimiter = ",")
+##ImmgenT_IGTHT.index = ImmgenT_IGTHT['Unnamed: 0'].values
+##ImmgenT_IGTHT = ImmgenT_IGTHT.drop(columns = "Unnamed: 0")
+##ImmgenT_mdata.obs['IGTHT'] = ImmgenT_IGTHT["IGTHT"].astype(str)
+##ImmgenT_mdata.obs['IGT'] = ImmgenT_IGTHT["IGT"].astype(str)
 
 
-#query_IGTHT = pd.read_csv(working_dir+"query_IGTHT.csv", delimiter = ",")
-#query_IGTHT.index = query_IGTHT['Unnamed: 0'].values
-#query_IGTHT = query_IGTHT.drop(columns = "Unnamed: 0")
-#query_IGTHT['Unknown'] = "Unknown"
+##query_IGTHT = pd.read_csv(working_dir+"query_IGTHT.csv", delimiter = ",")
+##query_IGTHT.index = query_IGTHT['Unnamed: 0'].values
+##query_IGTHT = query_IGTHT.drop(columns = "Unnamed: 0")
+##query_IGTHT['Unknown'] = "Unknown"
 
-print("Concat anndata - keep only common genes")
-mdata = AnnData.concat(
-    [ImmgenT_mdata, query_mdata],
-    axis=0,
-    join="inner",
-    label="origin",
-    keys=["ImmgenT", "query"]
-)
+#print("Concat anndata - keep only common genes")
+#mdata = AnnData.concat(
+#    [ImmgenT_mdata, query_mdata],
+#    axis=0,
+#    join="inner",
+#    label="origin",
+#    keys=["ImmgenT", "query"]
+#)
 
 print("Creating RNA layer counts")
 mdata.layers["counts"] = mdata.X.copy()
@@ -222,14 +226,14 @@ query_mask = mdata.obs["origin"] == "query"
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level1")
 level1_model = scvi.model.SCANVI.from_scvi_model(scvi_model, , "Unknown")
 level1_model.train(25)
-level1_model.save(prefix_SCANVI+"/scanvi_model/") #, save_anndata=True)
+level1_model.save(prefix+"/scanvi_level1_model/") #, save_anndata=True)
 
 ## level2
 ## Training scanvi model on scvi model
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level2")
 level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, ,"Unknown")
 level2_model.train(25)
-level2_model.save(prefix_SCANVI+"/scanvi_model/") #, save_anndata=True)
+level2_model.save(prefix+"/scanvi_level2__model/") #, save_anndata=True)
 
 ## Predictions and scores - create output file
 ## level1
@@ -281,8 +285,8 @@ output_file.loc[output_file["level2_scanvi_confidence"] < confidence_threshold, 
 ##output_file = mdata.obs[['level1_transfer_labels','level2_transfer_labels']] #,'level2.group_transfer_labels']]
 ##output_file.index = mdata.obs.index.copy()
 ##output_file.to_csv(prefix+"/output_annotations.csv", index=True)
-user_output_file = output_file.loc[query_mdata.obs.index, :]
-user_output_file.index = query_mdata.obs.index
+user_output_file = output_file.loc[query_mask, :]
+user_output_file.index = query_mask.obs.index
 user_output_file.to_csv(prefix+"/user_output_file.csv", index=True)
 
 
@@ -412,8 +416,8 @@ for annotation in level1_annotations:
 
 
 print("Prepare output files - plotting and annotations for user")
-#user_output_file = output_file.loc[query_mdata.obs.index, :] 
+#user_output_file = output_file.loc[query_mask.obs.index, :] 
 output_file.to_csv(prefix+"/output_file.csv", index=True)
-#user_output_file.index = query_mdata.obs.index
+#user_output_file.index = query_mask.obs.index
 #user_output_file.to_csv(prefix+"/user_output_file.csv", index=True)
 
