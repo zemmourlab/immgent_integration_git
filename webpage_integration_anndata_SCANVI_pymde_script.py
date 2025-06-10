@@ -107,15 +107,16 @@ os.chdir(working_dir)
 ##print(mdata)
 mdata = AnnData.read(path_to_anndata) #load this one (results of this block)
 mdata.raw = None
-#ImmgenT_mdata = AnnData.read(path_to_ImmgenT)
-#ImmgenT_mdata.X = ImmgenT_mdata.X.copy()
-#ImmgenT_mdata.layers["counts"] = ImmgenT_mdata.X.copy()
-#print(ImmgenT_mdata)
+ImmgenT_mdata = AnnData.read(path_to_ImmgenT)
+ImmgenT_mdata.X = ImmgenT_mdata.X.copy()
+ImmgenT_mdata.layers["counts"] = ImmgenT_mdata.X.copy()
+print(ImmgenT_mdata)
 ## Read in query Anndata object
 #query_mdata = AnnData.read(path_to_query)
-#query_mdata.X = query_mdata.X.copy()
-#query_mdata.layers["counts"] = query_mdata.X.copy()
-#print(query_mdata)
+query_mdata = mdata[mdata.obs_names.difference(ImmgenT_mdata.obs_names)].copy()
+query_mdata.X = query_mdata.X.copy()
+query_mdata.layers["counts"] = query_mdata.X.copy()
+print(query_mdata)
 
 ##full.mod['RNA'].obs_names = full_RNA.obs_names.astype(str)
 ##full.mod['RNA'].var_names = genes['x'].astype(str)
@@ -134,14 +135,14 @@ mdata.raw = None
 ##query_IGTHT = query_IGTHT.drop(columns = "Unnamed: 0")
 ##query_IGTHT['Unknown'] = "Unknown"
 
-#print("Concat anndata - keep only common genes")
-#mdata = AnnData.concat(
-#    [ImmgenT_mdata, query_mdata],
-#    axis=0,
-#    join="inner",
-#    label="origin",
-#    keys=["ImmgenT", "query"]
-#)
+print("Concat anndata - keep only common genes")
+mdata = AnnData.concat(
+    [ImmgenT_mdata, query_mdata],
+    axis=0,
+    join="inner",
+    label="origin",
+    keys=["ImmgenT", "query"]
+)
 
 print("Creating RNA layer counts")
 mdata.layers["counts"] = mdata.X.copy()
@@ -242,7 +243,7 @@ LEVEL1_SCANVI_LATENT_KEY = "level1_X_scANVI"
 LEVEL1_SCANVI_PREDICTIONS_KEY = "level1_C_scANVI"
 
 #mdata.obsm[SCVI_LATENT_KEY] = scvi_model.get_latent_representation(mdata)
-mdata.obsm[LEEVL1_SCANVI_LATENT_KEY] = level1_model.get_latent_representation(mdata)
+mdata.obsm[LEVEL1_SCANVI_LATENT_KEY] = level1_model.get_latent_representation(mdata)
 mdata.obs[LEVEL1_SCANVI_PREDICTIONS_KEY]= level1_model.predict(mdata)
 output_file = pd.DataFrame(mdata.obs[LEVEL1_SCANVI_PREDICTIONS_KEY], index = mdata.obs.index)
 
