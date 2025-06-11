@@ -52,6 +52,7 @@ mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
 mypal_level2 = setNames(mypal, unique(so$annotation_level2))
 mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_level2["CD4_cl18"] = "blue"
 mypal_igt = setNames(mypal, unique(so$IGT))
 mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
@@ -307,6 +308,35 @@ singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice
 
 ```
 
+**Exploring the data with subset of cells for finding the gates**
+Loading data on desktop
+```{r}
+setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc/")
+so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD4" &  !(so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+```
+
+Loading data on Midway
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc")
+so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD4" &  !(so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+```
+
 Plot CITEseq on MDE
 ```{r}
 so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
@@ -350,38 +380,6 @@ dev.off()
 
 
 ```
-
-**Exploring the data with subset of cells for finding the gates**
-*Loading data*
-on desktop
-```{r}
-setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc/")
-so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
-so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD4" &  !(so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif"))]
-
-so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
-# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
-
-DefaultAssay(so) = "ADT"
-# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
-
-```
-
-on Midway
-```{r}
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/cometsc")
-so_orig = readRDS("../../igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
-so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD4" &  !(so_orig$annotation_level2 %in% c("CD4_miniverse", "CD4_prolif"))]
-
-so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
-# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
-
-DefaultAssay(so) = "ADT"
-# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
-
-```
-
-
 
 
 *Exploring the data with subset of cells for finding the gates*
@@ -645,20 +643,58 @@ dev.off()
 
 #DO NOT USE SO_SUB!
 
-# toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
-# pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
+toplot = read.table("gating_toplot.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating_populations.csv", header = T, sep = ",",  row.names = 1)
+
+
 toplot = read.table("gating_toplot20250527.csv", header = T, sep = ",", row.names = 1)
 pops = read.table("gating_populations20250527.csv", header = T, sep = ",",  row.names = 1)
-thresholds = read.table("gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
-plots = read.table("gating_plots.csv", header = T, sep = ",",  row.names = 1)
-prefix3 = "20250527"
+thresholds = read.table("gating/gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "gating/20250527"
 
+toplot = read.table("gating_toplot20250605.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating_populations20250605.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating/gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "gating/202506057"
+
+toplot = read.table("gating/gating_toplot20250606.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating/gating_populations20250606.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating/gating_thresholds.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+# prefix3 = "gating/20250606"
+
+toplot = read.table("gating/gating_toplot20250606_2.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating/gating_populations20250606_2.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating/gating_thresholds20250606_2.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+# prefix3 = "gating/20250606_2"
+
+toplot = read.table("gating/gating_toplot20250606_3.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating/gating_populations20250606_3.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating/gating_thresholds20250606_3.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "gating/20250606_3"
+
+toplot = read.table("gating/gating_toplot20250606_4.csv", header = T, sep = ",", row.names = 1)
+pops = read.table("gating/gating_populations20250606_4.csv", header = T, sep = ",",  row.names = 1)
+thresholds = read.table("gating/gating_thresholds20250606_4.csv", header = T, sep = ",",  row.names = 1)
+plots = read.table("gating/gating_plots.csv", header = T, sep = ",",  row.names = 1)
+prefix3 = "gating/20250606_4"
+
+ensure_directory(prefix3)
+
+```
+
+Flow-like plots
+```{r}
 for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     toplots = colnames(toplot)[!is.na(toplot[pop,])]
     # j = toplots[2]
-    pdf(sprintf("gating_strategy_%s_%s.pdf", pop,prefix3), 6, 6, useDingbats = F)
+    pdf(sprintf("%s/gating_strategy_%s.pdf",prefix3, pop), 6, 6, useDingbats = F)
     for (j in toplots) {
         print(j)
         features = colnames(plots)[!is.na(plots[j,])]
@@ -678,16 +714,15 @@ for (i in 1:nrow(pops)) {
 
 ```
 
-*Calculate Se,Sp etc per cluster and sample*
+Bioinfo Sort
 --> GatedCells.Rds, SeSpPPVNPV_ClusterBySample.tsv
-
 cellid in each gate --> GatedCells.Rds
 ```{r}
 pops[is.na(pops) | pops == "" ] = NA
 
 gate_list = list()
 
-for (i in 7:nrow(pops)) {
+for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
     mrks = na.omit(unlist(pops[i,]))
@@ -709,22 +744,49 @@ for (i in 7:nrow(pops)) {
 }
 
 # saveRDS(gate_list, file = "GatedCells_20250527.Rds")
-saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
+# saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
+# gate_list = readRDS(sprintf("GatedCells_%s.Rds",prefix3))
+saveRDS(gate_list, file = sprintf("%s/GatedCells.Rds",prefix3))
+# gate_list = readRDS(sprintf("%s/GatedCells.Rds",prefix3))
 
-pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 10, 10, useDingbats = F)
-for (i in 7:nrow(pops)) {
+# pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 10, 10, useDingbats = F)
+# for (i in 1:nrow(pops)) {
+#     pop = rownames(pops)[i]
+#     print(pop)
+#     pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
+#     so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+#     so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]] #so@meta.data[,sprintf("is_%s", cl)] =
+#     p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% pop_split)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", pop))
+#     print(p)
+#     p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.1, highlight_alpha = 0.1)
+#     print(p)
+# }
+# dev.off()
+
+
+# pdf(sprintf("%s/gated_cells_inMDE.pdf",prefix3), 5, 5, useDingbats = F)
+for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
+    pdf(sprintf("%s/gated_cells_inMDE_%s.pdf",prefix3, pop), 5, 5, useDingbats = F)
     pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
     so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
-    so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]] #so@meta.data[,sprintf("is_%s", cl)] =
+    so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]]
+    so$density = "grey"
+    so$density[so@meta.data[,sprintf("is_gated_%s", pop)]] = densCols(so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 1], so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 2], colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
     p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% pop_split)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", pop))
     print(p)
-    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.1, highlight_alpha = 0.1)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.5, highlight_alpha = 0.5)
     print(p)
+    p = MyDimPlotHighlightDensity(so, umap_to_plot = "mde_incremental",group.by = sprintf("is_gated_%s", pop), split.by = NULL, raster = F, highlight_size = 0.2, highlight_alpha = 0.2)
+    print(p) + ggtitle(sprintf("%s", pop))
+    # p = DimPlot(so,reduction = "mde_incremental", group.by= "density", raster = F) + scale_color_identity()
+    # print(p) + ggtitle(sprintf("%s", pop))
+    dev.off()
 }
 
-dev.off()
+
+
 
 
 
@@ -760,24 +822,21 @@ for (i in 1:nrow(pops)) {
 
 stats = Reduce(f = rbind, stats_list) %>% as.data.frame()
 
-m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
+# m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
 
 stats = merge(stats, m, by = "sample_code", all.x = T, all.y = F)
 
 # write.table(stats, file = "SeSpPPVNPV_ClusterBySample.tsv", quote = F, row.names = F, col.names = T, sep = "\t")
-# write.table(stats, file = sprintf("SeSpPPVNPV_ClusterBySample_%s.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
+write.table(stats, file = sprintf("%s/SeSpPPVNPV_ClusterBySample.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
 
-```
-
-Plots
-```{r}
 
 # i = "npv"
 for (i in c("se", "sp", "ppv", "npv")) {
     print(i)
     
     # pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
-    pdf(sprintf("stats_%s_SummaryPlot_%s.pdf", i, prefix3),15,10, useDingbats = F)
+    pdf(sprintf("%s/stats_%s_SummaryPlot.pdf", prefix3,i),15,10, useDingbats = F)
     
     p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
         geom_jitter(data = stats, aes(pop, !!(sym(i)), color = pop, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
@@ -826,6 +885,46 @@ for (i in c("se", "sp", "ppv", "npv")) {
 
 ```
 
+**UMAP from selected markers**
+
+```{r}
+library(uwot)
+panel = c("CD62L", "CD44", "FR4", "CD73.5NTD", "CD69", "CXCR5", "PDCD1.PD1.CD279", "NEUROPILIN1.CD304", "GITR.CD357", "CD38", "KLRG1", "CD226.DNAM1")
+
+DefaultAssay(so) = "ADT"
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+so = ScaleData(so, features = panel)
+so = RunPCA(so, features = panel, npcs = 12, reduction.name = "pca")
+ElbowPlot(so)
+so = FindNeighbors(so, dims = 1:6, reduction = "pca")
+so = RunUMAP(so, dims = 1:6,reduction = "pca", reduction.name = "umap.panel")
+
+
+umap_result = umap(t(so[["ADT"]]@scale.data), n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
+so[["umap.panel2"]] = CreateDimReducObject(umap_result, assay = "ADT", key = "umap.panel2")
+umap_df$sample_code = rownames(umap_df)
+umap_df = data.frame(umap_df, df)
+umap_df$clusters = factor(clusters)
+
+pdf("gating/UMAP_panel_LogNorm.pdf", 5, 5, useDingbats = F)
+# pdf("gating/UMAP_panel_CLR.pdf", 10, 10, useDingbats = F)
+ElbowPlot(so)
+DimPlot(so, reduction = "umap.panel", group.by = "annotation_level2", label = TRUE, cols = mypal_level2)
+DimPlot(so, reduction = "umap.panel", group.by = "annotation_level2", label = T, cols = mypal_level2,label.size = 0.5) + NoLegend()
+DimPlot(so, reduction = "umap.panel", group.by = "annotation_level2", label = F, cols = mypal_level2, split.by = "annotation_level2", ncol = 4) + NoLegend()
+for (i in levels(so$annotation_level2)[levels(so$annotation_level2) %in% unique(so$annotation_level2)]) {
+    print(i)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "umap.panel", cells_to_highlight = colnames(so)[which(so@meta.data[,"annotation_level2"] %in% i)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", i), highlight_size = 0.5, highlight_alpha = 0.5)
+    print(p$plot3)
+    so@meta.data[,sprintf("is_%s", i)] = so$annotation_level2 %in% i
+    p = MyDimPlotHighlightDensity(so, umap_to_plot = "umap.panel",group.by = sprintf("is_%s", i), split.by = NULL, raster = F, highlight_size = 0.2, highlight_alpha = 0.2)
+    print(p) + ggtitle(sprintf("%s", i))
+}
+dev.off()
+
+
+```
 
 
 

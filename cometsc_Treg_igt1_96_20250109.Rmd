@@ -559,7 +559,7 @@ for (i in 1:nrow(pops)) {
 # saveRDS(gate_list, file = "GatedCells_20250527.Rds")
 saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
 
-pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 5, 5, useDingbats = F)
+pdf(sprintf("gated_cells_inMDE_%s.pdf",prefix3), 10, 10, useDingbats = F)
 for (i in 1:nrow(pops)) {
     pop = rownames(pops)[i]
     print(pop)
