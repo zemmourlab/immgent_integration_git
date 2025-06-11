@@ -892,8 +892,8 @@ library(uwot)
 panel = c("CD62L", "CD44", "FR4", "CD73.5NTD", "CD69", "CXCR5", "PDCD1.PD1.CD279", "NEUROPILIN1.CD304", "GITR.CD357", "CD38", "KLRG1", "CD226.DNAM1")
 
 DefaultAssay(so) = "ADT"
-so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
-# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
 so = ScaleData(so, features = panel)
 so = RunPCA(so, features = panel, npcs = 12, reduction.name = "pca")
 ElbowPlot(so)
@@ -901,11 +901,10 @@ so = FindNeighbors(so, dims = 1:6, reduction = "pca")
 so = RunUMAP(so, dims = 1:6,reduction = "pca", reduction.name = "umap.panel")
 
 
-umap_result = umap(t(so[["ADT"]]@scale.data), n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
-so[["umap.panel2"]] = CreateDimReducObject(umap_result, assay = "ADT", key = "umap.panel2")
-umap_df$sample_code = rownames(umap_df)
-umap_df = data.frame(umap_df, df)
-umap_df$clusters = factor(clusters)
+umap_result = umap(t(so[["ADT"]]@scale.data), n_neighbors = 30L, min_dist = 0.3, metric = "correlation")
+so[["umap.panel"]] = CreateDimReducObject(umap_result, assay = "ADT", key = "umap.panel")
+DimPlot(so, reduction = "umap.panel", group.by = "annotation_level2", label = T, cols = mypal_level2,label.size = 0.5) + NoLegend()
+
 
 pdf("gating/UMAP_panel_LogNorm.pdf", 5, 5, useDingbats = F)
 # pdf("gating/UMAP_panel_CLR.pdf", 10, 10, useDingbats = F)
