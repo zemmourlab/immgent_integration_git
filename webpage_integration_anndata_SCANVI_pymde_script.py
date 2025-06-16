@@ -113,7 +113,8 @@ ImmgenT_mdata.layers["counts"] = ImmgenT_mdata.X.copy()
 print(ImmgenT_mdata)
 ## Read in query Anndata object
 #query_mdata = AnnData.read(path_to_query)
-query_mdata = mdata[mdata.obs_names.difference(ImmgenT_mdata.obs_names)].copy()
+query_mdata = mdata[~mdata.obs_names.str.contains("IGT")].copy()
+del mdata
 query_mdata.X = query_mdata.X.copy()
 query_mdata.layers["counts"] = query_mdata.X.copy()
 print(query_mdata)
@@ -181,10 +182,10 @@ annotation_level2 = pd.read_csv("/n/groups/cbdm_lab/odc180/ImmgenT_workshop/Immg
 annotation_level2 = annotation_level2.loc[annotation_level2.index.intersection(mdata.obs.index)]
 mdata.obs['level1'] = "Unknown"
 mdata.obs['level2'] = "Unknown"
-#mdata.obs['level2.group'] = "Unknown"
+##mdata.obs['level2.group'] = "Unknown"
 mdata.obs.loc[annotation_level2.index, 'level1'] = annotation_level2['level1'].values
 mdata.obs.loc[annotation_level2.index, 'level2'] = annotation_level2['level2'].values
-#mdata.obs.loc[annotation_level2.index, 'level2.group'] = annotation_level2['level2.group'].values
+##mdata.obs.loc[annotation_level2.index, 'level2.group'] = annotation_level2['level2.group'].values
 
 
 # Comment if already trained
@@ -193,16 +194,16 @@ scvi_model = scvi.model.SCVI(mdata, n_latent=30, n_layers=2)
 scvi_model.train()
 scvi_model.save(prefix+"/scvi_model/") #, save_anndata=True)
 
-#SCANVI_LATENT_KEY = "X_scANVI"
+SCANVI_LATENT_KEY = "X_scANVI"
 print("Save latent_representation.csv")
 latent_representation = scvi_model.get_latent_representation()
 SCVI_LATENT_KEY = "X_scVI"
 ##mdata.mod['RNA'].obsm[SCVI_LATENT_KEY] = latent_representation
 mdata.obsm[SCVI_LATENT_KEY] = latent_representation
 ##latent_df = pd.DataFrame(latent_representation, index = mdata.mod['RNA'].obs.index)
-latent_df = pd.DataFrame(latent_representation, index = mdata.obs.index)
+latent_df_scvi = pd.DataFrame(latent_representation, index = mdata.obs.index)
 
-latent_df.to_csv(prefix+"/latent.csv", index=True)
+latent_df_scvi.to_csv(prefix+"/latent_scvi.csv", index=True)
 
 print("Save umap.csv")
 sc.pp.neighbors(mdata, use_rep=SCVI_LATENT_KEY)
@@ -214,8 +215,8 @@ umap_df.to_csv(prefix+"/umap_python.csv", index=True)
 print("Save Anndata")
 mdata.write_h5ad(prefix+"/adata_RNA.h5ad")
 
-#mdata = AnnData.read(prefix+"_orig/adata_RNA.h5ad")
-#latent_df = pd.read_csv(prefix+"_orig/latent.csv", index_col=0)
+##mdata = AnnData.read(prefix+"_orig/adata_RNA.h5ad")
+##latent_df = pd.read_csv(prefix+"_orig/latent.csv", index_col=0)
 
 print("Predict level1 and 2 annotations with SCANVI")
 ## Define ref and query masks (future use)
@@ -225,91 +226,96 @@ query_mask = mdata.obs["origin"] == "query"
 ## level1
 ## Training scanvi model on scvi model
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level1")
-level1_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown")
+level1_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown", labels_key="level1")
 level1_model.train(25)
 level1_model.save(prefix+"/scanvi_level1_model/") #, save_anndata=True)
 
 ## level2
 ## Training scanvi model on scvi model
 scvi.model.SCVI.setup_anndata(mdata, layer = "counts", batch_key = batchkey, categorical_covariate_keys = categorical_covariate_keys, labels_key="level2")
-level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown")
+level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model,"Unknown", labels_key="level2")
 level2_model.train(25)
-level2_model.save(prefix+"/scanvi_level2__model/") #, save_anndata=True)
+level2_model.save(prefix+"/scanvi_level2_model/") #, save_anndata=True)
 
 ## Predictions and scores - create output file
 ## level1
-#SCVI_LATENT_KEY = "X_SCVI"
+##SCVI_LATENT_KEY = "X_SCVI"
 LEVEL1_SCANVI_LATENT_KEY = "level1_X_scANVI"
 LEVEL1_SCANVI_PREDICTIONS_KEY = "level1_C_scANVI"
 
-#mdata.obsm[SCVI_LATENT_KEY] = scvi_model.get_latent_representation(mdata)
+##mdata.obsm[SCVI_LATENT_KEY] = scvi_model.get_latent_representation(mdata)
 mdata.obsm[LEVEL1_SCANVI_LATENT_KEY] = level1_model.get_latent_representation(mdata)
 mdata.obs[LEVEL1_SCANVI_PREDICTIONS_KEY]= level1_model.predict(mdata)
 output_file = pd.DataFrame(mdata.obs[LEVEL1_SCANVI_PREDICTIONS_KEY], index = mdata.obs.index)
+latent_df = pd.DataFrame(mdata.obsm[LEVEL1_SCANVI_LATENT_KEY], index = mdata.obs.index)
+latent_df.to_csv(prefix+"/latent_level1.csv", index=True)
 
-# Get posterior probabilities for all labels
-level1_probs = model.predict(mdata, soft=True)
-# Get max probability per cell (i.e., model confidence)
-level1_confidence = probs.max(axis=1)
-# Add to AnnData
+## Get posterior probabilities for all labels
+level1_probs = level1_model.predict(mdata, soft=True)
+## Get max probability per cell (i.e., model confidence)
+level1_confidence = level1_probs.max(axis=1)
+## Add to AnnData
 output_file["level1_scanvi_confidence"] = level1_confidence
-#output_file.to_csv(prefix_SCANVI+"/predicted_celltypes.csv")
+##output_file.to_csv(prefix_SCANVI+"/predicted_celltypes.csv")
 
-# Add final annotation  with unclear below a threshold
+## Add final annotation  with unclear below a threshold
 confidence_threshold = 0.95
 output_file["level1_final"] = output_file[LEVEL1_SCANVI_PREDICTIONS_KEY]
 output_file.loc[output_file["level1_scanvi_confidence"] < confidence_threshold, "level1_final"] = "unclear"
 
 ## level2
-#SCVI_LATENT_KEY = "X_SCVI"
+##SCVI_LATENT_KEY = "X_SCVI"
 LEVEL2_SCANVI_LATENT_KEY = "level2_X_scANVI"
 LEVEL2_SCANVI_PREDICTIONS_KEY = "level2_C_scANVI"
 
-#mdata.obsm[SCVI_LATENT_KEY] = scvi_model.get_latent_representation(mdata)
-mdata.obsm[LEEVL2_SCANVI_LATENT_KEY] = level2_model.get_latent_representation(mdata)
+##mdata.obsm[SCVI_LATENT_KEY] = scvi_model.get_latent_representation(mdata)
+mdata.obsm[LEVEL2_SCANVI_LATENT_KEY] = level2_model.get_latent_representation(mdata)
 mdata.obs[LEVEL2_SCANVI_PREDICTIONS_KEY]= level2_model.predict(mdata)
 output_file[LEVEL2_SCANVI_PREDICTIONS_KEY] = mdata.obs[LEVEL2_SCANVI_PREDICTIONS_KEY]
 
 ## Get posterior probabilities for all labels
-level2_probs = model.predict(mdata, soft=True)
+level2_probs = level2_model.predict(mdata, soft=True)
 ## Get max probability per cell (i.e., model confidence)
-level2_confidence = probs.max(axis=1)
+level2_confidence = level2_probs.max(axis=1)
 ## Add to AnnData
 output_file["level2_scanvi_confidence"] = level2_confidence
-#output_file.to_csv(prefix_SCANVI+"/predicted_celltypes.csv")
+##output_file.to_csv(prefix_SCANVI+"/predicted_celltypes.csv")
 
 ## Add final annotation  with unclear below a threshold
 output_file["level2_final"] = output_file[LEVEL2_SCANVI_PREDICTIONS_KEY]
 output_file.loc[output_file["level2_scanvi_confidence"] < confidence_threshold, "level2_final"] = "unclear"
 
-# Save user annotations to return to the user
+## Save user annotations to return to the user
 ##output_file = mdata.obs[['level1_transfer_labels','level2_transfer_labels']] #,'level2.group_transfer_labels']]
 ##output_file.index = mdata.obs.index.copy()
 ##output_file.to_csv(prefix+"/output_annotations.csv", index=True)
+output_file.to_csv(prefix+"/predictions_output_file.csv", index=True)
 user_output_file = output_file.loc[query_mask, :]
-user_output_file.index = query_mask.obs.index
+user_output_file.index = query_mdata.obs.index
 user_output_file.to_csv(prefix+"/user_output_file.csv", index=True)
 
-
+##output_file = pd.read_csv(prefix+"/predictions_output_file.csv", index_col=0)
+##latent_df = pd.read_csv(prefix+"/latent_level1.csv", index_col=0)
+##user_output_file = pd.read_csv(prefix+"/user_output_file.csv", index_col=0)
 
 print("run pyMDE - first on all data, second on subgroups")
 print("pyMDE on all data")
-latent_df = mdata.obsm[LEVEL1_SCANVI_KEY]
-# Load the full MDE reference embedding
+##latent_df = mdata.obsm[LEVEL1_SCANVI_KEY]
+## Load the full MDE reference embedding
 mde_ref_embedding = pd.read_csv(mde_ref_file, index_col=0)
 mde_ref_embedding = mde_ref_embedding.loc[mde_ref_embedding.index.intersection(latent_df.index)]
 
-# Make level1 and level2 mde files
-# level1
+## Make level1 and level2 mde files
+## level1
 mde_ref_embedding_level1 = mde_ref_embedding[["level1_MDE1","level1_MDE2"]]
 mde_ref_embedding_level1.index = mde_ref_embedding.index.copy()
 
-# level2
+## level2
 mde_ref_embedding_level2 = mde_ref_embedding[["level2_MDE1","level2_MDE2"]]
 mde_ref_embedding_level2.index = mde_ref_embedding.index.copy()
 
 
-# level1 mde
+## level1 mde
 rownames = mde_ref_embedding_level1.index.tolist()  # Convert index to list
 index_positions = [latent_df.index.get_loc(item) for item in rownames if item in latent_df.index]
 print(index_positions)
@@ -342,28 +348,34 @@ output_file['level1_MDE1'] =  level1_mde_df[0]
 output_file['level2_MDE1'] =  level1_mde_df[0]
 output_file['level1_MDE2'] =  level1_mde_df[1]
 output_file['level2_MDE2'] =  level1_mde_df[1]
+output_file.to_csv(prefix+"/predictions_level1_output_file.csv", index = True)
+
 
 print("pyMDE on subgroups")
-# Subset to level1 annotations
+## Subset to level1 annotations
 ##level1_annotations = mdata.obs["level1_transfer_labels"].unique()
-level1_annotations = ["CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP"]
+##level1_annotations = ["CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP"]
+threshold = 1
+counts = user_output_file[LEVEL1_SCANVI_PREDICTIONS_KEY].value_counts()
+level1_annotations  = counts[counts > threshold].index.tolist()
 
-# Directory to save outputs
+## Directory to save outputs
 ##os.makedirs(f"{prefix}/mde_by_level1", exist_ok=True)
 
 for annotation in level1_annotations:
     print(f"\n--- Processing group: {annotation} ---")
     
-    # Cells in the current group
+    ## Cells in the current group
     group_cells = mdata.obs_names[mdata.obs[LEVEL1_SCANVI_PREDICTIONS_KEY] == annotation]
-    
-    # Subset the totalVI embedding to group
+    ##group_cells = output_file.index[output_file[LEVEL1_SCANVI_PREDICTIONS_KEY] == annotation]
+
+    ## Subset the totalVI embedding to group
     group_integrated = latent_df.loc[latent_df.index.intersection(group_cells)]
     
-    # Also subset reference anchors to those in this group
+    ## Also subset reference anchors to those in this group
     group_ref_embedding = mde_ref_embedding_level2.loc[mde_ref_embedding_level2.index.intersection(group_integrated.index)]
     
-    # Check if we have enough anchors to continue
+    ## Check if we have enough anchors to continue
     if group_ref_embedding.shape[0] < 5:
         print(f"Skipping {annotation} (too few anchors: {group_ref_embedding.shape[0]})")
         continue
@@ -373,7 +385,7 @@ for annotation in level1_annotations:
         continue
 
 
-    # Get positions of anchor rows in SCVI
+    ## Get positions of anchor rows in SCVI
     index_positions = [
         group_integrated.index.get_loc(cell)
         for cell in group_ref_embedding.index if cell in group_integrated.index
@@ -383,16 +395,16 @@ for annotation in level1_annotations:
         print("Mismatch between index positions and anchors — skipping.")
         continue
 
-    # Prepare PyTorch tensors
+    ## Prepare PyTorch tensors
     rownames_tensor = torch.tensor(index_positions, device='cpu')
     anchor_values = torch.tensor(group_ref_embedding.values, dtype=torch.float32, device='cpu')
     full_tensor = torch.tensor(group_integrated.values, dtype=torch.float32, device='cpu')
 
-    # Anchored MDE constraint
+    ## Anchored MDE constraint
     print("  > Building anchor constraint")
     anchor_constraint = pymde.Anchored(anchors=rownames_tensor, values=anchor_values)
 
-    # Run MDE
+    ## Run MDE
     print("  > Running pymde.preserve_neighbors")
     mde_model = pymde.preserve_neighbors(
         full_tensor,
@@ -407,7 +419,7 @@ for annotation in level1_annotations:
     print("  > Embedding")
     mde_model.embed(eps=1e-6, verbose=True)
 
-    # Add result to output file
+    ## Add result to output file
     level2_subgroup_mde_df = pd.DataFrame(mde_model.X.cpu().numpy(), index=group_integrated.index)
     output_file.loc[group_integrated.index, 'level2_MDE1'] = level2_subgroup_mde_df[0].values
     output_file.loc[group_integrated.index, 'level2_MDE2'] = level2_subgroup_mde_df[1].values
@@ -417,8 +429,8 @@ for annotation in level1_annotations:
 
 
 print("Prepare output files - plotting and annotations for user")
-#user_output_file = output_file.loc[query_mask.obs.index, :] 
+##user_output_file = output_file.loc[query_mask.obs.index, :] 
 output_file.to_csv(prefix+"/output_file.csv", index=True)
-#user_output_file.index = query_mask.obs.index
-#user_output_file.to_csv(prefix+"/user_output_file.csv", index=True)
+##user_output_file.index = query_mask.obs.index
+##user_output_file.to_csv(prefix+"/user_output_file.csv", index=True)
 
