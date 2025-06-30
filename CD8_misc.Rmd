@@ -85,7 +85,8 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 **Most up-to-date data**
 
 ```{r}
-so_orig = readRDS("igt1_96_withtotalvi20250317_clean.Rds")
+# so_orig = readRDS("igt1_96_withtotalvi20250317_clean.Rds")
+so_orig = readRDS("igt1_96_withtotalvi20250513_clean.Rds")
 so = so[,so$annotation_level1 == "CD8"]
 so$Ag_spe[is.na(so$Ag_spe)] = "poly"
 

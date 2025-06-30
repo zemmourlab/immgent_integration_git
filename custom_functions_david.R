@@ -309,12 +309,12 @@ MyDimPlotHighlight <- function(seurat_object = so,
 # }
 
 #MyDimPlot shwoing density of highlited cells
-MyDimPlotHighlightDensity = function(seurat_object = so, umap_to_plot = "mde_incremental",group.by = sprintf("is_%s", cl), split.by = NULL, raster = T, highlight_size = 0.5, highlight_alpha = 0.5) {
+MyDimPlotHighlightDensity = function(seurat_object = so, umap_to_plot = "mde_incremental",group.by = sprintf("is_%s", cl), split.by = NULL, raster = T, highlight_size = 0.5, highlight_alpha = 0.5, cols = rev(rainbow(10, end = 4/6))) {
     require(scattermore)
     df = data.frame(feature1 = seurat_object[[umap_to_plot]]@cell.embeddings[, 1], feature2 = seurat_object[[umap_to_plot]]@cell.embeddings[, 2], group.by = seurat_object@meta.data[,group.by])
     df$split.by = seurat_object@meta.data[,split.by]
     df2 = df[df$group.by == T,]
-    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(cols), nbin = 500)
     
     p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
     # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
@@ -741,12 +741,34 @@ AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
 
 #Functions to flow-like plots, highlighting specific populations as density plot on top of grey background (see cometsc_CD4_igt1_96_20250109.Rmd)
 
-MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", cl), split.by = NULL, raster = T) {
+# MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", cl), split.by = NULL, raster = T) {
+#     require(scattermore)
+#     df = data.frame(feature1 = so[[assay]][slot][feature1,],feature2 = so[[assay]][slot][feature2,], group.by = so@meta.data[,group.by])
+#     df$split.by = so@meta.data[,split.by]
+#     df2 = df[df$group.by == T,]
+#     df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+#     
+#     p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
+#     # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
+#     if (raster == T ){
+#         p2 = geom_scattermore(data = df2, aes(feature1, feature2, color = density),  pixels = c(216, 216)) 
+#     } else {
+#         p2 = geom_point(data = df2, aes(feature1, feature2, color = density)) 
+#     }
+#     if(is.null(split.by)) {
+#         p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+#     } else {
+#         p3 = p1 + p2 + xlab(feature1) + ylab(feature2) +scale_colour_identity()+  theme_bw() + theme(axis.text.x=element_text(size=15), axis.text.y=element_text(size=15), legend.text=element_text(size=10), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20), legend.title = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + facet_wrap(~split.by)
+#     }
+#     return(p3)
+# }
+
+MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", cl), split.by = NULL, raster = T, cols = rev(rainbow(10, end = 4/6))) {
     require(scattermore)
     df = data.frame(feature1 = so[[assay]][slot][feature1,],feature2 = so[[assay]][slot][feature2,], group.by = so@meta.data[,group.by])
     df$split.by = so@meta.data[,split.by]
     df2 = df[df$group.by == T,]
-    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))), nbin = 500)
+    df2$density = densCols(df2$feature1, df2$feature2, colramp = colorRampPalette(cols), nbin = 500)
     
     p1 = ggplot(df) + geom_scattermore(aes(feature1, feature2), color = "grey", pixels = c(512, 512)) 
     # p1 = ggplot(df) + geom_point(aes(feature1, feature2), color = "grey") 
@@ -762,6 +784,7 @@ MyFeatureScatter = function(so = so, assay = "ADT", slot = "data", feature1 = fe
     }
     return(p3)
 }
+
 
 #Functions to calculate Se, Sp, PPV, NPV (see cometsc_CD4_igt1_96_20250109.Rmd)
 TpTnFpFn = function(x = colnames(so) %in% gate_list[["cl2"]], y = so$is_cl2) { 

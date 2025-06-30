@@ -1,0 +1,200 @@
+---
+title: "gdT_misc"
+output: html_document
+date: "2025-06-26"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+#source activate /project/zemmour/david/envs/scvi_20240315
+source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT
+R
+```
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+libs = c("Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Reds")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+mypal_level2 = setNames(mypal,unique(gdT_query$celltype))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+
+
+```
+
+**Most up-to-date data**
+
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+
+# so = list()
+# so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
+# so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
+# so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
+# so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
+# so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
+# so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
+# so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
+# so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
+
+
+```
+
+
+```{r}
+gdT_query = readRDS('~/google_drive_uchicago/ImmgenT/20250109_freeze/gdT/Integration/gdT Holy Grail/seuratobject_merged_RNA_withmetadata_withreductions_transferlabels_secondattempt.Rds')
+
+pdf("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/gdT/external_validation/GSE222454/mde_integrated.pdf", 20, 10, useDingbats = F)
+DimPlot(gdT_query, reduction = "mde_incremental", group.by = "celltype", split.by = "is_ref", label = T) + scale_color_manual(values = mypal_level2)
+dev.off()
+pdf("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/gdT/external_validation/GSE222454/mde_integrated2.pdf", 10, 10, useDingbats = F)
+DimPlot(gdT_query, reduction = "mde_incremental", group.by = "celltype", label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(gdT_query[,gdT_query$is_ref != "ref"], reduction = "mde_incremental", group.by = "celltype", label = T) + scale_color_manual(values = mypal_level2)
+DimPlot(gdT_query[,gdT_query$is_ref != "ref"], reduction = "mde_incremental", group.by = "level2_new_latent_all", label = T) + scale_color_manual(values = mypal_level2)
+dev.off()
+
+tmp = gdT_query[,gdT_query$is_ref != "ref"]
+tmp = table(tmp$celltype, tmp$level2_new_latent_all)
+tmp2 = tmp / rowSums(tmp)
+pdf("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/gdT/external_validation/GSE222454/heatmap_transfer_labels.pdf", 10, 10, useDingbats = F)
+pheatmap(tmp2, color = ColorRamp, display_numbers = T)
+dev.off()
+```
+
+
+**Alluvial plots**
+
+```{r}
+library("ggalluvial")
+
+# so_orig@meta.data %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse")) & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% summarize(count = n(), .groups = "drop") 
+
+
+pdf("AlluvialPlot_level2_tissue.pdf", 25, 8, useDingbats = F) #all cells
+df = so_orig@meta.data %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse")) & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()
+
+pdf("AlluvialPlot_level2_tissue2.pdf", 25, 8, useDingbats = F) #no more than 100 cells per organ
+df = so_orig@meta.data %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse")) & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>%
+  slice_sample(n = 100) %>%  # Keep no more than 5000 cells per organ_simplified
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+pdf("AlluvialPlot_level2_tissue3.pdf", 25, 8, useDingbats = F) #no more than 1000 cells per organ before subsetting gdT
+df = so_orig@meta.data %>% filter(condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% slice_sample(n = 1000) %>% ungroup() %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse"))) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()
+
+
+df$annotation_level2 = factor(df$annotation_level2, levels = rev(c("gdT_cl2","gdT_cl11","gdT_cl28","gdT_cl35","gdT_cl4","gdT_cl12","gdT_cl42","gdT_cl23","gdT_cl52","gdT_cl54","gdT_cl33","gdT_cl26","gdT_cl10","gdT_cl9","gdT_cl46","gdT_cl5","gdT_cl43","gdT_cl50","gdT_cl7")))
+df$organ_simplified = factor(df$organ_simplified, levels = rev(c("small intestine","colon","mammary gland","liver","peritoneal cavity","lung","blood","spleen","LN","bone marrow","thymus","kidney","submandibular gland","placenta","uterus","skin")))
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_level2) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = organ_simplified), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap
+    scale_x_discrete(limits = c("organ_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_organ) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+dev.off()
+
+is_alluvia_form(df, axes = 1:3, silent = TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
