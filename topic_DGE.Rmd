@@ -138,23 +138,35 @@ F1 = read.table(sprintf("%s/%s/gene_factor_matrix.txt", prefix, prefix2), header
 
 ```
 
+Export metadata
+```{r}
+so = readRDS(file = "igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+mdata_orig = data.frame(so@meta.data, so[["mde2_totalvi_20241006"]]@cell.embeddings, so[["mde_incremental"]]@cell.embeddings)
+write.table(mdata_orig, sprintf("%s/%s/metadata_20250513_mde.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+
+```
+
 Export loadings with metadata
 ```{r}
 # so = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
-# L1 = L1[colnames(so),]
-# all(rownames(L1) == colnames(so))
-# mdata_orig = data.frame(so@meta.data, so[["mde2_totalvi_20241006"]]@cell.embeddings, so[["mde_incremental"]]@cell.embeddings, L1)
-# write.table(mdata_orig, sprintf("%s/%s/mdata_mde_L1.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
+so = readRDS(file = "igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+L1 = L1[colnames(so),]
+all(rownames(L1) == colnames(so))
+mdata_orig = data.frame(so@meta.data, so[["mde2_totalvi_20241006"]]@cell.embeddings, so[["mde_incremental"]]@cell.embeddings, L1)
+write.table(mdata_orig, sprintf("%s/%s/mdata_mde_L1.txt", prefix, prefix2), quote = F, sep = "\t", row.names = T, col.names = T)
 
 mdata_orig = read.table(sprintf("%s/%s/mdata_mde_L1.txt", prefix, prefix2), header = T, sep = "\t")
 L1 = mdata_orig[,grep("^F[0-9]+$", colnames(mdata_orig), value = TRUE)]
 
 mdata_orig %>% select(IGT, exp_name) %>% unique()
+
+
 ```
 
+**Example**
 ```{r}
 
-TopicDGEPlots = function(F1, L1, group1, group2, mdata_orig, title_plot = "") {
+TopicDGEPlots = function(F1, L1, group1, group2, title_plot = "") {
     
     require(ggplot2)
     require(ggrepel)
@@ -223,6 +235,10 @@ TopicDGEPlots = function(F1, L1, group1, group2, mdata_orig, title_plot = "") {
     list(p1 = p1, p2 = p2, diff_factors = vplot, diff_genes = vplot_genes)
 }
 
+F1 = read.table(sprintf("%s/%s/gene_factor_matrix.txt", prefix, prefix2), header = T, sep = "\t") %>% as.matrix()
+L1 = read.table(sprintf("%s/%s/cell_factor_matrix.txt", prefix, prefix2), header = T, sep = "\t") %>% as.matrix()
+mdata = read.table(sprintf("%s/%s/metadata_20250513_mde.txt", prefix, prefix2), header = T, sep = "\t")
+
 # Example usage
 group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
 group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
@@ -230,7 +246,7 @@ group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_lev
 group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & condition_broad == "healthy") %>% pull(cellID)
 group2 = mdata_orig %>% filter( !(annotation_level1 %in% c("Treg")) & condition_broad == "healthy") %>% pull(cellID)
 
-results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg vs all in healthy")
+results = TopicDGEPlots(F1, L1, group1, group2, title_plot = "Treg vs all in healthy")
 
 # results$p1  # First plot (MA plot of factors)
 # results$p2  # Second plot (MA plot of genes)
@@ -329,7 +345,7 @@ exp(fc_genes["Rorc",])
 
 ```
 
-compare with FindMarkers
+**compare with FindMarkers**
 ```{r}
 group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") & IGT == "IGT67" & organ_simplified == "colon" ) %>% pull(cellID)
 group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") & IGT == "IGT67" & organ_simplified == "colon" ) %>% pull(cellID)
@@ -370,7 +386,7 @@ tmp2 %>% filter(pct.1 > 0.2 | pct.2 > 0.2) %>% arrange(desc(avg_log2FC))
 
 ```
 
-compare with limma
+**compare with limma**
 
 ```{r}
 group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") ) %>% pull(cellID)

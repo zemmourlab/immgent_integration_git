@@ -32,6 +32,7 @@ R
 libs = c("Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
 
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
@@ -60,8 +61,8 @@ mypal_level2["CD4_cl18"] = "blue"
 mypal_igt = setNames(mypal, unique(so$IGT))
 mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
-mypal_level2 = setNames(mypal,unique(gdT_query$celltype))
-mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2 = setNames(mypal,unique(gdT_query$celltype))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
 
 
 ```
@@ -70,6 +71,16 @@ mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
 
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+
+so = so_orig[,so_orig$annotation_level1 == "gdT"]
+
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize", )
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+# DefaultAssay(so) = "ADT"
+
+
+so$annotation_level2 = factor(so$annotation_level2, levels = c("gdT_cl2","gdT_cl11","gdT_cl28","gdT_cl35","gdT_cl4","gdT_cl12","gdT_cl42","gdT_cl23","gdT_cl52","gdT_cl54","gdT_cl33","gdT_cl26","gdT_cl10","gdT_cl9","gdT_cl46","gdT_cl5","gdT_cl43","gdT_cl50","gdT_cl7", "gdT_miniverse", "gdT_prolif"), ordered = T)
+# df$organ_simplified = factor(df$organ_simplified, levels = rev(c("small intestine","colon","mammary gland","liver","peritoneal cavity","lung","blood","spleen","LN","bone marrow","thymus","kidney","submandibular gland","placenta","uterus","skin")))
 
 # so = list()
 # so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
@@ -84,6 +95,7 @@ so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1
 
 ```
 
+**External data**
 
 ```{r}
 gdT_query = readRDS('~/google_drive_uchicago/ImmgenT/20250109_freeze/gdT/Integration/gdT Holy Grail/seuratobject_merged_RNA_withmetadata_withreductions_transferlabels_secondattempt.Rds')
@@ -106,8 +118,45 @@ dev.off()
 ```
 
 
-**Alluvial plots**
+**TCR chains analysis**
 
+```{r}
+rownames(so)[grepl("Trvg",rownames(so))]
+
+pdf("FeaturePlot_Trgv_genes.pdf", 20,20, useDingbats = F)
+FeaturePlot(so, reduction = "mde_incremental",slot = "data", features = rev(rownames(so)[grepl("Trgv",rownames(so))]), order = F, raster = T, raster.dpi = c(1024,1024))
+dev.off()
+
+pdf("DotPlot_Trgv_genes.pdf", 8,8, useDingbats = F)
+Idents(so) = "annotation_level2"
+DotPlot(so, features = rownames(so)[grepl("Trgv",rownames(so))], cols = c("white","red"), cluster.idents = T) + RotatedAxis()
+dev.off()
+```
+
+
+**Tissue**
+
+```{r}
+
+pdf("Dimplot_organ.pdf", 5, 5, useDingbats = F)
+for (i in unique(so$organ_simplified)) {
+    p = MyDimPlotHighlight(seurat_object = so[,so$condition_broad == "healthy"], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$organ_simplified %in% i)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", i))
+    print(p)
+}
+dev.off()
+
+pdf("Dimplot_organ2.pdf", 10, 10, useDingbats = F)
+for (i in unique(so$organ_simplified)) {
+    p = MyDimPlotHighlight(seurat_object = so[,so$condition_broad == "healthy"], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$organ_simplified %in% i)], highlight_column = "organ_simplified", pixels = c(512, 512), mycols = mypal_organ, title = sprintf("%s", i))
+    print(p)
+}
+dev.off()
+
+
+```
+
+
+Alluvial plots
 ```{r}
 library("ggalluvial")
 
@@ -182,6 +231,227 @@ print(p)
 dev.off()
 
 is_alluvia_form(df, axes = 1:3, silent = TRUE)
+
+
+
+
+
+```
+
+
+**Gene expression**
+
+```{r}
+
+MyFeaturePlot <- function(seurat_object = so, 
+                                assay = "RNA",
+                               slot = "counts",
+                               umap_to_plot = "mde_incremental", 
+                               # cells_to_highlight = names(which(so$nonconv_tcr_recog == T)), 
+                               cols = brewer.pal(9, "Reds"),
+                               feature = "Foxp3", 
+                               title = "", 
+                               # labelclusters = T, 
+                               pixels = c(512, 512), 
+                               size = 1, 
+                               alpha = 1,
+                               xlim = NULL,
+                               ylim = NULL,
+                               print_plot1 = TRUE, 
+                               print_plot2 = TRUE) {
+    
+    require(scattermore)
+    require(ggplot2)
+    
+    # UMAP embeddings
+    dim1 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 1]
+    dim2 <- seurat_object[[umap_to_plot]]@cell.embeddings[, 2]
+    tmp <- data.frame(seurat_object@meta.data, dim1 = dim1, dim2 = dim2, feature = seurat_object[[assay]][[slot]][feature,])
+    
+    # Subset for highlighted cells
+    tmp2 <- tmp[tmp$feature > 0, ]
+    
+    
+    # Background plot
+    bkrg <- ggplot(tmp) + 
+        geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = pixels)
+    
+    # Highlighted points
+    p2 <- geom_point(data = tmp2, 
+                     aes(dim1, dim2, color = feature), 
+                     size = size, 
+                     alpha = alpha)
+    
+    # Plots with consistent colors
+    plot1 <- bkrg + p2 + 
+        scale_color_manual(values = color_mapping) + 
+        scale_x_continuous(limits = xlim) +
+        scale_y_continuous(limits = ylim) +
+        ggtitle(title) + 
+        theme_minimal()
+    
+    plot2 <- bkrg + p2 + 
+        scale_color_manual(values = color_mapping) + 
+        scale_x_continuous(limits = xlim) +
+        scale_y_continuous(limits = ylim) +
+        theme_void() + NoLegend()
+    
+    # Add cluster labels dynamically for only the present values
+    if (labelclusters) {
+        tmp_labels <- tmp2 %>%
+            filter(!!sym(highlight_column_name) %in% highlight_values) %>%
+            group_by(!!sym(highlight_column_name)) %>%
+            summarise(dim1 = median(dim1), dim2 = median(dim2))
+        
+        plot3 <- plot2 + 
+            geom_text(data = tmp_labels, 
+                      aes(x = dim1, y = dim2, label = !!sym(highlight_column_name), 
+                          color = !!sym(highlight_column_name)),
+                      size = 4, show.legend = FALSE) +
+            scale_color_manual(values = color_mapping) +
+            scale_x_continuous(limits = xlim) +
+            scale_y_continuous(limits = ylim) +
+            ggtitle(title)
+    } else {
+        plot3 <- NULL
+    }
+    
+    # Print plots
+    # if (print_plot1) print(plot1)
+    # if (print_plot2) print(plot2)
+    # if (labelclusters && !is.null(plot3)) print(plot3)
+    # # Prevent implicit return
+    # invisible(NULL)
+    
+    plot1 = if (print_plot1) plot1 else NULL
+    plot2 = if (print_plot2) plot2 else NULL
+    plot3 = if (labelclusters && !is.null(plot3)) plot3 else NULL
+    
+    plot_list = list(plot1 = plot1, plot2 = plot2, plot3 = plot3)
+    return(plot_list)
+    
+    
+}
+
+
+pdf("FeaturePlot_genes_nonrasterized.pdf", 12,15, useDingbats = F)
+FeaturePlot(so, reduction = "mde_incremental",slot = "data", features = c("Rorc","Tbx21", "Zbtb16", "Lef1", "Tcf7", "Sox13"), order = T, raster = F, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", features = c("Ifng","Il17a", "Areg", "Il4", "Il10", "Gzmb", "Ccl5"), order = T, raster = F, raster.dpi = c(1024,1024))
+dev.off()
+
+```
+
+
+**Topic DGE**
+
+```{r}
+
+TopicDGEPlots = function(F1, L1, group1, group2, title_plot = "") {
+    
+    require(ggplot2)
+    require(ggrepel)
+    require(dplyr)
+    require(scattermore)
+    
+    # Calculate the loadings
+    loadings_group1 = colMeans(L1[group1,])
+    loadings_group2 = colMeans(L1[group2,])
+    loadings_groups = colMeans(L1[c(group1, group2),])
+    
+    # Mean genes for each group
+    mean_genes_group1 = F1 %*% loadings_group1
+    mean_genes_group2 = F1 %*% loadings_group2
+    mean_genes = F1 %*% colMeans(L1[c(group1, group2),])
+    
+    # Fold Change between the two groups
+    fc_loadings = loadings_group1 - loadings_group2
+    fc_genes = F1 %*% fc_loadings %>% as.data.frame()  # take exp to have the actual FC
+    
+    # Create vplot for fold changes (MA plot of factors)
+    vplot = data.frame(SYMBOL = names(fc_loadings), log2FC = fc_loadings / log(2), AveExpr = loadings_groups)
+    
+    # Maximum FC for symmetrical x-axis range
+    max_fc = ceiling(max(abs(vplot$log2FC)))  # Get the max of the absolute FC values and round up
+    top_genes = vplot %>%
+        arrange(desc(abs(log2FC))) %>%
+        head(50)
+    
+    # MA Plot (Factors)
+    p1 = ggplot(data = vplot) + 
+        geom_point(aes(x = log2FC, y = AveExpr), colour = "black", alpha = I(1), size = I(1)) +
+        xlim(-max_fc, max_fc) +  # Set symmetrical x-axis range
+        geom_text_repel(data = top_genes, aes(x = log2FC, y = AveExpr, label = SYMBOL), 
+                        size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+        theme_minimal() +
+        labs(
+            x = "Fold Change (log2)",
+            y = "Average Expression",
+            title = title_plot
+        )
+    
+    # Create vplot for gene expression (MA plot of genes)
+    vplot_genes = data.frame(SYMBOL = rownames(fc_genes), log2FC = fc_genes[,1] / log(2), AveExpr = mean_genes[,1])
+    
+    # Maximum FC for symmetrical x-axis range (for genes)
+    max_fc_genes = ceiling(max(abs(vplot_genes$log2FC)))  # Get the max of the absolute FC values and round up
+    top_genes_genes <- vplot_genes %>%
+        arrange(desc(abs(log2FC))) %>%
+        head(50)
+    
+    # MA Plot (Genes)
+    p2 <- ggplot(data = vplot_genes) + 
+        geom_scattermore(aes(x = log2FC, y = AveExpr), colour = "black", alpha = I(1), size = I(1), pixels = c(512, 512)) +
+        xlim(-max_fc_genes, max_fc_genes) +  # Set symmetrical x-axis range
+        geom_text_repel(data = top_genes_genes, aes(x = log2FC, y = AveExpr, label = SYMBOL), 
+                        size = 3, color = "red", box.padding = 0.35, point.padding = 0.5, segment.color = 'grey50', max.overlaps  = 20) +
+        theme_minimal() +
+        labs(
+            x = "Fold Change (log2)",
+            y = "Average Expression",
+            title = title_plot
+        )
+    
+    # Return the plots and vplot tables
+    list(p1 = p1, p2 = p2, diff_factors = vplot, diff_genes = vplot_genes)
+}
+
+F1 = read.table(sprintf("%s/%s/gene_factor_matrix.txt", prefix, prefix2), header = T, sep = "\t") %>% as.matrix()
+L1 = read.table(sprintf("%s/%s/cell_factor_matrix.txt", prefix, prefix2), header = T, sep = "\t") %>% as.matrix()
+mdata = read.table(sprintf("%s/%s/metadata_20250513_mde.txt", prefix, prefix2), header = T, sep = "\t")
+
+```
+
+```{r}
+# Example usage
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("gdT") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter(!(annotation_level1 %in% c("gdT")) & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("gdT") & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter(!(annotation_level1 %in% c("gdT")) & condition_broad == "healthy") %>% pull(cellID)
+results = TopicDGEPlots(F1, L1, group1, group2, title_plot = "gdT vs all in healthy")
+
+group1 = mdata_orig %>% filter(annotation_level2 %in% c("gdT_cl2","gdT_cl4","gdT_cl11","gdT_cl12","gdT_cl28","gdT_cl35") & organ_simplified == "small intestine" & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD8aa") & organ_simplified == "small intestine" & condition_broad == "healthy") %>% pull(cellID)
+results = TopicDGEPlots(F1, L1, group1, group2, title_plot = "CD8aa gdT vs CD8aa abT in healthy small intestine")
+
+group1 = mdata_orig %>% filter(annotation_level1 %in% "gdT" & annotation_level2 %in% c("gdT_cl2") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_cl2")) & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
+
+
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+results$diff_factors  # vplot for fold changes
+results$diff_genes %>% arrange(desc(log2FC)) %>% head(50) # vplot for gene expression
+results$diff_genes %>% arrange(desc(log2FC)) %>% tail(50) 
+
+# Call the function with F1, L1, and group data
+results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg_cl8 vs Treg_cl2 in colon healthy")
+
+# Access the plots and data
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+results$diff_factors  # vplot for fold changes
+results$diff_genes  # vplot for gene expression
 
 
 ```
