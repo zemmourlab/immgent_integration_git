@@ -60,8 +60,13 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 
 
 ```{r}
-setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/")
-so_orig = readRDS("igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+# setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/")
+source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
+
+setwd("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes")
+prefix = "20250709"
+
+so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
 so = list()
 so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
 so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
@@ -208,19 +213,29 @@ mypal_list[["level2_all"]]  = mypal_list[["level2_all"]] [!is.na(names(mypal_lis
 **Palette for organ_simplified** 
 
 ```{r}
-
 cls = c("blue","darkorange","darkolivegreen","darkorchid",
         "deepskyblue","pink","chartreuse","darkgoldenrod",
-        "cadetblue","brown","darkseagreen","violetred",
+        "yellow","brown","violetred",
         "cyan","burlywood", "red")
-mypal = c(sprintf("%s1",cls),sprintf("%s4",cls))
+
+mypal = c(sprintf("%s",cls),sprintf("%s3",cls))
 # mypal = c(polychrome())
 names(mypal) = NULL
 
-mypal_list[["organ_simplified"]] = setNames(mypal, unique(so_orig$organ_simplified))
+so_orig$organ_simplified[so_orig$organ == "colonic epithelium"] = "colon epi"
+so_orig$organ_simplified[so_orig$organ == "lamina propria of mucosa of colon"] = "colon LP"
+so_orig$organ_simplified[so_orig$organ %in% c("epithelium of small intestine","duodenal epithelium","jejunal epithelium","ileal epithelium")] = "small intestine epi"
+so_orig$organ_simplified[so_orig$organ %in% c("lamina propria of small intestine","ileum lamina propria")] = "small intestine LP"
+
+mypal_list[["organ_simplified"]] = setNames(mypal, unique(so_orig$organ_simplified)[!unique(so_orig$organ_simplified) %in% c("thymus", "SLO")])
+mypal_list[["organ_simplified"]]["SLO"] = "grey"
+mypal_list[["organ_simplified"]]["thymus"] = "black"
+mypal_list[["organ_simplified"]]["colon"] = "violetred2"
+mypal_list[["organ_simplified"]]["small intestine"] = "yellow2"
 mypal_list[["organ_simplified"]]  = mypal_list[["organ_simplified"]] [!is.na(names(mypal_list[["organ_simplified"]] ))]
 
-DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]], split.by = "organ_simplified", ncol = 5) + theme_dark()
+
+DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]], split.by = "organ_simplified", ncol = 5)
 
 
 
@@ -229,9 +244,10 @@ DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplifi
 
 **Print palettes**
 ```{r}
-ensure_directory("immgent_color_palettes")
 
-pdf("immgent_color_palettes/MDE_color_palette.pdf", 10,10, useDingbats = F)
+ensure_directory(prefix)
+
+pdf(sprintf("%s/MDE_color_palette.pdf",prefix), 10,10, useDingbats = F)
 for (i in unique(so_orig$annotation_level1)) {
     print(i)
     if (!is.null(so[[i]])) {
@@ -248,7 +264,7 @@ print(p + NoLegend())
 
 dev.off()
 
-pdf("immgent_color_palettes/MDE_color_palette_organ_simplified.pdf", 15,15, useDingbats = F)
+pdf(sprintf("%s/MDE_color_palette_organ_simplified.pdf", prefix), 15,15, useDingbats = F)
 p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]]) 
 p
 p + NoLegend()
@@ -262,10 +278,11 @@ dev.off()
 **Save palettes**
 ```{r}
 
-saveRDS(mypal_list, "immgent_color_palettes/immgent_color_palettes_list_20250708.Rds")
+# saveRDS(mypal_list, "immgent_color_palettes_list_20250708.Rds")
+saveRDS(mypal_list, sprintf("%s/immgent_color_palettes_list_%s.Rds", prefix, prefix))
 
 for (i in names(mypal_list)) {
-    write.table(mypal_list[[i]],file = sprintf("immgent_color_palettes/immgent_color_palettes_%s.csv",i),quote = F, sep = ",", col.names = F)
+    write.table(mypal_list[[i]],file = sprintf("%s/immgent_color_palettes_%s.csv",prefix,i),quote = F, sep = ",", col.names = F)
 }
 
 ```

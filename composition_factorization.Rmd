@@ -38,6 +38,11 @@ ColorRamp = rev(rainbow(10, end = 4/6))
 ColorRamp = rev(viridis(100))
 ColorRamp = brewer.pal(9, "Blues")
 
+mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/immgent_color_palettes_list_20250708.Rds")
+mypal_level1 = mypal_list[["level1"]]
+mypal_level2 = mypal_list[["level2_all"]]
+mypal_organ = mypal_list[["organ_simplified"]]
+
 #mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
 
 n = 70
@@ -144,14 +149,15 @@ prefix2 = "flashier/20250313_expoPropInLevel1"
 prefix2 = "flashier/20250313_pca"
 prefix2 = "flashier/20250313_semiNMF"
 prefix2 = "flashier/20250314_allT_semiNMF"
+prefix2 = "flashier/20250709_expoPropInLevel1"
 ensure_directory(sprintf("%s/%s", prefix,prefix2))
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
 
 ```
 
 ```{r}
-mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
-# mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+# mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
 mdata_orig$IGT_10xlane_id = NULL
 mdata_orig$organism_id = NULL
 mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
@@ -162,8 +168,8 @@ mdata_orig$sample_id = NULL
 mdata_orig$count_unique = NULL
 colnames(mdata_orig)
 
-# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45|CD44|CD4|CD8|PLZF|TFH|Treg|VP1Tetp",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
-mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45|CD44|CD4|CD8|PLZF|TFH|Treg|VP1Tetp",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+# mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45",target_cells_simplified) & n_cells > 50) %>% select(matches("prop"), IGTHT, sample_name:last_col()) %>% as.data.frame()
 dim(mdata0)
 # mdata0 = mdata_orig %>% filter(grepl(pattern = "allT|CD45p",target_cells_simplified) & n_cells > 50 & condition_broad %in% c("virus", "bacteria", "fungus", "parasite")) %>% select(matches("prop"), sample_name:last_col()) %>% as.data.frame()
 # dim(mdata0)
@@ -359,7 +365,7 @@ plot(fit,
      plot_type = "structure",
      pm_which = "loadings",
      pm_groups = mdata$organ_simplified,
-     pm_colors = mypal,
+     pm_colors = mypal_organ,
      gap = 5) #+ NoLegend()
 
 plot(fit,
@@ -367,7 +373,7 @@ plot(fit,
      plot_type = "structure",
      pm_which = "factors",
      pm_groups = cluster_meta$annotation_level1,
-     pm_colors = mypal,
+     pm_colors = mypal_organ,
      gap = 5) #+ NoLegend()
 
 dev.off()
@@ -448,7 +454,8 @@ UMAP
 library(uwot)
 message("factors_volcano.pdf")
 res = ldf(fit, type = "i")
-L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+L1 = with(res, L) 
+# L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
 rownames(L1) == mdata$sample_code
 colnames(L1) = paste("F", 1:ncol(L1), sep = "")
 
@@ -469,7 +476,8 @@ louvain_result <- cluster_louvain(g, resolution = 1)
 clusters <- membership(louvain_result)
 table(clusters)
 
-umap_result = umap(L1, n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
+# umap_result = umap(L1, n_neighbors = 15, min_dist = 0.1, metric = "euclidean")
+umap_result = umap(L1, n_neighbors = 10, min_dist = 0.5, metric = "euclidean")
 umap_df = as.data.frame(umap_result)
 colnames(umap_df) = c("UMAP_1", "UMAP_2")
 rownames(umap_df) = rownames(L1)
@@ -479,6 +487,14 @@ all(umap_df$sample_code == rownames(L1))
 umap_df = data.frame(umap_df, L1)
 # umap_df = data.frame(umap_df, df)
 umap_df$clusters = factor(clusters)
+umap_df$organ_simplified = gsub("\\."," ", umap_df$organ_simplified)
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = organ_simplified)) +
+  geom_point(alpha = 0.8, size = 2) +
+        scale_color_manual(values = as.character(polychrome()))+
+  theme_void() +
+  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+    p + facet_wrap(~organ_simplified, ncol = 5)
 
 # #Add annotation level 1 prop to dataframe
 # m3 = readRDS(sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
@@ -615,6 +631,24 @@ pheatmap(tmp, color = ColorRamp, cluster_rows = T, cluster_cols = T, fontsize_ro
 dev.off()
 ```
 
+
+**Figures?**
+
+```{r}
+prefix = "SampleComp/20250226"
+prefix2 = "flashier/20250313_expoPropInLevel1"
+
+so_orig = readRDS("igt1_96_withtotalvi20250226.Rds")
+
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+
+```
 
 
 
