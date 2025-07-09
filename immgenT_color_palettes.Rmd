@@ -1,0 +1,373 @@
+---
+title: "immgenT_color_palettes.Rmd"
+output: html_document
+date: "2025-07-08"
+editor_options: 
+  chunk_output_type: console
+---
+
+---
+title: "MDEs_ForEachDataset"
+output: html_document
+date: "2025-05-21"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=3:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=152GB
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315
+module load openblas/0.3.13 #load again or error
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+#cd ~/google_drive/ImmgenT/analysis/data_integration/IGT1_56/Treg
+
+#srun --pty --jobid 21908677 -w midway3-0291 /bin/bash
+
+R
+#options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+```
+
+**Initialize in R: load libraries and custom functions**
+
+```{r}
+options(max.print=1000)
+# setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+libs = c("gridExtra","fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+```
+
+
+```{r}
+setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
+so = list()
+so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
+so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
+so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
+so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
+so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
+so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
+so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
+so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
+
+
+```
+
+
+```{r}
+mypal_list = list()
+```
+
+
+**Level1 palette**
+```{r}
+mypal_list[["level1"]] = c(CD4 = "blue", CD8 = "darkorange2", Treg = "deeppink", gdT = "chartreuse3", CD8aa = "darkorchid", nonconv = "darkgoldenrod1",DN = "deepskyblue",DP="red",thymocyte = "grey")
+
+# DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, cols = mypal_list[["level1"]], label = T, label.box = F) + NoLegend()
+
+
+```
+
+
+**Palette for each level 1: CD4, CD8, etc**
+```{r}
+
+# cls = c("cadetblue","chartreuse","chocolate","cyan","darkgoldenrod","darkorange","darkorchid","darkseagreen","deeppink","deepskyblue","darkolivegreen","blue","brown","antiquewhite","aquamarine","azure") #
+# cls = c("blue","darkorange","darkseagreen","darkorchid","deeppink","deepskyblue","chartreuse","cadetblue","brown","antiquewhite","darkgoldenrod","darkolivegreen","cyan","red","burlywood")
+
+cls = c("blue","darkorange","darkolivegreen","darkorchid",
+        "deepskyblue","pink","chartreuse","darkgoldenrod",
+        "cadetblue","brown","darkseagreen","violetred",
+        "cyan","burlywood", "red")
+mypal = c(sprintf("%s2",cls),sprintf("%s",cls))
+
+
+i = "CD4"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "Treg"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "CD8"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "gdT"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "nonconv"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "CD8aa"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "DN"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+i = "DP"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+# DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
+
+mypal_list[["thymocyte"]] = c(thymocyte = "cornsilk3")
+mypal_list[["nonT"]] = c(nonT = "cornsilk1")
+mypal_list[["remove"]] = c(nonT = "cornsilk2")
+
+i = "unclear"
+tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
+mypal_list[[i]] = setNames(mypal, tocol)
+mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
+mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
+mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
+
+levels(so_orig$annotation_level2)[!levels(so_orig$annotation_level2) %in% unlist(lapply(mypal_list, names), use.names=F)]
+
+# mypal_level2 = unlist(mypal_list, use.names = F)
+# names(mypal_level2) = unlist(lapply(mypal_list, names), use.names = F) 
+
+```
+
+**Palette for nonoverlapping colors for all: mypal_level2_all** 
+```{r}
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c( glasbey(),polychrome(), mypal1)
+names(mypal) = NULL
+
+mypal_list[["level2_all"]] = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_list[["level2_all"]]  = mypal_list[["level2_all"]] [!is.na(names(mypal_list[["level2_all"]] ))]
+
+# DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_all"]]) + NoLegend()
+
+
+
+```
+
+**Palette for organ_simplified** 
+
+```{r}
+
+cls = c("blue","darkorange","darkolivegreen","darkorchid",
+        "deepskyblue","pink","chartreuse","darkgoldenrod",
+        "cadetblue","brown","darkseagreen","violetred",
+        "cyan","burlywood", "red")
+mypal = c(sprintf("%s1",cls),sprintf("%s4",cls))
+# mypal = c(polychrome())
+names(mypal) = NULL
+
+mypal_list[["organ_simplified"]] = setNames(mypal, unique(so_orig$organ_simplified))
+mypal_list[["organ_simplified"]]  = mypal_list[["organ_simplified"]] [!is.na(names(mypal_list[["organ_simplified"]] ))]
+
+DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]], split.by = "organ_simplified", ncol = 5) + theme_dark()
+
+
+
+```
+
+
+**Print palettes**
+```{r}
+ensure_directory("immgent_color_palettes")
+
+pdf("immgent_color_palettes/MDE_color_palette.pdf", 10,10, useDingbats = F)
+for (i in unique(so_orig$annotation_level1)) {
+    print(i)
+    if (!is.null(so[[i]])) {
+        p = DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + ggtitle(sprintf("mypal_list[['%s']]",i)) 
+        print(p)
+        print(p + NoLegend())
+    }
+    
+}
+p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_all"]]) + 
+    ggtitle(sprintf("mypal_list[['%s']]","level2_all")) #+ NoLegend()
+print(p)
+print(p + NoLegend())
+
+dev.off()
+
+pdf("immgent_color_palettes/MDE_color_palette_organ_simplified.pdf", 15,15, useDingbats = F)
+p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]]) 
+p
+p + NoLegend()
+p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplified", raster = T, cols = mypal_list[["organ_simplified"]], split.by = "organ_simplified", ncol = 5) 
+p + NoLegend() 
+p + theme_dark() + NoLegend() 
+dev.off()
+
+```
+
+**Save palettes**
+```{r}
+
+saveRDS(mypal_list, "immgent_color_palettes/immgent_color_palettes_list_20250708.Rds")
+
+for (i in names(mypal_list)) {
+    write.table(mypal_list[[i]],file = sprintf("immgent_color_palettes/immgent_color_palettes_%s.csv",i),quote = F, sep = ",", col.names = F)
+}
+
+```
+
+
+########
+
+```{r}
+#Gradients
+library(RColorBrewer)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+# ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+library(viridis)
+ColorRamp = rev(viridis(100))
+ColorRamp = rev(cividis(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = colorRampPalette(c('white','red'))(20)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+# ColorRamp = colorRampPalette(c('Red'))(20)
+#image(1:100, 1, as.matrix(1:100), col = ColorRamp, main = "Color Palette", xaxt = 'n', yaxt = 'n', xlab = "", ylab = "")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c( glasbey(),polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+mypal_organ = setNames(mypal, unique(so$organ_simplified))
+mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+mypal_cl = setNames(mypal, unique(gsub("^.*_","",unique(so$annotation_level2))) %>% sort())
+mypal_cl = mypal_cl[!is.na(names(mypal_cl))]
+barplot(table(mypal_cl), col = mypal_cl, horiz = T,angle = 90 )
+
+barplot(table(mypal_level1), col = mypal_level1, horiz = T, axis.lty = 1)
+
+
+
+#parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+```
+
+
+
+```{r}
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c( glasbey(),polychrome(), mypal1)
+names(mypal) = NULL
+
+mypal_cl = setNames(mypal, unique(gsub("^.*_","",unique(so_orig$annotation_level2))) %>% sort())
+mypal_cl = mypal_cl[!is.na(names(mypal_cl))]
+mypal_cl["prolif"] = "black"
+mypal_cl["miniverse"] = "grey"
+mypal_cl["cl3"] = "darkgoldenrod"
+mypal_cl["cl9"] = "chocolate1"
+mypal_cl["cl21"] = "brown3"
+mypal_cl["cl18"] = "chartreuse3"
+mypal_cl["cl18"] = "aquamarine2"
+mypal_cl["thymocyte"] = "#F7E1A0"
+
+# helper to extract the key we care about from annotation_level2
+get_clkey <- function(x){
+  case_when(
+    x == "thymocyte"            ~ "thymocyte",
+    grepl("_prolif$",    x)     ~ "prolif",
+    grepl("_miniverse$", x)     ~ "miniverse",
+    TRUE                         ~ sub(".*_(cl[0-9]+)$","\\1", x)
+  )
+}
+
+
+# make a named vector of colours keyed by your exact annotation_level2 values
+pal_anno <- unique(so_orig$annotation_level2) %>% 
+  setNames(.,.) %>% 
+  sapply(get_clkey) %>%                # turn Treg_cl1 → "cl1", etc
+  { mypal_cl[.] }                      # look up the colours
+# pal_anno is now a named character vector: names=annotation_level2, values=hex
+names(pal_anno) = unique(so_orig$annotation_level2)
+
+# barplot(table(pal_anno), col = pal_anno, horiz = T,angle = 90 )
+
+# pdf("MDE_color_palette.pdf", 10,10, useDingbats = F)
+# DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = pal_anno) + NoLegend()
+DimPlot(so[["CD4"]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = pal_anno, label = T, label.box = F) + NoLegend()
+# dev.off()
+
+```
+

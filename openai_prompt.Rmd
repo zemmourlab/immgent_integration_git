@@ -1,0 +1,33 @@
+---
+title: "openai_prompt.Rmd"
+output: html_document
+date: "2025-07-09"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+```{r}
+library(openai)
+
+openai::model_list() %>% pull(id)
+
+# Set your API key (or put in your .Renviron)
+Sys.setenv(OPENAI_API_KEY = "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")
+
+# 3) send a Chat completion request
+res = create_chat_completion(
+  model    = "gpt-4o-mini",                   # or "gpt-3.5-turbo"
+  messages = list(
+    list(role = "system", content = "You are a coding expert and computational biologist, in R and python"),
+    list(role = "user",   content = "How do I run PCA in R?")
+  )
+)
+
+# 4) extract the assistant’s reply
+cat(res$choices[[1]]$messagecontent)
+write.table(x = res$choices$message.content, file = sprintf("~/Desktop/openai_api_%s.Rmd", res$id), quote = F, F, col.names = F)
+
+```
+
