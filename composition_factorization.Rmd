@@ -27,10 +27,12 @@ R
 ```
 
 ```{r}
-# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
 libs = c("fastTopics", "flashier", "Seurat", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
+
 
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
@@ -38,7 +40,8 @@ ColorRamp = rev(rainbow(10, end = 4/6))
 ColorRamp = rev(viridis(100))
 ColorRamp = brewer.pal(9, "Blues")
 
-mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/immgent_color_palettes_list_20250708.Rds")
+mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_list = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
 mypal_level1 = mypal_list[["level1"]]
 mypal_level2 = mypal_list[["level2_all"]]
 mypal_organ = mypal_list[["organ_simplified"]]
@@ -158,6 +161,7 @@ ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
 ```{r}
 # mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds", prefix))
 mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+
 mdata_orig$IGT_10xlane_id = NULL
 mdata_orig$organism_id = NULL
 mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
@@ -182,9 +186,22 @@ mdata = mdata0
 
 mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
 
-mdata$organ_simplified = make.names(mdata$organ_simplified)
-mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
-mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+# mdata$organ_simplified = make.names(mdata$organ_simplified)
+# mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+# mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+
+mdata$organ_simplified = mdata$organ_simplified
+# mdata$organ_simplified =  factor(mdata$organ_simplified, levels = names(which(!table( mdata$organ_simplified)==0)))
+# mdata$organ_simplified = relevel(mdata$organ_simplified, ref = "spleen")
+mdata$organ_simplified[mdata$organ == "colonic epithelium"] = "colon epi"
+mdata$organ_simplified[mdata$organ == "lamina propria of mucosa of colon"] = "colon LP"
+mdata$organ_simplified[mdata$organ %in% c("epithelium of small intestine","duodenal epithelium","jejunal epithelium","ileal epithelium")] = "small intestine epi"
+mdata$organ_simplified[mdata$organ %in% c("lamina propria of small intestine","ileum lamina propria")] = "small intestine LP"
+mdata$organ_simplified = factor(mdata$organ_simplified, levels = c("blood","spleen","LN","SLO","bone marrow","thymus",
+                                                                   "lung", "liver", "peritoneal cavity",
+                                                                   "colon epi","small intestine epi","colon LP","small intestine LP","skin",
+                                                                   "mammary gland","uterus", "placenta", "prostate","submandibular gland","kidney", "pancreas","CNS","synovial fluid"))
+
 
 mdata$condition_detailed_simplified = make.names(mdata$condition_detailed_simplified)
 mdata$condition_detailed_simplified =  factor(mdata$condition_detailed_simplified, levels = names(which(!table( mdata$condition_detailed_simplified)==0)))
@@ -488,13 +505,12 @@ umap_df = data.frame(umap_df, L1)
 # umap_df = data.frame(umap_df, df)
 umap_df$clusters = factor(clusters)
 umap_df$organ_simplified = gsub("\\."," ", umap_df$organ_simplified)
+umap_df$organ_simplified
+umap_df$organ_simplified[umap_df$organ == "colonic epithelium"] = "colon epi"
+umap_df$organ_simplified[umap_df$organ == "lamina propria of mucosa of colon"] = "colon LP"
+umap_df$organ_simplified[umap_df$organ %in% c("epithelium of small intestine","duodenal epithelium","jejunal epithelium","ileal epithelium")] = "small intestine epi"
+umap_df$organ_simplified[umap_df$organ %in% c("lamina propria of small intestine","ileum lamina propria")] = "small intestine LP"
 
-p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = organ_simplified)) +
-  geom_point(alpha = 0.8, size = 2) +
-        scale_color_manual(values = as.character(polychrome()))+
-  theme_void() +
-  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
-    p + facet_wrap(~organ_simplified, ncol = 5)
 
 # #Add annotation level 1 prop to dataframe
 # m3 = readRDS(sprintf("%s/annotation_level1_PropPerSample_withMetadata.Rds", prefix))
@@ -509,8 +525,15 @@ p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = clusters)) +
   geom_point(alpha = 0.8, size = 2) +
         scale_color_manual(values = mypal)+
   theme_void() +
-  labs(title = "UMAP Visualization", x = "UMAP 1", y = "UMAP 2")
+  labs(title = "Sample UMAP", x = "UMAP 1", y = "UMAP 2")
 LabelClusters(p, id = "clusters")
+
+p = ggplot(umap_df, aes(x = UMAP_1, y = UMAP_2, color = organ_simplified)) +
+  geom_point(alpha = 0.8, size = 2) +
+        scale_color_manual(values = mypal_organ)+
+  theme_void() +
+  labs(title = "Sample UMAP", x = "UMAP 1", y = "UMAP 2")
+    p + facet_wrap(~organ_simplified, ncol = 5)
 
 bkgrd = ggplot(umap_df[,c("UMAP_1", "UMAP_2")],aes(x = UMAP_1, y = UMAP_2)) + geom_point(alpha = 0.1, size = 1, color = "grey50")
 
@@ -632,24 +655,191 @@ dev.off()
 ```
 
 
-**Figures?**
+**Figures**
+
 
 ```{r}
 prefix = "SampleComp/20250226"
-prefix2 = "flashier/20250313_expoPropInLevel1"
+prefix2 = "flashier/20250709_expoPropInLevel1"
 
-so_orig = readRDS("igt1_96_withtotalvi20250226.Rds")
+# so_orig = readRDS("igt1_96_withtotalvi20250226.Rds")
+so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata
 
 fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+props = read.table(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1.txt", prefix))
+
 
 res = ldf(fit, type = "i")
-L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag
 rownames(L1) == mdata$sample_code
 colnames(L1) = paste("F", 1:ncol(L1), sep = "")
 
 
 ```
 
+```{r}
+
+pheatmap(as.dist(1-cor(t(L1))), color = rev(ColorRamp))
+```
+
+
+
+Structure plot
+
+
+F1: Resting
+F2: IEL
+F3: Rorc
+F4: activated?
+F5: prolif acute activation
+F6: 
+
+
+```{r}
+
+topic_colors = glasbey(6)
+L1 = ldf(fit, type = "i")$L
+L1 = L1/rowSums(L1)
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+mdata$organ_simplified = factor(mdata$organ_simplified, levels = c("blood","spleen","LN","SLO","bone marrow","thymus",
+                                                                   "lung", "liver", "peritoneal cavity",
+                                                                   "colon epi","small intestine epi","colon LP","small intestine LP","skin",
+                                                                   "mammary gland","uterus", "placenta", "prostate","submandibular gland","kidney", "pancreas","CNS","synovial fluid"))
+
+pdf(sprintf("%s/%s/structure_plots.pdf", prefix,prefix2), 15,5, useDingbats = F)
+structure_plot(L1,grouping = mdata$organ_simplified,topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+structure_plot(L1,grouping = mdata$organ_simplified,topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+#resting and activated factors
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = c(5,4,1),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+grps = factor(mdata$organ_simplified[mdata$condition_broad != "healthy"], levels = intersect(levels(mdata$organ_simplified),unique(mdata$organ_simplified[mdata$condition_broad != "healthy"])))
+structure_plot(L1[mdata$condition_broad != "healthy",],grouping = grps,topics = c(5,4,1),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+    labs(y = "membership") +
+    theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+#IEL and Rorc
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = c(3,2),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+grps = factor(mdata$organ_simplified[mdata$condition_broad != "healthy"], levels = intersect(levels(mdata$organ_simplified),unique(mdata$organ_simplified[mdata$condition_broad != "healthy"])))
+structure_plot(L1[mdata$condition_broad != "healthy",],grouping = grps,topics = c(3,2),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+    labs(y = "membership") +
+    theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+
+dev.off()
+
+
+
+###
+pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 10, 8, useDingbats = F)
+plot(fit,
+     kset = 1:2,
+     pm_subset =,
+     plot_type = "structure",
+     pm_which = "loadings",
+     pm_groups = mdata$organ_simplified,
+     pm_colors = mypal_organ,
+     gap = 5) #+ NoLegend()
+
+plot(fit,
+     include_scree = F,
+     plot_type = "structure",
+     pm_which = "factors",
+     pm_groups = cluster_meta$annotation_level1,
+     pm_colors = mypal_organ,
+     gap = 5) #+ NoLegend()
+
+dev.off()
+
+```
+
+boxplots
+```{r}
+
+df = data.frame(mdata, L1)
+df2 = df %>% 
+  filter(!organ_simplified %in% "SLO") %>%
+  mutate(is_healthy = factor(condition_broad %in% "healthy", levels = c(TRUE, FALSE),
+                             labels = c("Healthy","Not healthy")))
+
+
+p = ggplot(df2) +
+    geom_boxplot(aes(x = organ_simplified, y = F1, fill = organ_simplified), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    geom_jitter(aes(x = organ_simplified, y = F1), width = 0.2, alpha = 1, size = 0.5) +
+    # geom_text(data = subset(summary_data, sum_value > 1), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+    #           size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_organ) +
+    theme_minimal() +
+    labs(
+        x = "",
+        y = "",
+        title = "",
+        fill = ""
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  +
+    NoLegend()
+
+
+p = ggplot(df2) +
+    geom_boxplot(aes(x = organ_simplified, y = F1, fill = organ_simplified, group = interaction(organ_simplified, is_healthy)), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    # geom_jitter(aes(x = organ_simplified, y = F1), width = 0.2, alpha = 1, size = 0.5) +
+    # geom_text(data = subset(summary_data, sum_value > 1), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+    #           size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_organ) +
+    theme_minimal() +
+    labs(
+        x = "",
+        y = "",
+        title = "",
+        fill = ""
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  #+ NoLegend()
+p
+
+
+```
+
+
+Heatmap clusters factors
+
+```{r}
+F1 = ldf(fit, type = "i")$F
+top_cl <- apply(F1, 2, order, decreasing = TRUE)[1:10, ]
+top_cl <- rownames(fit$F_pm)[top_cl]
+plot(fit,
+     plot_type = "heatmap",
+     pm_which = "factors",
+     pm_subset = top_cl,
+     pm_groups = factor(top_cl, levels = unique(top_cl)),
+     kset = 1:6,
+     gap = 0.2)
+```
 
 
 

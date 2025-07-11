@@ -808,6 +808,23 @@ SeSpPPVNPV = function(tp = tmp["tp"], tn = tmp["tn"], fp=tmp["fp"], fn=tmp["fn"]
     return(res)
 }
 
+NoGrid <- function(...) {
+    no.grid.theme <- theme(
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        validate = TRUE,
+        ...
+    )
+    return(no.grid.theme)
+}
+
+# NoLegend <- function (...) 
+# {
+#     no.legend.theme <- theme(legend.position = "none", validate = TRUE, 
+#                              ...)
+#     return(no.legend.theme)
+# }
+
 
 # MyDimPlotHighlight <- function(seurat_object = so, 
 #                                umap_to_plot = "mde_totalvi_20241201_gdT_rmIGTsample", 
