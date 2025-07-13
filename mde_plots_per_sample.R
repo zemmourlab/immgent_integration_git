@@ -33,12 +33,12 @@ so_orig = readRDS(file = path_to_seurat_object)
 
 message("Set color palette")
 library("pals")
-# n = 70
-# qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-# mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
-# mypal1 = mypal1[-4]
-# mypal = c(glasbey(), polychrome(), mypal1)
-# names(mypal) = NULL
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
 # mypal_organ = setNames(mypal, unique(so_orig$organ_simplified))
 # mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
 # mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
