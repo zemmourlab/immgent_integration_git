@@ -74,6 +74,43 @@ so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
 # i="IGT37"
 level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
 
+message("Plots for Ag specific cells only")
+igts = so_orig@meta.data %>% filter(is_agspe == T) %>% pull(IGT) %>% unique()
+
+pdf(sprintf("%s/IGT1-96_MDEs_AgSpe.pdf", output_dir), width = 20, height = 20, useDingbats = F)
+for (i in igts) {
+    samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
+    for (s in samples) {
+        print(s)
+        ps2 = list()
+        ps3 = list()
+        for (l in level1) {
+            # print(l)
+            p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$sample_code == s)], highlight_column_name = "is_agspe", pixels = c(512, 512), mycols = c("black", "red"), title = sprintf("%s in %s", l, s), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+            ps2[[l]] = p$plot2
+            ps3[[l]] = p$plot3 #to get plot with labels
+        }
+        grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
+        grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
+        # dev.off()
+    }
+}
+dev.off()
+
+pdf(sprintf("%s/IGT1-96_MDEs_AgSpe2.pdf", output_dir), width = 20, height = 20, useDingbats = F)
+ps2 = list()
+ps3 = list()
+for (l in level1) {
+    print(l)
+    p = MyDimPlotHighlight(seurat_object = so[[l]], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so[[l]])[which(so[[l]]$is_agspe == T)], highlight_column_name = "Ag_spe", pixels = c(512, 512), mycols = mypal, title = sprintf("Ag spe in %s", l), highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+    ps2[[l]] = p$plot2
+    ps3[[l]] = p$plot3 #to get plot with labels
+}
+grid.arrange(grobs = ps3, ncol = 3, nrow = 3)
+grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
+dev.off()
+
+
 message("One file per sample, with labels only")
 for (i in unique(so_orig$IGT)) {
     samples = so_orig@meta.data %>% filter(IGT == i) %>% pull(sample_code) %>% unique()
@@ -149,5 +186,8 @@ for (i in unique(so_orig$IGT)) {
 #     }
 # }
 # dev.off()
+
+
+
 
 
