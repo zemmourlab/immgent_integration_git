@@ -33,21 +33,28 @@ so_orig = readRDS(file = path_to_seurat_object)
 
 message("Set color palette")
 library("pals")
-n = 70
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
-mypal1 = mypal1[-4]
-mypal = c(glasbey(), polychrome(), mypal1)
-names(mypal) = NULL
-mypal_organ = setNames(mypal, unique(so_orig$organ_simplified))
-mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
-mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
-mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
-mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
-mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
-mypal_level2["CD4_cl18"] = "blue"
-mypal_igt = setNames(mypal, unique(so_orig$IGT))
-mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+# n = 70
+# qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+# mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+# mypal1 = mypal1[-4]
+# mypal = c(glasbey(), polychrome(), mypal1)
+# names(mypal) = NULL
+# mypal_organ = setNames(mypal, unique(so_orig$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+# mypal_igt = setNames(mypal, unique(so_orig$IGT))
+# mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+#mypal_list = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_level1 = mypal_list[["level1"]]
+mypal_level2_all = mypal_list[["level2_all"]]
+mypal_level2 = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]])
+mypal_organ = mypal_list[["organ_simplified"]]
 
 
 message("Plotting")
