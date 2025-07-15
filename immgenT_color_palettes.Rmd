@@ -65,6 +65,7 @@ source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com
 
 setwd("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes")
 prefix = "20250709"
+prefix = "20250714"
 
 so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
 so = list()
@@ -189,9 +190,11 @@ levels(so_orig$annotation_level2)[!levels(so_orig$annotation_level2) %in% unlist
 # mypal_level2 = unlist(mypal_list, use.names = F)
 # names(mypal_level2) = unlist(lapply(mypal_list, names), use.names = F) 
 
+mypal_list[["level2"]] = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]],mypal_list[["nonT"]], mypal_list[["remove"]] , mypal_list[["unclear"]] )
+
 ```
 
-**Palette for nonoverlapping colors for all: mypal_level2_all** 
+**Palette for nonoverlapping colors for all: mypal_level2_option2** 
 ```{r}
 library("pals")
 n = 70
@@ -201,10 +204,10 @@ mypal1 = mypal1[-4]
 mypal = c( glasbey(),polychrome(), mypal1)
 names(mypal) = NULL
 
-mypal_list[["level2_all"]] = setNames(mypal, unique(so_orig$annotation_level2))
-mypal_list[["level2_all"]]  = mypal_list[["level2_all"]] [!is.na(names(mypal_list[["level2_all"]] ))]
+mypal_list[["level2_option2"]] = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_list[["level2_option2"]]  = mypal_list[["level2_option2"]] [!is.na(names(mypal_list[["level2_option2"]] ))]
 
-# DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_all"]]) + NoLegend()
+# DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_option2"]]) + NoLegend()
 
 
 
@@ -257,8 +260,14 @@ for (i in unique(so_orig$annotation_level1)) {
     }
     
 }
-p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_all"]]) + 
-    ggtitle(sprintf("mypal_list[['%s']]","level2_all")) #+ NoLegend()
+
+p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2"]]) + 
+    ggtitle(sprintf("mypal_list[['%s']]","level2")) #+ NoLegend()
+print(p)
+print(p + NoLegend())
+
+p = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, cols = mypal_list[["level2_option2"]]) + 
+    ggtitle(sprintf("mypal_list[['%s']]","level2_option2")) #+ NoLegend()
 print(p)
 print(p + NoLegend())
 
@@ -286,7 +295,6 @@ for (i in names(mypal_list)) {
 }
 
 ```
-
 
 ########
 

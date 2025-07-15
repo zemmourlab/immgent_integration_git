@@ -79,6 +79,14 @@ names(mypal) = NULL
 
 #parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
 
+# mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_list = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_level1 = mypal_list[["level1"]]
+mypal_level2_all = mypal_list[["level2_all"]]
+mypal_level2 = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]])
+mypal_organ = mypal_list[["organ_simplified"]]
+
+
 
 ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
     so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)

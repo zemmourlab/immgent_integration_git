@@ -24,6 +24,10 @@ path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
 cd $path_to_wd
 
 # path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds
+# output_dir=MDE_InEachSample
+# Rscript $SCRIPT_DIR/mde_plots_per_sample.R $path_to_seurat_object $output_dir
+
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds
 output_dir=MDE_InEachSample_20250712
 Rscript $SCRIPT_DIR/mde_plots_per_sample.R $path_to_seurat_object $output_dir
+
