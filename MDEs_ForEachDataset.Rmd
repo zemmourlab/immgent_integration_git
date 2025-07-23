@@ -78,12 +78,10 @@ names(mypal) = NULL
 # mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
 # mypal_list = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
 mypal_list = readRDS("/Users/david/Library/CloudStorage/Box-Box/ZemmourLab_David/ZemmourLib/data/immgent_color_palettes_list_20250709.Rds")
-
 mypal_level1 = mypal_list[["level1"]]
 mypal_level2_all = mypal_list[["level2_all"]]
 mypal_level2 = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]])
 mypal_organ = mypal_list[["organ_simplified"]]
-
 
 
 
@@ -107,49 +105,6 @@ output_dir = "MDE_InEachSample_20250712"
 ```{r}
 library(gridExtra)
 
-gene = "Fcer1g"
-
-so = so_orig
-so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
-
-so = list()
-so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
-so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
-so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
-so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
-so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
-so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
-so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
-so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
-# so = lapply(so, function(x) NormalizeData(x,assay = "RNA", normalization.method = "LogNormalize",verbose = T))
-
-
-
-ImmgenTFeaturePlots = function(so_orig, so_list = SplitObject(so_orig, split.by = "annotation_level1"), gene = "Cd4", slot = "data", reduction_overall = "mde2_totalvi_20241006", reduction_level2 = "mde_incremental",mypal_level1 = ZemmourLib::immgent_colors[["level1"]], mypal_level2 = ZemmourLib::immgent_colors[["level2"]]) {
-    library(gridExtra)
-    # don't forget to run NormalizeData() before
-    # split so_orig to so_list before running
-    level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
-    ps1 = list()
-    ps2 = list()
-    ps1[["all"]] = DimPlot(so_orig, reduction = reduction_overall, group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level1) + ggtitle("") + theme_void() + NoLegend()
-    print(ps1[["all"]])
-    
-    ps2[["all"]]  = FeaturePlot(so_orig, reduction = reduction_overall,slot = "data", features = gene, order = F, raster = T, raster.dpi = c(1024,1024)) + ggtitle(sprintf("%s", gene)) + theme_void() + NoLegend()
-    print(ps2[["all"]])
-    
-    ps1 = list()
-    ps2 = list()
-    for (l in level1) {
-        print(l)
-        ps1[[l]] = DimPlot(so_list[[l]], reduction = reduction_level2, group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level2) + ggtitle(sprintf("MDE %s", l)) + theme_void() + NoLegend()
-        ps2[[l]] = FeaturePlot(so_list[[l]], reduction = reduction_level2,slot = "data", features = gene, order = F, raster = T, raster.dpi = c(1024,1024)) + ggtitle(sprintf("MDE %s, gene %s", l, gene)) + theme_void() + NoLegend()
-    }
-    grid.arrange(grobs = ps1, ncol = 3, nrow = 3)
-    grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-    
-}
-
 #example of use
 so_orig
 so_orig = NormalizeData(so_orig,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
@@ -161,30 +116,7 @@ pdf(sprintf("misc_plots/FeaturePlot_%s.pdf",gene), width = 20, height = 20, useD
 ImmgenTFeaturePlots(so_orig, so_list, gene = "Cd4", slot = "data")
 dev.off()
 
-# level1 = c("CD4", "CD8", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")
-pdf(sprintf("misc_plots/FeaturePlot_%s.pdf",gene), width = 20, height = 20, useDingbats = F)
-ps1 = list()
-ps2 = list()
-ps1[["all"]] = DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level1) + ggtitle("") + theme_void() + NoLegend()
-print(ps1[["all"]])
-
-ps2[["all"]]  = FeaturePlot(so_orig, reduction = "mde2_totalvi_20241006",slot = "data", features = gene, order = F, raster = T, raster.dpi = c(1024,1024)) + ggtitle(sprintf("%s", gene)) + theme_void() + NoLegend()
-print(ps2[["all"]])
-
-ps1 = list()
-ps2 = list()
-for (l in level1) {
-    print(l)
-    ps1[[l]] = DimPlot(so[[l]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024), label = T) + scale_color_manual(values = mypal_level2) + ggtitle(sprintf("MDE %s", l)) + theme_void() + NoLegend()
-    ps2[[l]] = FeaturePlot(so[[l]], reduction = "mde_incremental",slot = "data", features = gene, order = F, raster = T, raster.dpi = c(1024,1024)) + ggtitle(sprintf("MDE %s, gene %s", l, gene)) + theme_void() + NoLegend()
-}
-grid.arrange(grobs = ps1, ncol = 3, nrow = 3)
-grid.arrange(grobs = ps2, ncol = 3, nrow = 3)
-dev.off()
-
 ```
-
-
 
 **MDE plots in each sample**
 Too long so better to run on Midway with:
@@ -205,7 +137,7 @@ output_dir=MDE_InEachSample_20250712
 Rscript $SCRIPT_DIR/mde_plots_per_sample.R $path_to_seurat_object $output_dir
 ```
 
-
+FYI: already in mde_plots_per_sample.R
 ```{r}
 
 library(gridExtra)
@@ -285,7 +217,7 @@ for (i in unique(so_orig$IGT)) {
 
 ```
 
-For Ag-specific cells only
+FYI: already in mde_plots_per_sample.R, For Ag-specific cells only
 
 ```{r}
 library(gridExtra)

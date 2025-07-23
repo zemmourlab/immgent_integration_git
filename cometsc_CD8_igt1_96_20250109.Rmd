@@ -2,6 +2,8 @@
 title: "cometsc_CD8"
 output: html_document
 date: "2025-01-09"
+editor_options: 
+  chunk_output_type: console
 ---
 
 Continuation from clustering_CD8_igt_1_96.Rmd
@@ -20,10 +22,10 @@ R
 ```
 
 ```{r}
-libs = c("Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
+libs = c("ZemmourLib","Seurat", "ggplot2", "dplyr", "ggrastr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
-options(Seurat.object.assay.version = 'v5')
-source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+# options(Seurat.object.assay.version = 'v5')
+# source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
 ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
@@ -45,6 +47,10 @@ length(glasbey())
 length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
+
+mypal_level2 = immgent_colors$level2
+mypal_level1 = immgent_colors$level1
+mypal_organ = immgent_colors$organ_simplified
 
 ```
 
@@ -265,5 +271,601 @@ singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice
 singleton_list %>% group_by(cluster) %>% arrange(rank, decreasing = F) %>% slice_head(n = 10) %>% as.data.frame() %>% write.table(sprintf("%s/%s/singleton_all_ranked_top10percluster.csv", prefix, prefix2), sep = ",", quote = F, row.names = F, col.names = T)
 
 ```
+
+
+**Exploring the data with subset of cells for finding the gates**
+Loading data on desktop
+```{r}
+setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD8/cometsc/")
+so_orig = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds')
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD8" &  !(so_orig$annotation_level2 %in% c("CD8_miniverse", "CD8_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+## Subset data to plot and analyze faster
+# sub = so@meta.data %>% group_by(annotation_level2, IGTHT) %>% sample_n(ifelse(test = n() < 20, yes = n(), no = 20)) %>% pull(cellID)
+# so_sub = so[,sub]
+# so_sub@meta.data %>% group_by(annotation_level2) %>% summarize(n()) %>% as.data.frame()
+# so = so_sub
+
+```
+
+Loading data on Midway
+```{r}
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8/cometsc")
+so_orig = readRDS("../../igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+so = so_orig[,so_orig$cite_seq == T & so_orig$annotation_level1 == "CD8" &  !(so_orig$annotation_level2 %in% c("CD8_miniverse", "CD8_prolif"))]
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+
+DefaultAssay(so) = "ADT"
+# so = so[rownames(so)[so@assays$ADT@meta.features$IGT1only == F],]
+
+```
+
+Plot CITEseq on MDE
+```{r}
+so = NormalizeData(so, assay = "ADT", normalization.method = "CLR")
+# prots = sort(rownames(so)[so@assays$ADT@meta.features$IGT1only == F])
+prots = so@assays$ADT@meta.features %>% filter(IGT1only == F) %>% select(classification) %>% arrange(classification) %>% row.names()
+umap_to_plot = "mde_incremental"
+pdf(sprintf("%s/MDE_proteins_CLR.pdf", "."), 10,10, useDingbats = F)
+for (f in prots) {
+    print(f)
+    print(FeaturePlot(so, reduction = umap_to_plot, features = f, raster = T, order = F, raster.dpi = c(1024,1024)))
+}
+dev.off()
+
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+# prots = sort(rownames(so)[so@assays$ADT@meta.features$IGT1only == F])
+prots = so@assays$ADT@meta.features %>% filter(IGT1only == F) %>% select(classification) %>% arrange(classification) %>% row.names()
+umap_to_plot = "mde_incremental"
+pdf(sprintf("%s/MDE_proteins_Log.pdf", "."), 10,10, useDingbats = F)
+for (f in prots) {
+    print(f)
+    print(FeaturePlot(so, reduction = umap_to_plot, features = f, raster = T, order = F, raster.dpi = c(1024,1024)))
+}
+dev.off()
+
+so@assays$ADT@meta.features %>% filter(IGT1only == F) %>% select(classification) %>% arrange(classification) %>% row.names()
+
+```
+
+Heatmap
+```{r}
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+adt = as.matrix(so[["ADT"]]$data)
+adt = adt[so[["ADT"]]@meta.features$IGT1only ==F,]
+markers = rownames(adt)#c("CD62L", "KLRG1", "CD49B", "FR4", "SCA1", "NEUROPILIN1.CD304", "CD69", "CD45RB")
+adt = adt[markers,]
+tmp = melt(adt)
+tmp$cluster = so$annotation_level2[tmp$Var2]
+tmp2 = tmp %>% group_by(cluster, Var1) %>% summarize(mean(value))
+tmp3 = dcast(data = tmp2, Var1 ~ cluster)
+rownames(tmp3) = tmp3[,1]
+tmp3 = tmp3[,-1]
+#labels_matrix = ifelse(is.na(tmp3), yes = "", no = as.character(signif(tmp3,2)))
+# tmp4 = t(tmp3 / colMeans(tmp3))
+tmp4 = tmp3 - rowMeans(tmp3)
+
+# pdf(sprintf("%s/%s_heatmap.pdf", prefix, prefix3), 5,5)
+pdf(sprintf("%s/heatmap_ADT.pdf", "."), 10,15)
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "LogNorm geom mean ADT", na_col = "grey") #display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), fontsize = 10,
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "LogNorm geom mean ADT", na_col = "grey") #display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), fontsize = 10,
+pheatmap(mat = tmp4, cluster_rows = T, cluster_cols = T, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "LogNorm geom mean ADT (rowMean normalized)", na_col = "grey")
+pheatmap(mat = tmp4, cluster_rows = T, cluster_cols = F, col = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "LogNorm geom mean ADT (rowMean normalized)", na_col = "grey")
+
+dev.off()
+
+
+```
+
+
+*Exploring the data with subset of cells for finding the gates*
+
+--> use these plots to update gating.xlsx (then export each sheet for downstream analysis)
+```{r}
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+## Subset data to plot and analyze faster
+# so@meta.data %>% group_by(annotation_level2) %>% summarize(n()) %>% as.data.frame()
+# sub = so@meta.data %>% group_by(annotation_level2) %>% sample_n(ifelse(test = n() < 1000, yes = n(), no = 1000)) %>% pull(cellID)
+# so_sub = so[,sub]
+# so_sub@meta.data %>% group_by(annotation_level2) %>% summarize(n()) %>% as.data.frame()
+# so = so_sub
+
+features_list = list(c("CD4", "CD8B"), #1
+                     c("CD8A", "CD8B"),
+                     c("CD62L", "CD44"),
+                     c("CD62L", "IL7RA.CD127"), 
+                     c("CD62L", "CD103"), #5
+                     c("IL7RA.CD127", "CD103"),
+                     c("IL7RA.CD127", "CD31"),
+                     c("CD103", "CD31"),
+                     c("IL7RA.CD127", "LY6C1-LY6C2"),  
+                     c("IL7RA.CD127", "ITAX.CD11C"),#10
+                     c("CD94", "KLRG1"),
+                     c("ITAX.CD11C", "KLRG1"),
+                     c("IL7RA.CD127", "KLRG1"),
+                     c("HAVCR2", "CD38"),
+                     c("HAVCR2", "GITR.CD357"),#15
+                     c("HAVCR2", "CD39"),
+                     c("CD39", "CD73.5NTD"),
+                     c("CD103", "CD49A"),
+                     c("CD103", "CD69"),
+                     c("PDCD1.PD1.CD279", "CD69"),#20
+                     c("B220", "CD8B"), 
+                     c("CD55.DAF", "KLRG1"),
+                     c("B220", "CD160"), 
+                     c("CD200", "FR4"),
+                     c("LY49A", "FR4")
+                     )
+
+th_list = list("CD4" = 4,
+               "CD8B" = 4,
+               "CD8A" = 4,
+               "CD62L" = 4,
+               "CD44" = 5,
+               "IL7RA.CD127" = 4,
+               "CD103" = 4,
+               "CD31" = 4,
+               'LY6C1-LY6C2' = 6,
+               "ITAX.CD11C" = 3.5,
+               "CD94" = 4,
+               "KLRG1" = 4,
+               "HAVCR2" = 4.5,
+               "CD38" = 6,
+               "GITR.CD357" = 4,
+               "CD39" = 4,
+               "CD73.5NTD" = 4,
+               "CD49A" = 4,
+               "CD69" = 4,
+               "PDCD1.PD1.CD279" = 4,
+               "B220" = 3.5,
+               "CD55.DAF" = 4,
+               "CD160" = 4,
+               "CD200" = 4,
+               "FR4" = 4,
+               "LY49A" = 4)
+                
+               
+               
+
+pdf("all_pops_gates_facetted.pdf", 15,15, useDingbats = F)
+for (i in 1:length(features_list)) {
+    print(i)
+    feature1 = features_list[[i]][1]
+    feature2 = features_list[[i]][2]
+    th1 = th_list[[feature1]]
+    th2 = th_list[[feature2]]
+    # FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2_group") + scale_color_manual(values = mypal_level2) #+ ggtitle(sprintf("is_%s", cl))
+    p = FeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = "annotation_level2", split.by = "annotation_level2", ncol = 4, raster = F, pt.size = 0.2) + scale_color_manual(values = mypal_level2) + geom_vline(aes(xintercept = th1), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = th2), linetype="dashed", color = "brown") 
+    print(p)
+}
+dev.off()
+
+```
+
+
+*Plots from gating strategy*
+```{r}
+
+toplot = read.table("gating/20250720/gating_20250720_toplot.csv", header = T, sep = ",", row.names = 1, as.is = T, check.names = F)
+# colnames(toplot)  = colnames(toplot) %>% gsub(pattern = "-", replacement = "\\.")
+pops = read.table("gating/20250720/gating_20250720_populations.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+# colnames(pops)  = colnames(pops) %>% gsub(pattern = "-", replacement = "\\.")
+thresholds = read.table("gating/20250720/gating_20250720_thresholds.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+# rownames(thresholds) = rownames(thresholds) %>% gsub(pattern = "-", replacement = "\\.")
+plots = read.table("gating/20250720/gating_20250720_plots.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+# rownames(plots) = rownames(plots) %>% gsub(pattern = "-", replacement = "\\.")
+# colnames(plots) = colnames(plots) %>% gsub(pattern = "-", replacement = "\\.")
+prefix3 = "gating/20250720"
+
+ensure_directory(prefix3)
+
+toplot = read.table("gating/20250721/gating_20250721_toplot.csv", header = T, sep = ",", row.names = 1, as.is = T, check.names = F)
+pops = read.table("gating/20250721/gating_20250721_populations.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+thresholds = read.table("gating/20250721/gating_20250721_thresholds.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+plots = read.table("gating/20250721/gating_20250721_plots.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+prefix3 = "gating/20250721"
+ensure_directory(prefix3)
+
+toplot = read.table("gating/20250722/gating_20250722_toplot.csv", header = T, sep = ",", row.names = 1, as.is = T, check.names = F)
+pops = read.table("gating/20250722/gating_20250722_populations.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+thresholds = read.table("gating/20250722/gating_20250722_thresholds.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+plots = read.table("gating/20250722/gating_20250722_plots.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+prefix3 = "gating/20250722"
+ensure_directory(prefix3)
+
+
+so@meta.data %>% group_by((IGTHT)) %>% sample_n
+
+```
+
+Flow-like plots
+```{r}
+for (i in 1:nrow(pops)) { #
+    pop = rownames(pops)[i]
+    print(pop)
+    toplots = colnames(toplot)[!is.na(toplot[pop,])] #colnames(toplot)[!is.na(toplot[pop,])] %>% gsub(pattern = "\\.", replacement = "-")
+    # toplots = gsub("LY6C1.LY6C2", "LY6C1-LY6C2",toplots)
+    # j = toplots[2]
+    pdf(sprintf("%s/gating_strategy_%s.pdf",prefix3, pop), 6, 6, useDingbats = F)
+    for (j in toplots) { #j = toplots[8]
+        print(j)
+        features = colnames(plots)[!is.na(plots[j,])]#colnames(plots)[!is.na(plots[j,])] %>% gsub(pattern = "\\.", replacement = "-")
+        feature1 = features[1]
+        feature2 = features[2]
+        feature1_th1 = thresholds[features[1],"th1"]
+        feature1_th2 = thresholds[features[1],"th2"]
+        feature2_th1 = thresholds[features[2],"th1"]
+        feature2_th2 = thresholds[features[2],"th2"]
+        pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
+        so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split) #so@meta.data[,sprintf("is_%s", cl)] =
+        p = MyFeatureScatter(so,slot = "data",feature1 = feature1, feature2 = feature2, group.by = sprintf("is_%s", pop),split.by = NULL, raster = F) + 
+            geom_vline(aes(xintercept = feature1_th1), linetype="dashed", color = "brown", na.rm = TRUE) + 
+            geom_vline(aes(xintercept = feature1_th2), linetype="dashed", color = "brown", na.rm = TRUE) + 
+            geom_hline(aes(yintercept = feature2_th1), linetype="dashed", color = "brown", na.rm = TRUE) + 
+            geom_hline(aes(yintercept = feature2_th2), linetype="dashed", color = "brown", na.rm = TRUE) + 
+            ggtitle(sprintf("is_%s", pop))
+        print(p)
+        
+    }
+    dev.off()
+    
+}
+
+
+```
+
+Bioinfo Sort
+--> GatedCells.Rds, SeSpPPVNPV_ClusterBySample.tsv
+cellid in each gate --> GatedCells.Rds
+```{r}
+pops[is.na(pops) | pops == "" ] = NA
+
+gate_list = list()
+
+for (i in 1:nrow(pops)) {
+# for (i in c(7:12,16)) {
+    print(i)
+    pop = rownames(pops)[i]
+    print(pop)
+    mrks = na.omit(unlist(pops[i,]))
+    # if (!any(names(mrks) %in% rownames(thresholds))) {
+    #     names(mrks)[!names(mrks) %in% rownames(thresholds)] = names(mrks)[!names(mrks) %in% rownames(thresholds)] %>% gsub(pattern = "\\.", replacement = "-")
+    # }
+    ths = list(th1 = thresholds[match(names(mrks),rownames(thresholds)),"th1"],
+               th2 = thresholds[match(names(mrks),rownames(thresholds)),"th2"])
+    names(ths[[1]]) = names(mrks)
+    names(ths[[2]]) = names(mrks)
+    ths
+    
+    cells = colnames(so)
+    for (m in names(mrks)) {
+        print(m)
+        if (mrks[m] == "p") {
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th1"]][m])))
+        } else if (mrks[m] == "n") {
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] < ths[["th1"]][m])))
+        } else if (mrks[m] == "m") {
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th1"]][m] & so[["ADT"]]$data[m,cells] < ths[["th2"]][m] )))
+            } else if (mrks[m] == "h"){
+            cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th2"]][m])))
+        }
+    }
+    
+    if (pop == "CD8_cl10") {
+        pop = "CD8_cl10"
+        message("special gate for CD8_cl10")
+        cells = intersect(cells, names(which(so[["ADT"]]$data["CD103",cells] > thresholds["CD103","th1"] | so[["ADT"]]$data["CD49A",cells] > thresholds["CD49A","th1"])))
+    }
+
+    gate_list[[pop]] = cells
+    message(sprintf("%s: %s cells",pop, length(cells)))
+}
+
+# saveRDS(gate_list, file = "GatedCells_20250527.Rds")
+# saveRDS(gate_list, file = sprintf("GatedCells_%s.Rds",prefix3))
+# gate_list = readRDS(sprintf("GatedCells_%s.Rds",prefix3))
+saveRDS(gate_list, file = sprintf("%s/GatedCells.Rds",prefix3))
+# gate_list = readRDS(sprintf("%s/GatedCells.Rds",prefix3))
+
+
+# pdf(sprintf("%s/gated_cells_inMDE.pdf",prefix3), 5, 5, useDingbats = F)
+
+for (i in 1:nrow(pops)) {
+# for (i in c(7:12,16)) { #c(1,2,6,19)
+    pop = rownames(pops)[i]
+    print(pop)
+    pdf(sprintf("%s/gated_cells_inMDE_%s.pdf",prefix3, pop), 5, 5, useDingbats = F)
+    pop_split = strsplit(pop, split = ",") %>% unlist() #if interested population is a mixture of several clusters
+    so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+    so@meta.data[,sprintf("is_gated_%s", pop)] = colnames(so) %in% gate_list[[pop]]
+    so$density = "grey"
+    so$density[so@meta.data[,sprintf("is_gated_%s", pop)]] = densCols(so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 1], so[["mde_incremental"]]@cell.embeddings[so@meta.data[,sprintf("is_gated_%s", pop)], 2], colramp = colorRampPalette(inferno(100)), nbin = 500) #rev(rainbow(10, end = 4/6)))
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% pop_split)], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("%s", pop))
+    print(p)
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so@meta.data[,sprintf("is_gated_%s", pop)])], highlight_column = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = sprintf("gated %s", pop), highlight_size = 0.5, highlight_alpha = 0.5)
+    print(p)
+    p = MyDimPlotHighlightDensity(so, umap_to_plot = "mde_incremental",group.by = sprintf("is_gated_%s", pop), split.by = NULL, raster = F, highlight_size = 0.2, highlight_alpha = 0.2, cols = inferno(100))
+    print(p) + ggtitle(sprintf("%s", pop))
+    # p = DimPlot(so,reduction = "mde_incremental", group.by= "density", raster = F) + scale_color_identity()
+    # print(p) + ggtitle(sprintf("%s", pop))
+    dev.off()
+}
+
+
+
+```
+
+SeSpPPVNPV_ClusterBySample.tsv by comparing gated cells and true clusters
+```{r}
+stats_list = list()
+for (i in 1:nrow(pops)) {
+# for (i in c(7:12,16)) { #c(1,2,6,19)
+    print(i)
+    pop = rownames(pops)[i]
+    print(pop)
+    pop_split = strsplit(pop, split = ",") %>% unlist() 
+    so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+    stats = list()
+    tmp = so@meta.data
+    # s = "I39H3_decidua_E12.5_SFB_allT_mouse0135"
+    for (s in unique(so$sample_code)) {
+        # print(s)
+        tmp = so@meta.data %>% filter(sample_code == s)
+        cont_table = TpTnFpFn(x = factor(rownames(tmp) %in% gate_list[[pop]], levels = c("TRUE", "FALSE")), y = factor(tmp[,sprintf("is_%s", pop)],levels = c("TRUE", "FALSE")))
+        stats[[s]] = SeSpPPVNPV(tp = cont_table["tp"], tn = cont_table["tn"], fp = cont_table["fp"], fn=  cont_table["fn"])
+        stats[[s]]["ncells"] = length(which(tmp[,sprintf("is_%s", pop)] == "TRUE"))
+        stats[[s]]["prevalence"] = stats[[s]]["ncells"] / nrow(tmp)
+    }
+    stats_list[[pop]] = do.call(rbind, stats) %>% as.data.frame
+    stats_list[[pop]][,"pop"] = pop
+    stats_list[[pop]][,"sample_code"] = rownames(stats_list[[pop]])
+    
+}
+
+stats = Reduce(f = rbind, stats_list) %>% as.data.frame()
+
+# m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+
+stats = merge(stats, m, by = "sample_code", all.x = T, all.y = F)
+
+# write.table(stats, file = "SeSpPPVNPV_ClusterBySample.tsv", quote = F, row.names = F, col.names = T, sep = "\t")
+write.table(stats, file = sprintf("%s/SeSpPPVNPV_ClusterBySample.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
+
+
+# stats %>% filter(prevalence>0.3 & ncells > 50 & pop == "gdT_cl4")
+i = "ppv"
+for (i in c("se", "sp", "ppv", "npv")) {
+    print(i)
+    
+    # pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
+    pdf(sprintf("%s/stats_%s_SummaryPlot.pdf", prefix3,i),15,10, useDingbats = F)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = pop, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        # geom_jitter(aes(pop, ppv, color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) +
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        # geom_jitter(data = stats, aes(pop, ppv, color = pop, size = prevalence>0.1 & ncells > 50), width = 0.2, height = 0) +
+        geom_jitter(aes(pop, !!(sym(i)), color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nsamples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = organ_simplified, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(aes(pop, !!(sym(i)), color = organ_simplified), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations, Boxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    dev.off()
+    
+}
+
+```
+
+**Testing different gating strategies for CD8_cl10**
+```{r}
+
+toplot = read.table("gating/20250722_cl10/gating_20250722_cl10_toplot.csv", header = T, sep = ",", row.names = 1, as.is = T, check.names = F)
+pops = read.table("gating/20250722_cl10/gating_20250722_cl10_populations.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+thresholds = read.table("gating/20250722_cl10/gating_20250722_cl10_thresholds.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+plots = read.table("gating/20250722_cl10/gating_20250722_cl10_plots.csv", header = T, sep = ",",  row.names = 1, as.is = T, check.names = F)
+prefix3 = "gating/20250722_cl10"
+ensure_directory(prefix3)
+
+pops[is.na(pops) | pops == "" ] = NA
+
+gate_list = list()
+
+for (i in 1:nrow(pops)) {
+# for (i in c(7:12,16)) {
+    print(i)
+    pop = rownames(pops)[i]
+    print(pop)
+    mrks = na.omit(unlist(pops[i,]))
+    # if (!any(names(mrks) %in% rownames(thresholds))) {
+    #     names(mrks)[!names(mrks) %in% rownames(thresholds)] = names(mrks)[!names(mrks) %in% rownames(thresholds)] %>% gsub(pattern = "\\.", replacement = "-")
+    # }
+    ths = list(th1 = thresholds[match(names(mrks),rownames(thresholds)),"th1"],
+               th2 = thresholds[match(names(mrks),rownames(thresholds)),"th2"])
+    names(ths[[1]]) = names(mrks)
+    names(ths[[2]]) = names(mrks)
+    ths
+    
+    cells = colnames(so)
+    for (m in names(mrks)) {
+        print(m)
+        if (m == "CD103|CD49A") {
+            if (mrks[m] == "p") {
+                cells = intersect(cells, names(which(so[["ADT"]]$data["CD103",cells] > thresholds["CD103","th1"] | so[["ADT"]]$data["CD49A",cells] > thresholds["CD49A","th1"])))
+            }
+        } else {
+            if (mrks[m] == "p") {
+                cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th1"]][m])))
+            } else if (mrks[m] == "n") {
+                cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] < ths[["th1"]][m])))
+            } else if (mrks[m] == "m") {
+                cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th1"]][m] & so[["ADT"]]$data[m,cells] < ths[["th2"]][m] )))
+            } else if (mrks[m] == "h"){
+                cells = intersect(cells, names(which(so[["ADT"]]$data[m,cells] > ths[["th2"]][m])))
+            }
+        }
+    }
+    
+    # if ( pop == "CD8_cl10") {
+    #     pop = "CD8_cl10"
+    #     message("special gate for CD8_cl10")
+    #     cells = intersect(cells, names(which(so[["ADT"]]$data["CD103",cells] > thresholds["CD103","th1"] | so[["ADT"]]$data["CD49A",cells] > thresholds["CD49A","th1"])))
+    # }
+
+    gate_list[[pop]] = cells
+    message(sprintf("%s: %s cells",pop, length(cells)))
+}
+
+
+
+
+
+```
+
+```{r}
+stats_list = list()
+for (i in 1:nrow(pops)) {
+# for (i in c(7:12,16)) { #c(1,2,6,19)
+    print(i)
+    gated = rownames(pops)[i]
+    print(gated)
+    pop = "CD8_cl10"
+    pop_split = strsplit(pop, split = ",") %>% unlist() 
+    so@meta.data[,sprintf("is_%s", pop)] = factor(so$annotation_level2 %in% pop_split)
+    stats = list()
+    tmp = so@meta.data
+    # s = "I39H3_decidua_E12.5_SFB_allT_mouse0135"
+    for (s in unique(so$sample_code)) {
+        # print(s)
+        tmp = so@meta.data %>% filter(sample_code == s)
+        cont_table = TpTnFpFn(x = factor(rownames(tmp) %in% gate_list[[gated]], levels = c("TRUE", "FALSE")), y = factor(tmp[,sprintf("is_%s", pop)],levels = c("TRUE", "FALSE")))
+        stats[[s]] = SeSpPPVNPV(tp = cont_table["tp"], tn = cont_table["tn"], fp = cont_table["fp"], fn=  cont_table["fn"])
+        stats[[s]]["ncells"] = length(which(tmp[,sprintf("is_%s", pop)] == "TRUE"))
+        stats[[s]]["prevalence"] = stats[[s]]["ncells"] / nrow(tmp)
+    }
+    stats_list[[gated]] = do.call(rbind, stats) %>% as.data.frame
+    stats_list[[gated]][,"pop"] = gated
+    stats_list[[gated]][,"sample_code"] = rownames(stats_list[[gated]])
+    
+}
+
+stats = Reduce(f = rbind, stats_list) %>% as.data.frame()
+
+m = read.table("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+
+stats = merge(stats, m, by = "sample_code", all.x = T, all.y = F)
+
+# write.table(stats, file = "SeSpPPVNPV_ClusterBySample.tsv", quote = F, row.names = F, col.names = T, sep = "\t")
+write.table(stats, file = sprintf("%s/SeSpPPVNPV_ClusterBySample.tsv", prefix3), quote = F, row.names = F, col.names = T, sep = "\t")
+
+
+# stats %>% filter(prevalence>0.3 & ncells > 50 & pop == "gdT_cl4")
+i = "ppv"
+for (i in c("se", "sp", "ppv", "npv")) {
+    print(i)
+    
+    # pdf(sprintf("stats_%s_SummaryPlot.pdf", i),15,10, useDingbats = F)
+    pdf(sprintf("%s/stats_%s_SummaryPlot.pdf", prefix3,i),15,10, useDingbats = F)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = pop, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        # geom_jitter(aes(pop, ppv, color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) +
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i)), color = pop), outliers = F) + 
+        # geom_jitter(data = stats, aes(pop, ppv, color = pop, size = prevalence>0.1 & ncells > 50), width = 0.2, height = 0) +
+        geom_jitter(aes(pop, !!(sym(i)), color = pop), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_level2) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nsamples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Level2") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(data = stats, aes(pop, !!(sym(i)), color = organ_simplified, size = prevalence>0.2 & ncells > 50), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations,\nBoxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    p = ggplot(stats %>% filter(prevalence>0.2 & ncells > 50)) + geom_boxplot(aes(pop, !!(sym(i))), outliers = F) + 
+        geom_jitter(aes(pop, !!(sym(i)), color = organ_simplified), width = 0.2, height = 0) +
+        scale_size_manual(values = c(0.5,2)) +
+        scale_color_manual(values = mypal_organ) + 
+        labs(title = sprintf("%s by Gating Strategies across Populations, Boxplot samples with prevalence >0.2 and ncells >50",i), x = "Gating Strategies", y = i, color = "Organ") + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        scale_y_continuous(limits = c(0,1))
+    print(p)
+    
+    dev.off()
+    
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 

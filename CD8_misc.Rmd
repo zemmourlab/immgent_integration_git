@@ -281,6 +281,113 @@ FCFCplot(vplot,
 
 ```
 
+**Barplot of cluster proportion in specific samples**
+
+prop_data and mdata
+mdata_sl1 from annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds (proportion of CD8, CD4, Treg etc in each sample)
+mdata_s from annotation_level2_PropPerSample.txt (proportion of total cells in the sample)
+```{r}
+prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) # --> mdata_s
+# prop_data = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix)) %>% select(IGTHT, ends_with("ncells"), ends_with("prop")) # --> mdata_sl1
+colnames(prop_data) = gsub(pattern = "gdT_52", replacement = "gdT_cl52", x = colnames(prop_data))
+colnames(prop_data) = gsub(pattern = "gdT_54", replacement = "gdT_cl54", x = colnames(prop_data))
+
+m = read.table('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/Sample_metadata_david_20250628_v10.csv',header = T, sep = ",")
+
+# changing here and not in the original file to keep consistent with the database
+colnames(m)
+m$IGT_10xlane_id = NULL
+m$organism_id = NULL
+m$IGT = m$immgent_IGT_10xlane_id
+m$immgent_IGT_10xlane_id = NULL
+m$HT = m$hashtag_number
+m$hashtag_number = NULL
+m$sample_id = NULL
+m$count_unique = NULL
+
+m$sample_code.1 = NULL
+
+mdata = merge(prop_data, m, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+
+mdata$organ_simplified = factor(mdata$organ_simplified, levels = c("blood","spleen","LN","SLO","bone marrow","thymus",
+                                                                   "lung", "liver", "peritoneal cavity",
+                                                                   "colon epi","small intestine epi","colon LP","small intestine LP","skin",
+                                                                   "mammary gland","uterus", "placenta", "prostate","submandibular gland","kidney", "pancreas","CNS","synovial fluid"))
+#any(is.na(mdata$organ_simplified))
+
+mdata$condition_detailed_simplified = factor(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+
+# mdata_sl1 = mdata 
+mdata_s = mdata
+
+```
+
+
+CD8_cl14/15/18 barplot samples
+```{r}
+mdata #see chunk at the beginning, from prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) 
+
+# rorc = c("CD4_cl17","nonconv_cl8", "gdT_cl7","gdT_cl9", "gdT_cl46","gdT_cl10", "CD8_cl7", "DP_cl60", "Treg_cl2", "CD4_cl21", "CD8_cl10", "Treg_cl8", "CD8aa_cl1", "DN_cl41")
+mycl = c("CD8_cl14","CD8_cl15","CD8_cl28")
+want_cols = paste0(mycl, ".prop")
+tmp = mdata %>% filter(grepl(pattern = "allT|CD45p", x = target_cells_simplified) & !(condition_detailed == "baseline" & organ_simplified == "spleen") ) %>% select(sample_code,any_of(want_cols))
+tmp = mdata %>% select(sample_code,any_of(want_cols))
+
+tmp2 = tmp %>% mutate(total_prop = rowSums(select(., ends_with(".prop")), na.rm = TRUE)) %>% arrange(desc(total_prop))
+tmp2 %>% head(50) %>% pull(sample_code)
+
+tmp2 <- tmp2 %>% 
+  arrange(desc(total_prop)) %>% 
+  mutate(sample_code = factor(sample_code, sample_code)) %>% 
+    head(50)
+
+tmp_long <- tmp2 %>% 
+  select(-total_prop) %>% 
+  pivot_longer(
+    cols      = -sample_code,
+    names_to  = "population",
+    values_to = "prop"
+  ) 
+
+tmp_long$population = gsub("\\.prop","", tmp_long$population )
+tmp_long$condition_detailed_organ = mdata$condition_detailed_organ[match(tmp_long$sample_code, mdata$sample_code)]
+
+label_map = tmp_long %>% 
+  distinct(sample_code, condition_detailed_organ) %>% 
+  arrange(sample_code)
+lab_vec = label_map$condition_detailed_organ
+names(lab_vec) = label_map$sample_code
+
+
+pdf("paper_cosmology/figures/bits/CD8cl141528_clusters_in_topsamples.pdf", 10, 8, useDingbats = F) #all cells
+p = ggplot(tmp_long, aes(x = sample_code, y = prop, fill = population)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = immgent_colors$level2) +
+    scale_x_discrete(labels = lab_vec) +
+    theme_minimal() +
+    labs(
+        x    = "Sample",
+        y    = "Proportion",
+        fill = "Population"
+    ) +
+    ggtitle("Top samples with CD8 cl14/15/28 - percent of total CD8") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        # axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        # axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank(),        # Removes axis tick marks
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+print(p)
+dev.off()
+
+
+```
+
 
 
 

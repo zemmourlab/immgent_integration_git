@@ -46,7 +46,7 @@ setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analy
 options(max.print=1000)
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
+libs = c("ZemmourLib","fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "scattermore") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -82,7 +82,8 @@ mypal_level1 = setNames(mypal, unique(so$annotation_level1))
 **load Seurat**
 
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20241216.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds")
 ```
 
 **Get TF list**
@@ -119,6 +120,7 @@ tf = tf[tf %in% rownames(so)]
 ```{r}
 so = so_orig[,!so_orig$annotation_level1 %in% c("remove", "prolif", "nonT")]
 so = so_orig[,!so_orig$annotation_level1 %in% c("remove", "prolif", "nonT", "miniverse", "unclear", "thymocyte")]
+so = so_orig[,!so_orig$annotation_level2_group %in% c("proliferating", "miniverse")]
 
 # so = NormalizeData(so, assay = "RNA", normalization.method = "RC", scale.factor = 10000)
 
@@ -185,7 +187,9 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-write.table(pseudobulk[["RNA"]]$data, file = "igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.csv", sep = ",", quote = F)
+# write.table(pseudobulk[["RNA"]]$data, file = "igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.csv", sep = ",", quote = F)
+# write.table(pseudobulk[["RNA"]]$data, file = "igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K_20250717.csv", sep = ",", quote = F)
+# saveRDS(pseudobulk, file = "igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K_seurat.Rds")
 # save(pseudobulk, file = "igt1_96_pseudobulk_byclusterannotationlevel2_20241219.Rds")
 barplot(pseudobulk[["RNA"]]$data["Foxp3",])
 # barplot(pseudobulk[["RNA"]]$data["Fezf2",])
@@ -207,7 +211,6 @@ library(tibble)
 library(ggrepel)
 
 # Prepare the data
-# Assuming 'tf_level2_norm' is the data frame/matrix containing your expression data
 data_long <- as.data.frame(tf_level2_norm_filt) %>%
   rownames_to_column(var = "Gene") %>% 
   pivot_longer(cols = -Gene, names_to = "Cluster", values_to = "Expression") %>%

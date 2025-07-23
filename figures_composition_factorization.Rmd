@@ -1,0 +1,1496 @@
+---
+title: "composition_analysis"
+output: html_document
+date: "2024-10-24"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443 -->
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/
+R
+```
+
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("stringr","ZemmourLib", "fastTopics", "flashier", "Seurat", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+mypal_list = readRDS("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_list = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes/20250709/immgent_color_palettes_list_20250709.Rds")
+mypal_level1 = mypal_list[["level1"]]
+mypal_level2_all = mypal_list[["level2_all"]]
+mypal_level2 = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]])
+mypal_organ = mypal_list[["organ_simplified"]]
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+
+mypal_condition_detailed_simplified = setNames(mypal, unique(so$condition_detailed_simplified))
+mypal_condition_detailed_simplified = mypal_condition_detailed_simplified[!is.na(names(mypal_condition_detailed_simplified))]
+
+mypal_igt = setNames(mypal, unique(so$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+**Load data and models**
+
+Seurat object
+```{r}
+prefix = "SampleComp/20250226"
+# prefix2 = "flashier/20250709_expoPropInLevel1"
+prefix2 = "flashier/20250312"
+
+# so_orig = readRDS("igt1_96_withtotalvi20250226.Rds")
+so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+so = so_orig
+
+```
+
+prop_data and mdata
+mdata_sl1 from annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds
+mdata_s from annotation_level2_PropPerSample.txt
+```{r}
+prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) # --> mdata_s
+# prop_data = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix)) %>% select(IGTHT, ends_with("ncells"), ends_with("prop")) # --> mdata_sl1
+colnames(prop_data) = gsub(pattern = "gdT_52", replacement = "gdT_cl52", x = colnames(prop_data))
+colnames(prop_data) = gsub(pattern = "gdT_54", replacement = "gdT_cl54", x = colnames(prop_data))
+
+m = read.table('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/sample_metadata/Sample_metadata_david_20250628_v10.csv',header = T, sep = ",")
+
+# changing here and not in the original file to keep consistent with the database
+colnames(m)
+m$IGT_10xlane_id = NULL
+m$organism_id = NULL
+m$IGT = m$immgent_IGT_10xlane_id
+m$immgent_IGT_10xlane_id = NULL
+m$HT = m$hashtag_number
+m$hashtag_number = NULL
+m$sample_id = NULL
+m$count_unique = NULL
+
+m$sample_code.1 = NULL
+
+mdata = merge(prop_data, m, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+
+mdata$organ_simplified = factor(mdata$organ_simplified, levels = c("blood","spleen","LN","SLO","bone marrow","thymus",
+                                                                   "lung", "liver", "peritoneal cavity",
+                                                                   "colon epi","small intestine epi","colon LP","small intestine LP","skin",
+                                                                   "mammary gland","uterus", "placenta", "prostate","submandibular gland","kidney", "pancreas","CNS","synovial fluid"))
+#any(is.na(mdata$organ_simplified))
+
+mdata$condition_detailed_simplified = factor(mdata$condition_detailed_simplified)
+mdata$condition_detailed_simplified = relevel(mdata$condition_detailed_simplified, ref = "baseline")
+
+
+# mdata_sl1 = mdata 
+mdata_s = mdata
+
+```
+
+Topic fit model
+```{r}
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag
+
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+```
+
+
+**Heatmap clusters x samples**
+
+```{r}
+
+mdata = mdata %>% arrange(organ_simplified, condition_detailed_simplified)
+rownames(mdata) = mdata$IGTHT
+df = mdata %>% select(ends_with("prop"))
+
+pheatmap(df, cluster_rows = F, cluster_cols = F, display_numbers = F, color = c("white",brewer.pal(9, "Reds")))
+pheatmap(df, cluster_rows = T, cluster_cols = F, display_numbers = F, color = c("white",brewer.pal(9, "Reds")))
+
+```
+
+on annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds --> annotation_level2_PropPerSamplePerLevel1_heatmap.pdf , c("white", brewer.pal(9, "RdPu")) better
+on annotation_level2_PropPerSample.txt --> annotation_level2_PropPerSample_heatmap.pdf
+```{r}
+# assume df is your numeric matrix (rownames = original rows, colnames = original cols)
+mdata = mdata %>% arrange(organ_simplified, condition_detailed_simplified)
+df = mdata %>% select(IGTHT, organ_simplified, condition_detailed_simplified, ends_with("prop"))
+df_long = melt(df)
+# df2 = mdata %>% select(IGTHT, organ_simplified, condition_detailed_simplified, ends_with("ncells"))
+# # df$IGTHT = rownames(df)
+# df_long1 = melt(df)
+# df_long2 = melt(df2)
+# all(df_long1$IGTHT == df_long2$IGTHT)
+# df_long = data.frame(qsdf_long1, ncells = df_long2$value)
+# df_long$value[df_long$ncells <5] = 0
+# # length(which(df_long$ncells > 0 & df_long$ncells < 5))
+
+df_long$annotation_level1 = NA
+df_long$annotation_level1[grepl("CD8_", df_long$variable)] = "CD8"
+df_long$annotation_level1[grepl("CD4_", df_long$variable)] = "CD4"
+df_long$annotation_level1[grepl("Treg_", df_long$variable)] = "Treg"
+df_long$annotation_level1[grepl("gdT_", df_long$variable)] = "gdT"
+df_long$annotation_level1[grepl("CD8aa_", df_long$variable)] = "CD8aa"
+df_long$annotation_level1[grepl("nonconv_", df_long$variable)] = "nonconv"
+df_long$annotation_level1[grepl("DN_", df_long$variable)] = "DN"
+df_long$annotation_level1[grepl("DP_", df_long$variable)] = "DP"
+df_long$annotation_level1[grepl("thymocyte", df_long$variable)] = "thymocyte"
+df_long$annotation_level1 = factor(df_long$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+df_long$IGTHT = factor(df_long$IGTHT, levels = mdata$IGTHT)
+
+
+heatmap_plot = ggplot(df_long, aes(x = variable, y = IGTHT, fill = value)) +
+  geom_tile() +
+  # facet into strips by level1, free x-scale and free x-space gives a visible gap
+  facet_grid(. ~ annotation_level1,
+             scales = "free_x",
+             space  = "free_x") +
+  scale_fill_gradientn(
+    # colours = c("white", brewer.pal(9, "RdPu")),
+    colours = c("white",rev(rocket(10))), 
+    name    = "value"
+  ) +
+  theme_minimal() +
+  theme(
+    # rotate your variable names
+    axis.text.x = element_text(angle = 45, hjust = 1),
+
+    # blow away the grid lines
+    # panel.grid = element_blank(),
+    panel.grid.major   = element_line(color = "grey80", linewidth = 0.2),
+    panel.grid.minor   = element_line(color = "grey90", linewidth = 0.1),
+
+    # widen the gap between facets
+    panel.spacing.x = unit(0.5, "cm"),
+
+    # you can style or remove those facet‐strips:
+    strip.background = element_blank(),
+    strip.text.x = element_text(face = "bold")
+  )
+
+heatmap_plot
+
+annot_df <- df %>% 
+  select(IGTHT, organ_simplified, condition_detailed_simplified) %>% 
+  pivot_longer(-IGTHT, names_to = "anno", values_to = "value")
+annot_df$IGTHT = factor(annot_df$IGTHT, levels = mdata$IGTHT)
+
+# 3. discrete colours for your two annotation tracks
+organ_cols = mypal_organ
+
+cond_cols = mypal_condition_detailed_simplified#setNames( mypal, unique(df$condition_detailed) )
+cond_cols["baseline"] = "grey"
+cond_cols[names(cond_cols) != "baseline"] = "red3"
+
+
+# 4. make the annotation heatmap
+anno_plot <- ggplot(annot_df, aes(x = anno, y = IGTHT, fill = value)) +
+  geom_tile() +
+  scale_fill_manual(
+    values = c(organ_cols, cond_cols)
+    # guide  = "none"
+  ) +
+    facet_grid(. ~ anno,
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  theme(
+      panel.spacing.x = unit(0, "cm"),
+    axis.text.y      = element_blank(),
+axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title       = element_blank(),
+    panel.grid       = element_blank(),
+    plot.margin      = margin(5,0,5,5)
+  )
+anno_plot
+
+# 5. combine with patchwork give the annotation panel a small fixed width
+# pdf(sprintf("%s/annotation_level2_PropPerSamplePerLevel1_heatmap.pdf", prefix), width = 25, 10,useDingbats = F)
+pdf(sprintf("%s/annotation_level2_PropPerSample_heatmap.pdf", prefix), width = 25, 10,useDingbats = F)
+anno_plot + NoLegend() + heatmap_plot + plot_layout(widths = c(0.1, 1))
+anno_plot + heatmap_plot + plot_layout(widths = c(0.1, 1))
+dev.off()
+
+```
+
+**Show Single Sample**
+
+CD8 in I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142 to show Trm at memory timepoint
+
+(I20H7_colonLP_allT_mouse0035 to show rare Trm at baseline
+I9H10_smallintestineLP_allT_mouse0018 to show rare Trm at baseline (no CITEseq))
+
+Barplots
+```{r}
+mdata = mdata_sl1
+# mdata = mdata_s
+# mdata = mdata %>% arrange(organ_simplified, condition_detailed_simplified)
+# df = mdata %>% select(IGTHT, organ_simplified, condition_detailed_simplified, ends_with("prop"))
+# df_long = melt(df)
+# df_long$variable = gsub("\\.prop", "",df_long$variable)
+
+mdata = mdata %>% arrange(organ_simplified, condition_detailed_simplified)
+df = mdata %>% select(IGTHT, organ_simplified, condition_detailed_simplified, ends_with("prop"))
+df_long = melt(df)
+df_long$annotation_level1 = NA
+df_long$annotation_level1[grepl("CD8_", df_long$variable)] = "CD8"
+df_long$annotation_level1[grepl("CD4_", df_long$variable)] = "CD4"
+df_long$annotation_level1[grepl("Treg_", df_long$variable)] = "Treg"
+df_long$annotation_level1[grepl("gdT_", df_long$variable)] = "gdT"
+df_long$annotation_level1[grepl("CD8aa_", df_long$variable)] = "CD8aa"
+df_long$annotation_level1[grepl("nonconv_", df_long$variable)] = "nonconv"
+df_long$annotation_level1[grepl("DN_", df_long$variable)] = "DN"
+df_long$annotation_level1[grepl("DP_", df_long$variable)] = "DP"
+df_long$annotation_level1[grepl("thymocyte", df_long$variable)] = "thymocyte"
+df_long$annotation_level1 = factor(df_long$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+df_long$IGTHT = factor(df_long$IGTHT, levels = mdata$IGTHT)
+df_long$variable = gsub("\\.prop", "",df_long$variable)
+which(is.na(df_long$variable))
+unique(df_long$variable)[!unique(df_long$variable) %in% levels(so$annotation_level2)]
+df_long$variable = factor(df_long$variable, levels = levels(so_orig$annotation_level2))
+
+# p1 = ggplot(df_long) + geom_point(aes(variable, value, colour =variable )) + 
+#     facet_grid(. ~ annotation_level1,
+#              scales = "free_x",
+#              space  = "free_x") + 
+#   theme_minimal() +
+#     scale_color_manual(values = mypal_level2) +
+#   theme(
+#     panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   ) +
+#   labs(
+#     x = "",
+#     y = "Proportion",
+#     color = "Population"
+#   )
+# p1 + NoLegend()
+
+pdf("paper_cosmology/figures/bits/barplot_example_sample_sl1.pdf", width = 15, 5,useDingbats = F)
+# pdf("paper_cosmology/figures/bits/barplot_example_sample_s.pdf", width = 15, 5,useDingbats = F)
+p1 = ggplot(df_long, aes(x = variable, y = value, alpha = 0.5), fill = "grey") +
+  geom_boxplot(outlier.shape = NA) 
+
+example = df_long %>% filter(IGTHT == "I40H8")
+# p2 = geom_bar(data = example, mapping = aes(variable, value, fill =variable ), stat = "identity")
+p2 = geom_point(data = example, mapping = aes(variable, value, color =variable, size = 1, alpha = 1))
+p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  # scale_fill_manual(values = mypal_level2) +
+    scale_color_manual(values = mypal_level2) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + 
+    ggtitle("I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142")
+
+print(p + NoLegend() + NoGrid())
+
+example = df_long %>% filter(IGTHT == "I32H7")
+# p2 = geom_bar(data = example, mapping = aes(variable, value, fill =variable ), stat = "identity")
+p2 = geom_point(data = example, mapping = aes(variable, value, color =variable, size = 2, alpha = 1))
+p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  # scale_fill_manual(values = mypal_level2) +
+    scale_color_manual(values = mypal_level2) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + 
+    ggtitle("I32H7_colonLP_CD45p_mouse0103")
+print(p + NoLegend() + NoGrid())
+
+example = df_long %>% filter(IGTHT == "I20H7")
+# p2 = geom_bar(data = example, mapping = aes(variable, value, fill =variable ), stat = "identity")
+p2 = geom_point(data = example, mapping = aes(variable, value, color =variable, size = 2, alpha = 1))
+p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  # scale_fill_manual(values = mypal_level2) +
+    scale_color_manual(values = mypal_level2) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + 
+    ggtitle("I20H7_colonLP_allT_mouse0035")
+print(p + NoLegend() + NoGrid())
+
+
+example = df_long %>% filter(IGTHT == "I9H10")
+# p2 = geom_bar(data = example, mapping = aes(variable, value, fill =variable ), stat = "identity")
+p2 = geom_point(data = example, mapping = aes(variable, value, color =variable, size = 2, alpha = 1))
+p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  # scale_fill_manual(values = mypal_level2) +
+    scale_color_manual(values = mypal_level2) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + 
+    ggtitle("I9H10_smallintestineLP_allT_mouse0018")
+print(p + NoLegend() + NoGrid())
+
+
+
+dev.off()
+
+
+```
+
+
+ImmgenT clusters in IGT UMAPs
+```{r}
+#IGT40
+igt40 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221216_exp_id_27_28_32_33_Goldrath/IGT40/dataset_clean.Rds')
+
+igt40$annotation_level2 = so_orig@meta.data[colnames(igt40),"annotation_level2"]
+igt40$annotation_level1 = so_orig@meta.data[colnames(igt40),"annotation_level1"]
+igt40$cellID = so_orig@meta.data[colnames(igt40),"cellID"]
+igt40$sample_code = so_orig@meta.data[colnames(igt40),"sample_code"]
+igt40 = igt40[,!is.na(igt40$annotation_level2)]
+s = "I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142"
+cl = "CD8_cl10"
+
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+igt40_2 = igt40[,igt40$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt40_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt40_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT40 CD8 cells, %s %s highlighted", s, cl))
+# p$plot1
+p$plot2
+p$plot3
+
+igt40_2 = igt40[,igt40$sample_code == s] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt40_2@meta.data %>% filter(annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt40_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in %s cells, %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+cells_to_highlight = igt40@meta.data %>% filter(sample_code == s & annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt40 , umap_to_plot = "umap_rna", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(512,512), highlight_size = 2, title = sprintf("UMAP in all IGT40 cells, %s %s highlighted", s, cl))
+p$plot2
+p$plot3
+dev.off()
+
+#IGT32
+igt32 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221115_exp_id_24_DSS_Kaede/IGT32/dataset_clean.Rds')
+
+igt32$annotation_level2 = so_orig@meta.data[colnames(igt32),"annotation_level2"]
+igt32$annotation_level1 = so_orig@meta.data[colnames(igt32),"annotation_level1"]
+igt32$cellID = so_orig@meta.data[colnames(igt32),"cellID"]
+igt32$sample_code = so_orig@meta.data[colnames(igt32),"sample_code"]
+igt32 = igt32[,!is.na(igt32$annotation_level2)]
+s = "I32H7_colonLP_CD45p_mouse0103"
+cl = "CD8_cl10"
+
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+igt32_2 = igt32[,igt32$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt32_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt32_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT32 CD8 cells, %s %s highlighted", s, cl))
+# p$plot1
+p$plot2
+p$plot3
+
+igt32_2 = igt32[,igt32$sample_code == s] %>% NormalizeData() %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt32_2@meta.data %>% filter(annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt32_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in %s cells, %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+cells_to_highlight = igt32@meta.data %>% filter(sample_code == s & annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt32 , umap_to_plot = "umap_rna", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(512,512), highlight_size = 2, title = sprintf("UMAP in all IGT32 cells, %s %s highlighted", s, cl))
+p$plot2
+p$plot3
+dev.off()
+
+
+#IGT20
+igt20 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220812_exp_id_13_ColonSI/IGT20/dataset_clean.Rds')
+
+igt20$annotation_level2 = so_orig@meta.data[colnames(igt20),"annotation_level2"]
+igt20$annotation_level1 = so_orig@meta.data[colnames(igt20),"annotation_level1"]
+igt20$cellID = so_orig@meta.data[colnames(igt20),"cellID"]
+igt20$sample_code = so_orig@meta.data[colnames(igt20),"sample_code"]
+igt20 = igt20[,!is.na(igt20$annotation_level2)]
+s = "I20H7_colonLP_allT_mouse0035"
+cl = "CD8_cl10"
+
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+igt20_2 = igt20[,igt20$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt20_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt20_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT40 CD8 cells, %s %s highlighted", s, cl))
+# p$plot1
+p$plot2
+p$plot3
+
+igt20_2 = igt20[,igt20$sample_code == s] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt20_2@meta.data %>% filter(annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt20_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in %s cells, %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+cells_to_highlight = igt20@meta.data %>% filter(sample_code == s & annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt20 , umap_to_plot = "umap_rna", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(512,512), highlight_size = 2, title = sprintf("UMAP in all IGT40 cells, %s %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+dev.off()
+
+#IGT9
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+igt9 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220526_exp_id_07_OneMouse/IGT9/dataset_clean.Rds')
+igt9$annotation_level2 = so_orig@meta.data[colnames(igt9),"annotation_level2"]
+igt9$annotation_level1 = so_orig@meta.data[colnames(igt9),"annotation_level1"]
+igt9$cellID = so_orig@meta.data[colnames(igt9),"cellID"]
+igt9$sample_code = so_orig@meta.data[colnames(igt9),"sample_code"]
+igt9 = igt9[,!is.na(igt9$annotation_level2)]
+DimPlot(igt9, reduction = "umap_rna", group.by = "annotation_level2", raster = F, split.by = c("annotation_level1"), label = T) + scale_color_manual(values = ZemmourLib::immgent_colors$level2) + NoGrid() + NoLegend()
+
+s = "I9H10_smallintestineLP_allT_mouse0018"
+cl = "CD8_cl10"
+
+igt9_2 = igt9[,igt9$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt9_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt9_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in IGT9 CD8 cells, %s %s highlighted", s, cl))
+# p$plot1
+p$plot2
+p$plot3
+
+igt9_2 = igt9[,igt9$sample_code == "I9H10_smallintestineLP_allT_mouse0018"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt9_2@meta.data %>% filter(annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt9_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in %s cells, %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+cells_to_highlight = igt9@meta.data %>% filter(sample_code == s & annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt9 , umap_to_plot = "umap_rna", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(512,512), highlight_size = 2, title = sprintf("UMAP in all IGT9 cells, %s %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+dev.off()
+
+```
+
+CITEseq plot CD103 ITB7
+```{r}
+# igt40 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221216_exp_id_27_28_32_33_Goldrath/IGT40/dataset_clean.Rds')
+s = "I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142"
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+igt40 = so_orig[,so_orig$IGT == "IGT40"]
+igt40 = NormalizeData(igt40, assay = "ADT", normalization.method = "LogNormalize")
+igt40$is_cl10 = igt40$annotation_level2 == "CD8_cl10" & igt40$sample_code == s 
+MyFeatureScatter(igt40, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10", highlight_size = 2, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) + ggtitle(s)
+dev.off()
+
+s = "I32H7_colonLP_CD45p_mouse0103"
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+igt32 = so_orig[,so_orig$IGT == "IGT32"]
+igt32 = NormalizeData(igt32, assay = "ADT", normalization.method = "LogNormalize")
+igt32$is_cl10 = igt32$annotation_level2 == "CD8_cl10" & igt32$sample_code == s 
+MyFeatureScatter(igt32, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10",highlight_size = 5, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) + ggtitle(s)
+dev.off()
+
+
+s = "I20H7_colonLP_allT_mouse0035"
+pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+igt20 = so_orig[,so_orig$IGT == "IGT20"]
+igt20 = NormalizeData(igt20, assay = "ADT", normalization.method = "LogNormalize")
+igt20$is_cl10 = igt20$annotation_level2 == "CD8_cl10" & igt20$sample_code == s 
+MyFeatureScatter(igt20, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10",highlight_size = 5, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) + ggtitle(s)
+dev.off()
+
+igt9 = so_orig[,so_orig$IGT == "IGT9"]
+igt9 = NormalizeData(igt9, assay = "ADT", normalization.method = "LogNormalize")
+igt9$is_cl10 = igt9$annotation_level2 == "CD8_cl10" & igt$sample_code == s 
+MyFeatureScatter(igt9, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10")
+
+s = "I32H7_colonLP_CD45p_mouse0103"
+igt = so_orig[,so_orig$IGT == "IGT32"]
+igt = NormalizeData(igt, assay = "ADT", normalization.method = "LogNormalize")
+igt$is_cl10 = igt$annotation_level2 == "CD8_cl10" & igt$sample_code == s 
+MyFeatureScatter(igt, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10",highlight_size = 5, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) 
+
+```
+
+
+**Simple correlation heatmap of T cell pop %?**
+
+```{r}
+# prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) # --> mdata_s
+prop_data = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix)) %>% select(IGTHT, ends_with("ncells"), ends_with("prop")) # --> mdata_sl1
+
+tmp = prop_data %>% select(ends_with("prop"))
+colnames(tmp) = gsub("\\.prop", "", colnames(tmp))
+c = cor(tmp, method = "pearson")
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "PuOr"))(100))
+pdf("paper_cosmology/figures/bits/cluster_cor_heatmap.pdf", 15,15, useDingbats = F)
+pheatmap(mat = c, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), color = ColorRamp, fontsize_row = 10, fontsize_col = 10,  main = "", )
+dev.off()
+```
+
+**Alluvial plot**
+
+IEL alluvial
+```{r}
+library("ggalluvial")
+iel = c("CD8_cl26", "CD4_cl28", "gdt_cl42", "gdT_cl2", "gdT_cl12", "gdT_cl35", "gdT_cl11",  "CD8aa_cl16", "CD8aa_cl40", "nonconv_cl55")
+
+# so_orig@meta.data %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse")) & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% summarize(count = n(), .groups = "drop") 
+
+
+pdf("paper_cosmology/figures/bits/AlluvialPlot_IEL_tissue.pdf", 25, 8, useDingbats = F) #all cells
+df = so_orig@meta.data %>% filter(annotation_level2 %in% iel & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()
+#& condition_broad == "healthy"
+
+# pdf("AlluvialPlot_level2_tissue2.pdf", 25, 8, useDingbats = F) #no more than 100 cells per organ
+# df = so_orig@meta.data %>% filter(annotation_level2 %in% iel & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>%
+#   slice_sample(n = 100) %>%  # Keep no more than 100 cells per organ_simplified
+#   ungroup() %>%
+#   group_by(annotation_level2, organ_simplified) %>%
+#   summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+#   as.data.frame()
+
+# pdf("AlluvialPlot_level2_tissue3.pdf", 25, 8, useDingbats = F) #no more than 1000 cells per organ before subsetting gdT
+# df = so_orig@meta.data %>% filter(condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% slice_sample(n = 1000) %>% ungroup() %>% filter(annotation_level2 %in% iel) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()
+
+
+df$annotation_level2 = factor(df$annotation_level2, levels = iel)
+# df$organ_simplified = factor(df$organ_simplified, levels = rev(c("small intestine","colon","mammary gland","liver","peritoneal cavity","lung","blood","spleen","LN","bone marrow","thymus","kidney","submandibular gland","placenta","uterus","skin")))
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = organ_simplified), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap
+    scale_x_discrete(limits = c("organ_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_organ) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_level2) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+dev.off()
+
+is_alluvia_form(df, axes = 1:3, silent = TRUE)
+
+
+
+
+
+```
+
+Rorgt barplot samples
+```{r}
+mdata #see chunk at the beginning, from prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) 
+
+# rorc = c("CD4_cl17","nonconv_cl8", "gdT_cl7","gdT_cl9", "gdT_cl46","gdT_cl10", "CD8_cl7", "DP_cl60", "Treg_cl2", "CD4_cl21", "CD8_cl10", "Treg_cl8", "CD8aa_cl1", "DN_cl41")
+rorc = c("CD4_cl17","nonconv_cl8","gdT_cl9", "gdT_cl46", "Treg_cl8")
+want_cols = paste0(rorc, ".prop")
+# tmp = mdata %>% filter(grepl(pattern = "allT|CD45p", x = target_cells_simplified) & !(condition_detailed == "baseline" & organ_simplified == "spleen") ) %>% select(sample_code,any_of(want_cols))
+tmp = mdata %>% select(sample_code,any_of(want_cols))
+
+tmp2 = tmp %>% mutate(total_prop = rowSums(select(., ends_with(".prop")), na.rm = TRUE)) %>% arrange(desc(total_prop))
+tmp2 %>% head(50) %>% pull(sample_code)
+
+tmp2 <- tmp2 %>% 
+  arrange(desc(total_prop)) %>% 
+  mutate(sample_code = factor(sample_code, sample_code)) %>% 
+    head(50)
+
+tmp_long <- tmp2 %>% 
+  select(-total_prop) %>% 
+  pivot_longer(
+    cols      = -sample_code,
+    names_to  = "population",
+    values_to = "prop"
+  ) 
+
+tmp_long$population = gsub("\\.prop","", tmp_long$population )
+tmp_long$condition_detailed_organ = mdata$condition_detailed_organ[match(tmp_long$sample_code, mdata$sample_code)]
+
+label_map = tmp_long %>% 
+  distinct(sample_code, condition_detailed_organ) %>% 
+  arrange(sample_code)
+lab_vec = label_map$condition_detailed_organ
+names(lab_vec) = label_map$sample_code
+
+
+pdf("paper_cosmology/figures/bits/Rorc_clusters_in_topsamples.pdf", 10, 8, useDingbats = F) #all cells
+p = ggplot(tmp_long, aes(x = sample_code, y = prop, fill = population)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = immgent_colors$level2_option2) +
+    scale_x_discrete(labels = lab_vec) +
+    theme_minimal() +
+    labs(
+        x    = "Sample",
+        y    = "Proportion",
+        fill = "Population"
+    ) +
+    ggtitle("Top samples with ") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        # axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        # axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank(),        # Removes axis tick marks
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+print(p)
+dev.off()
+
+
+```
+
+CD8_cl14/15/18 barplot samples
+```{r}
+mdata #see chunk at the beginning, from prop_data = read.table(file = sprintf("%s/annotation_level2_PropPerSample.txt", prefix), header = T, sep = "\t" ) 
+
+# rorc = c("CD4_cl17","nonconv_cl8", "gdT_cl7","gdT_cl9", "gdT_cl46","gdT_cl10", "CD8_cl7", "DP_cl60", "Treg_cl2", "CD4_cl21", "CD8_cl10", "Treg_cl8", "CD8aa_cl1", "DN_cl41")
+mycl = c("CD8_cl14","CD8_cl15","CD8_cl28")
+want_cols = paste0(mycl, ".prop")
+tmp = mdata %>% filter(grepl(pattern = "allT|CD45p", x = target_cells_simplified) & !(condition_detailed == "baseline" & organ_simplified == "spleen") ) %>% select(sample_code,any_of(want_cols))
+tmp = mdata %>% select(sample_code,any_of(want_cols))
+
+tmp2 = tmp %>% mutate(total_prop = rowSums(select(., ends_with(".prop")), na.rm = TRUE)) %>% arrange(desc(total_prop))
+tmp2 %>% head(50) %>% pull(sample_code)
+
+tmp2 <- tmp2 %>% 
+  arrange(desc(total_prop)) %>% 
+  mutate(sample_code = factor(sample_code, sample_code)) %>% 
+    head(50)
+
+tmp_long <- tmp2 %>% 
+  select(-total_prop) %>% 
+  pivot_longer(
+    cols      = -sample_code,
+    names_to  = "population",
+    values_to = "prop"
+  ) 
+
+tmp_long$population = gsub("\\.prop","", tmp_long$population )
+tmp_long$condition_detailed_organ = mdata$condition_detailed_organ[match(tmp_long$sample_code, mdata$sample_code)]
+
+label_map = tmp_long %>% 
+  distinct(sample_code, condition_detailed_organ) %>% 
+  arrange(sample_code)
+lab_vec = label_map$condition_detailed_organ
+names(lab_vec) = label_map$sample_code
+
+
+pdf("paper_cosmology/figures/bits/CD8cl141528_clusters_in_topsamples.pdf", 10, 8, useDingbats = F) #all cells
+p = ggplot(tmp_long, aes(x = sample_code, y = prop, fill = population)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = immgent_colors$level2) +
+    scale_x_discrete(labels = lab_vec) +
+    theme_minimal() +
+    labs(
+        x    = "Sample",
+        y    = "Proportion",
+        fill = "Population"
+    ) +
+    ggtitle("Top samples with CD8 cl14/15/28 - percent of total CD8") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        # axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        # axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank(),        # Removes axis tick marks
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+print(p)
+dev.off()
+
+
+```
+
+
+
+**Barplot Rorc and Ahrr expression**
+```{r}
+
+pseudobulk = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K_seurat.Rds')
+
+gs = c("Rorc", "Ahrr")
+pdf("paper_cosmology/figures/bits/Barplot_Rorc_Ahr.pdf", 12, 7, useDingbats = F)
+for (g in gs) {
+    print(g)
+    gene_to_plot = g
+    data = data.frame(
+        Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+        Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+    )
+    data$Cluster = gsub("\\-", "_", data$Cluster)
+    data$Cluster = factor(data$Cluster, levels = levels(so_orig$annotation_level2))
+    data$level1 = so_orig$annotation_level1[match(data$Cluster, so_orig$annotation_level2)]
+    
+    
+    # Create the barplot
+    p = ggplot(data, aes(x = Cluster, y = Expression, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p + NoGrid())
+    
+}
+dev.off()
+
+```
+
+
+**Co occuring T cell pops?**
+
+flashier/20250312
+```{r}
+prefix = "SampleComp/20250226"
+# prefix2 = "flashier/20250709_expoPropInLevel1"
+prefix2 = "flashier/20250312"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+F1 = with(ldf(fit, type = "i"), F)
+colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+F1 = F1[,order(fit$pve, decreasing = T)]
+rownames(F1) = gsub(pattern = "gdT_52", replacement = "gdT_cl52", rownames(F1))
+rownames(F1) = gsub(pattern = "gdT_54", replacement = "gdT_cl54", rownames(F1))
+```
+
+heatmap geom_tile
+```{r}
+# F1 = F1[rownames(F1)[!grepl("miniverse|prolif", rownames(F1))],]
+# F1 = F1[,!colnames(F1) %in% c("F21", "F18")]
+# F1 = t(scale(t(F1), center = T, scale = T))
+top_cl = apply(F1, 2, order, decreasing = TRUE)[1:5, ]
+# top_cl = apply(F1, 2, order, decreasing = TRUE)
+# top_cl = unique(c("Ifng",rownames(fit$F_pm)[top_genes]))
+top_cl
+
+plot_data = melt(F1[c(top_cl),], varnames = c("Cluster", "Factor"), value.name = "Expression")
+# hc = hclust(d = dist(F1))
+# plot_data$Cluster = factor(plot_data$Cluster, levels = rownames(F1)[hc$order])
+
+# plot_data$Cluster = gsub(pattern = "\\.prop", replacement = "", plot_data$Cluster)
+plot_data$Cluster = gsub(pattern = "\\.prop", replacement = "", plot_data$Cluster)
+plot_data$Cluster = factor(plot_data$Cluster , levels = unique(plot_data$Cluster))
+
+# Create the dot plot
+
+pdf("paper_cosmology/figures/bits/cluster_factor_geom_tile.pdf", 5, 8, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = Cluster, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+    scale_fill_gradientn(
+    colours = c("white",rev(viridis(10))), 
+    name    = "Expression"
+  ) +
+  # scale_fill_gradient(low = "white", high = "brown") +  # Adjust color gradient
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 6),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Cluster))) + 
+  coord_fixed(ratio = 1, ) +  # Ensure tiles are square
+  labs(title = "Coordinated Clusters", x = "", y = "")
+print(p)
+
+p = ggplot(plot_data, aes(x = Factor, y = Cluster, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+  scale_fill_gradient(low = "white", high = "brown") +  # Adjust color gradient
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 6),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Cluster))) + 
+  coord_fixed(ratio = 1, ) +  # Ensure tiles are square
+  labs(title = "Coordinated Clusters", x = "", y = "")
+print(p)
+dev.off()
+```
+
+alternate viz heatmaps
+```{r}
+
+
+pdf("paper_cosmology/figures/bits/cluster_factor_heatmap_viz1.pdf", 10,20, useDingbats = F)
+tmp3 = F1
+# ColorRamp = colorRampPalette(c('white','red'))(20)
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, color = c("white",brewer.pal(9, "Reds")), fontsize_row = 10, fontsize_col = 10,  main = "Factors")
+pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, breaks = seq(-max(abs(tmp3)),max(abs(tmp3)),length.out = length(ColorRamp)+1), fontsize_row = 10, fontsize_col = 10,  main = "Factors")
+dev.off()
+
+pdf("paper_cosmology/figures/bits/cluster_factor_heatmap_viz2_to match sample heatmap.pdf", 15,4, useDingbats = F)
+df_long = melt(F1)
+colnames(df_long) = c("Cluster", "Factor", "Value")
+df_long$Cluster = gsub(pattern = "\\.prop", replacement = "", df_long$Cluster)
+df_long$Cluster = factor(df_long$Cluster, levels = levels(so_orig$annotation_level2))
+any(is.na(df_long$Cluster))
+df_long$value[is.na(df_long$Cluster)]
+
+df_long$annotation_level1 = NA
+df_long$annotation_level1[grepl("CD8_", df_long$Cluster)] = "CD8"
+df_long$annotation_level1[grepl("CD4_", df_long$Cluster)] = "CD4"
+df_long$annotation_level1[grepl("Treg_", df_long$Cluster)] = "Treg"
+df_long$annotation_level1[grepl("gdT_", df_long$Cluster)] = "gdT"
+df_long$annotation_level1[grepl("CD8aa_", df_long$Cluster)] = "CD8aa"
+df_long$annotation_level1[grepl("nonconv_", df_long$Cluster)] = "nonconv"
+df_long$annotation_level1[grepl("DN_", df_long$Cluster)] = "DN"
+df_long$annotation_level1[grepl("DP_", df_long$Cluster)] = "DP"
+df_long$annotation_level1[grepl("thymocyte", df_long$Cluster)] = "thymocyte"
+df_long$annotation_level1 = factor(df_long$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+
+heatmap_plot = ggplot(df_long, aes(x = Cluster, y = Factor, fill = Value)) +
+  geom_tile() +
+  # facet into strips by level1, free x-scale and free x-space gives a visible gap
+  facet_grid(. ~ annotation_level1,
+             scales = "free_x",
+             space  = "free_x") +
+  scale_fill_gradientn(
+    # colours = c("white", brewer.pal(9, "RdPu")),
+    # colours = c("white",rev(rocket(10))), 
+      colours = c("white",brewer.pal(9, "Greens")),
+    name    = "value"
+  ) +
+  theme_minimal() +
+  theme(
+    # rotate your variable names
+    axis.text.x = element_text(angle = 45, hjust = 1),
+
+    # blow away the grid lines
+    # panel.grid = element_blank(),
+    panel.grid.major   = element_line(color = "grey80", linewidth = 0.2),
+    panel.grid.minor   = element_line(color = "grey90", linewidth = 0.1),
+
+    # widen the gap between facets
+    panel.spacing.x = unit(0.5, "cm"),
+
+    # you can style or remove those facet‐strips:
+    strip.background = element_blank(),
+    strip.text.x = element_text(face = "bold")
+  ) +
+    labs(title = "", x = "", y = "")
+
+heatmap_plot
+heatmap_plot + NoLegend()
+dev.off()
+
+gs = c("F2", "F16")
+pdf("paper_cosmology/figures/bits/Barplot_F2_F16.pdf", 12, 7, useDingbats = F)
+for (g in gs) {
+    print(g)
+    gene_to_plot = g
+    data = df_long %>% filter(Factor == g)
+    data$Cluster = factor(data$Cluster, levels = levels(so_orig$annotation_level2))
+    data$level1 = data$annotation_level1
+    
+    
+    # Create the barplot
+    p = ggplot(data, aes(x = Cluster, y = Value, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p + NoGrid())
+    
+}
+dev.off()
+
+```
+
+
+```{r}
+
+```
+
+
+How many T cell response / coordinated T cell cluster patterns per sample**
+
+```{r}
+prefix = "SampleComp/20250226"
+# prefix2 = "flashier/20250709_expoPropInLevel1"
+prefix2 = "flashier/20250312"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag(
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+L1 = L1[,order(fit$pve, decreasing = T)]
+L1 = L1[,!colnames(L1) %in% c("F11", "F21")]
+# rownames(L1) %in% mdata$sample_code
+
+
+tmp =rowSums(L1>0.1) 
+tmp_long = melt(tmp)
+tmp_long$sample_code = rownames(tmp_long)
+tmp_long = tmp_long %>% mutate(IGTHT = str_extract(sample_code, "^[^_]+"))
+tmp_long$sample_code = NULL
+tmp_long2 = merge(tmp_long, m, by = "IGTHT", all.x = T, all.y = F, suffixes = c(".x", ""))
+tmp_long2$is_healthy = tmp_long2$condition_broad == "healthy"
+tmp_long2$is_SLO = tmp_long2$organ_simplified %in% c("spleen", "LN", "blood", "SLO", "thymus")
+
+pdf("paper_cosmology/figures/bits/sample_factor_distrib.pdf", 5,5, useDingbats = F)
+ggplot(tmp_long2, aes(x = value)) +
+  geom_histogram(
+    binwidth   = 1,           # adjust to taste
+    position   = "stack",     # stacks the bars by condition
+    colour     = "grey30",    # outline colour for each bar
+    alpha      = 0.8
+  ) +
+  theme_minimal() +
+  labs(
+    x    = "Value",
+    y    = "Frequency",
+    title= "Histogram of value, by condition_broad"
+  ) +
+  theme(
+    axis.text  = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 11)
+  ) + NoGrid()
+
+
+ggplot(tmp_long2, aes(x = value, fill = condition_broad)) +
+  geom_histogram(
+    binwidth   = 1,           # adjust to taste
+    position   = "stack",     # stacks the bars by condition
+    colour     = "grey30",    # outline colour for each bar
+    alpha      = 0.8
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = mypal) +  # or scale_fill_manual(...) if you have custom colours
+  labs(
+    x    = "Value",
+    y    = "Frequency",
+    fill = "Condition Broad",
+    title= "Histogram of value, by condition_broad"
+  ) +
+  theme(
+    axis.text  = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 11)
+  ) + NoGrid()
+
+ggplot(tmp_long2, aes(x = value, fill = is_healthy)) +
+    geom_histogram(
+        binwidth   = 1,           # adjust to taste
+        position   = "stack",     # stacks the bars by condition
+        colour     = "grey30",    # outline colour for each bar
+        alpha      = 0.8
+    ) +
+    theme_minimal() +
+    scale_fill_manual(values = c("red3","grey")) +
+    labs(
+        x    = "Value",
+        y    = "Frequency",
+        fill = "is healthy Broad",
+        title= "Histogram of value, by condition_broad"
+    ) +
+    theme(
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.title = element_text(size = 12),
+        legend.text  = element_text(size = 11)
+    ) + facet_wrap(~is_healthy) + NoGrid()
+
+dev.off()
+
+
+####Geom tile with examples
+
+tmp_long = melt(L1)
+colnames(tmp_long) = c("sample_code", "Factor", "value")
+tmp_long = tmp_long %>% mutate(IGTHT = str_extract(sample_code, "^[^_]+"))
+# tmp_long$sample_code = NULL
+tmp_long2 = merge(tmp_long, m, by = "IGTHT", all.x = T, all.y = F, suffixes = c(".x", ""))
+# tmp_long2$is_healthy = tmp_long2$condition_broad == "healthy"
+# tmp_long2$is_SLO = tmp_long2$organ_simplified %in% c("spleen", "LN", "blood", "SLO", "thymus")
+
+top5_per_factor <- tmp_long2 %>%
+  group_by(Factor) %>% 
+  arrange(desc(value), .by_group = TRUE) %>% 
+  distinct(IGT, .keep_all = TRUE) %>% 
+  slice_head(n = 5) %>% 
+  ungroup() %>% pull(sample_code.x)
+top_cl = match(top5_per_factor, rownames(L1))
+
+top_cl = apply(L1, 2, order, decreasing = TRUE)[1:3, ]
+top_cl
+
+plot_data = melt(L1[c(top_cl),], varnames = c("sample_code", "Factor"), value.name = "Expression")
+# plot_data$Sample = factor(plot_data$Sample , levels = unique(plot_data$Sample))
+plot_data = plot_data %>% mutate(IGTHT = str_extract(sample_code, "^[^_]+"))
+plot_data$sample_type = mdata$sample_type[match(plot_data$IGTHT,mdata$IGTHT)]
+plot_data$condition_detailed_organ = mdata$condition_detailed_organ[match(plot_data$IGTHT,mdata$IGTHT)]
+
+# Create the dot plot
+
+label_map = plot_data %>% 
+  distinct(sample_code, condition_detailed_organ) %>% 
+  arrange(sample_code)
+lab_vec = label_map$condition_detailed_organ
+names(lab_vec) = label_map$sample_code
+
+pdf("paper_cosmology/figures/bits/Sample_factor_geom_tile.pdf", 10, 10, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = sample_code, fill = Expression, alpha = Expression)) +
+    geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+    scale_fill_gradientn(
+        colours = c("white",rev(viridis(10))), 
+        name    = "Expression"
+    ) +
+    # scale_fill_gradient(low = "white", high = "brown") +  # Adjust color gradient
+    theme_minimal() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 6),  # Rotate x-axis labels
+                axis.text.y = element_text( size = 6),  # Rotate x-axis labels
+        panel.grid = element_blank(),  # Remove gridlines
+        panel.border = element_blank()  # Optional: remove the border around the plot
+    ) +
+    coord_fixed(ratio = 1, ) +  # Ensure tiles are square
+    labs(title = "", x = "", y = "")
+print(p + scale_y_discrete(limits = rev(levels(plot_data$sample_code))) )
+print(p + scale_y_discrete(limits = rev(levels(plot_data$sample_code)),labels = lab_vec) )
+
+
+dev.off()
+
+```
+
+
+
+(Forget, tests)
+```{r}
+prefix = "SampleComp/20250226"
+# prefix2 = "flashier/20250709_expoPropInLevel1"
+prefix2 = "flashier/20250312"
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+
+
+
+# F1 = ldf(fit, type = "i")$F
+# top_cl <- apply(F1, 2, order, decreasing = TRUE)[1:10, ]
+# top_cl <- rownames(fit$F_pm)[top_cl]
+# plot(fit,
+#      plot_type = "heatmap",
+#      pm_which = "factors",
+#      pm_subset = top_cl,
+#      # pm_groups = factor(top_cl, levels = unique(top_cl)),
+#      kset = 1:6,
+#      gap = 0.2)
+
+F1 = with(ldf(fit, type = "i"), F)
+colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+F1 = F1[,order(fit$pve, decreasing = T)]
+# F1 = F1[rownames(F1)[!grepl("miniverse|prolif", rownames(F1))],]
+# F1 = F1[,!colnames(F1) %in% c("F21", "F18")]
+# F1 = t(scale(t(F1), center = T, scale = T))
+top_cl = apply(F1, 2, order, decreasing = TRUE)[1:5, ]
+# top_cl = apply(F1, 2, order, decreasing = TRUE)
+# top_cl = unique(c("Ifng",rownames(fit$F_pm)[top_genes]))
+top_cl
+
+top_cl = apply(F1, 2, order, decreasing = TRUE)[1:5, ]
+tmp = matrix(data = rep(c(top_cl),ncol(F1)), ncol = ncol(F1))
+dim(tmp)
+for (i in 1:ncol(F1)) {
+    # print(i)
+    tmp[,i] = F1[tmp[,i],i]
+}
+colnames(tmp) = colnames(F1)
+plot_data = data.frame(Cluster = rownames(F1)[c(top_cl)], tmp)
+plot_data = melt(plot_data, is.vars = "Cluster", variable.name = c("Factor"), value.name = "Expression")
+pheatmap(plot_data[,-1], cluster_rows = F, cluster_cols = F, color = c("white",brewer.pal(9, "Reds")))
+# plot_data$Cluster2 = paste(plot_data$Cluster, plot_data$Factor, sep = ".")
+# plot_data$Cluster2 = factor(plot_data$Cluster2, levels = plot_data$Cluster2 )
+
+plot_data_long <- plot_data %>%
+  pivot_longer(
+    cols = -Cluster,           # Select all columns EXCEPT 'Cluster' to pivot
+    names_to = "Factor",       # The new column for the old column names ('F1', 'F5'...)
+    values_to = "Expression"   # The new column for the cell values
+  )
+
+ggplot(plot_data, aes(x = Factor, y = Cluster, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +
+  scale_fill_gradient(low = "white", high = "brown") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  ) +
+  coord_fixed() + # Ensure tiles are square
+  labs(
+    title = "Tile Plot of T cell Responses",
+    x = "Factor",
+    y = "Cluster",
+    fill = "Expression", # Renames the legend title
+    alpha = "Expression"
+  )
+
+
+plot_data = melt(F1[c(top_cl),], varnames = c("Cluster", "Factor"), value.name = "Expression")
+plot_data = melt(F1[top_cl,], varnames = c("Cluster", "Factor"), value.name = "Expression")
+# hc = hclust(d = dist(F1))
+# plot_data$Cluster = factor(plot_data$Cluster, levels = rownames(F1)[hc$order])
+
+# plot_data$Cluster = gsub(pattern = "\\.prop", replacement = "", plot_data$Cluster)
+# plot_data$Cluster = factor(plot_data$Cluster , levels = levels(so_orig$annotation_level2))
+# plot_data$Cluster = factor(plot_data$Cluster , levels = levels(so_orig$annotation_level2))
+plot_data$Cluster2 = paste(plot_data$Cluster, plot_data$Factor, sep = ".")
+factor(plot_data$Cluster , levels = rownames(F1)[c(top_cl)])
+rownames(F1)[c(top_cl)]
+
+tmp = matrix(data = rep(top_cl,ncol(F1)), ncol = ncol(F1))
+F1[tmp[,1],1]
+F1[tmp[,2],2]
+F1[tmp[,3],3]
+
+
+# Create the dot plot
+
+# pdf(sprintf("%s/%s/CD4_genematrix_topicsTh1217.pdf", prefix, prefix2), 3, 7, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = Cluster, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+  scale_fill_gradient(low = "white", high = "brown") +  # Adjust color gradient
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Cluster))) + 
+  coord_fixed(ratio = 1, ) +  # Ensure tiles are square
+  labs(title = "Dot Plot of T cell Responses", x = "Layer", y = "Cluster")
+print(p)
+# dev.off()
+
+```
+
+
+
+
+
+
+############
+
+
+```{r}
+# prefix2 = "flashier/20250709_expoPropInLevel1"
+ prefix2 = "flashier/20250312"
+
+ensure_directory(sprintf("%s/%s", prefix,prefix2))
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
+```
+
+Figures
+
+
+```{r}
+prefix = "SampleComp/20250226"
+prefix2 = "flashier/20250709_expoPropInLevel1"
+
+# so_orig = readRDS("igt1_96_withtotalvi20250226.Rds")
+so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata
+
+fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+props = read.table(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1.txt", prefix))
+
+
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)) #same as res$F %*% diag
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+
+```
+
+```{r}
+
+pheatmap(as.dist(1-cor(t(L1))), color = rev(ColorRamp))
+```
+
+
+
+Structure plot
+
+
+F1: Resting
+F2: IEL
+F3: Rorc
+F4: activated?
+F5: prolif acute activation
+F6: 
+
+
+```{r}
+
+topic_colors = glasbey(6)
+L1 = ldf(fit, type = "i")$L
+L1 = L1/rowSums(L1)
+rownames(L1) == mdata$sample_code
+colnames(L1) = paste("F", 1:ncol(L1), sep = "")
+
+mdata$organ_simplified = factor(mdata$organ_simplified, levels = c("blood","spleen","LN","SLO","bone marrow","thymus",
+                                                                   "lung", "liver", "peritoneal cavity",
+                                                                   "colon epi","small intestine epi","colon LP","small intestine LP","skin",
+                                                                   "mammary gland","uterus", "placenta", "prostate","submandibular gland","kidney", "pancreas","CNS","synovial fluid"))
+
+pdf(sprintf("%s/%s/structure_plots.pdf", prefix,prefix2), 15,5, useDingbats = F)
+structure_plot(L1,grouping = mdata$organ_simplified,topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+structure_plot(L1,grouping = mdata$organ_simplified,topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = 6:1,
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+#resting and activated factors
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = c(5,4,1),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+grps = factor(mdata$organ_simplified[mdata$condition_broad != "healthy"], levels = intersect(levels(mdata$organ_simplified),unique(mdata$organ_simplified[mdata$condition_broad != "healthy"])))
+structure_plot(L1[mdata$condition_broad != "healthy",],grouping = grps,topics = c(5,4,1),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+    labs(y = "membership") +
+    theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+#IEL and Rorc
+structure_plot(L1[mdata$condition_broad == "healthy",],grouping = mdata$organ_simplified[mdata$condition_broad == "healthy"],topics = c(3,2),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+  labs(y = "membership") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+grps = factor(mdata$organ_simplified[mdata$condition_broad != "healthy"], levels = intersect(levels(mdata$organ_simplified),unique(mdata$organ_simplified[mdata$condition_broad != "healthy"])))
+structure_plot(L1[mdata$condition_broad != "healthy",],grouping = grps,topics = c(3,2),
+               loadings_order = "embed",colors = mypal1, gap = 5) +
+    labs(y = "membership") +
+    theme(axis.text.x = element_text(angle = 30,hjust = 0.5))
+
+
+dev.off()
+
+
+
+###
+pdf(sprintf("%s/%s/structure_plot.pdf", prefix, prefix2), 10, 8, useDingbats = F)
+plot(fit,
+     kset = 1:2,
+     pm_subset =,
+     plot_type = "structure",
+     pm_which = "loadings",
+     pm_groups = mdata$organ_simplified,
+     pm_colors = mypal_organ,
+     gap = 5) #+ NoLegend()
+
+plot(fit,
+     include_scree = F,
+     plot_type = "structure",
+     pm_which = "factors",
+     pm_groups = cluster_meta$annotation_level1,
+     pm_colors = mypal_organ,
+     gap = 5) #+ NoLegend()
+
+dev.off()
+
+```
+
+boxplots
+```{r}
+
+df = data.frame(mdata, L1)
+df2 = df %>% 
+  filter(!organ_simplified %in% "SLO") %>%
+  mutate(is_healthy = factor(condition_broad %in% "healthy", levels = c(TRUE, FALSE),
+                             labels = c("Healthy","Not healthy")))
+
+
+p = ggplot(df2) +
+    geom_boxplot(aes(x = organ_simplified, y = F1, fill = organ_simplified), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    geom_jitter(aes(x = organ_simplified, y = F1), width = 0.2, alpha = 1, size = 0.5) +
+    # geom_text(data = subset(summary_data, sum_value > 1), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+    #           size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_organ) +
+    theme_minimal() +
+    labs(
+        x = "",
+        y = "",
+        title = "",
+        fill = ""
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  +
+    NoLegend()
+
+
+p = ggplot(df2) +
+    geom_boxplot(aes(x = organ_simplified, y = F1, fill = organ_simplified, group = interaction(organ_simplified, is_healthy)), alpha = 0.6, outlier.shape = NA) +  # Remove outliers from the boxplot
+    # geom_jitter(aes(x = organ_simplified, y = F1), width = 0.2, alpha = 1, size = 0.5) +
+    # geom_text(data = subset(summary_data, sum_value > 1), aes(x = annotation_level1, y = sum_value, label = annotation_level2), 
+    #           size = 3, vjust = -0.5, color = "black") +
+    scale_fill_manual(values = mypal_organ) +
+    theme_minimal() +
+    labs(
+        x = "",
+        y = "",
+        title = "",
+        fill = ""
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  #+ NoLegend()
+p
+
+
+```
+
+
+Heatmap clusters factors
+
+```{r}
+F1 = ldf(fit, type = "i")$F
+top_cl <- apply(F1, 2, order, decreasing = TRUE)[1:10, ]
+top_cl <- rownames(fit$F_pm)[top_cl]
+plot(fit,
+     plot_type = "heatmap",
+     pm_which = "factors",
+     pm_subset = top_cl,
+     pm_groups = factor(top_cl, levels = unique(top_cl)),
+     kset = 1:6,
+     gap = 0.2)
+```
+
+
+
+
+
+
