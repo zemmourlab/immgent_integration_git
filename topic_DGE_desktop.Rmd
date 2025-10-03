@@ -23,7 +23,7 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 
 Custom functions
 ```{r}
-TopicDGEPlots = function(F1, L1, group1, group2, title_plot = "") {
+FlashierDGE = function(F1, L1, group1, group2, title_plot = "") {
     
     require(ggplot2)
     require(ggrepel)
@@ -96,15 +96,24 @@ TopicDGEPlots = function(F1, L1, group1, group2, title_plot = "") {
 
 Load necessary data
 ```{r}
+
+#import cell metadata
+mdata_orig = read.table("metadata_20250513_mde.txt", header = T, sep = "\t")
+
+#option1 (best): import F1 and L1 from the fit object
+fit = readRDS("fit.Rds")
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)  ) #same as res$L %*% diag(res$D)
+L1 = L1[mdata_orig$cellID,]
+all(rownames(L1) == rownames(mdata_orig))
+colnames(L1) = sprintf("F%s", 1:ncol(L1))
+
+F1 = with(ldf(fit, type = "i"), F)
+colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+
+#option 2: import F1 and L1 from the matrices
 F1 = read.table("gene_factor_matrix.txt", header = T, sep = "\t") %>% as.matrix() #gene x factor
 L1 = read.table("cell_factor_matrix.txt", header = T, sep = "\t") %>% as.matrix() #cells x factor
-
-# library(bigmemory)
-# mat = read.big.matrix("cell_factor_matrix.txt", header = F, type = "double", sep = "\t")
-# mdata_orig = read.table("mdata_mde_L1.txt", header = T, sep = "\t")
-# L1 = mdata_orig[,grep("^F[0-9]+$", colnames(mdata_orig), value = TRUE)]
-
-mdata_orig = read.table("metadata_20250513_mde.txt", header = T, sep = "\t")
 
 mdata_orig %>% select(IGT, exp_name) %>% unique()
 
@@ -115,25 +124,15 @@ Example
 group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl8") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
 group2 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & annotation_level2 %in% c("Treg_cl2") & organ_simplified == "colon" & condition_broad == "healthy") %>% pull(cellID)
 
-group1 = mdata_orig %>% filter(annotation_level1 %in% c("Treg") & condition_broad == "healthy") %>% pull(cellID)
-group2 = mdata_orig %>% filter( !(annotation_level1 %in% c("Treg")) & condition_broad == "healthy") %>% pull(cellID)
-
-results = TopicDGEPlots(F1, L1, group1, group2, mdata_orig, title_plot = "Treg vs all in healthy")
-
-# results$p1  # First plot (MA plot of factors)
-# results$p2  # Second plot (MA plot of genes)
-# results$diff_factors  # vplot for fold changes
-results$diff_genes %>% arrange(desc(log2FC)) # vplot for gene expression
 
 # Call the function with F1, L1, and group data
-results = TopicDGEPlots(F1, L1, group1, group2, title_plot = "Treg_cl8 vs Treg_cl2 in colon healthy")
+results = FlashierDGE(F1, L1, group1, group2, title_plot = "Treg_cl8 vs Treg_cl2 in colon healthy")
 
 # Access the plots and data
 results$p1  # First plot (MA plot of factors)
 results$p2  # Second plot (MA plot of genes)
-results$diff_factors  %>% arrange(desc(log2FC))# vplot for fold changes
-results$diff_genes %>% arrange(desc(log2FC)) # vplot for gene expression
-
+results$diff_factors  # table for fold changes of gene programs
+results$diff_genes %>% arrange(desc(log2FC)) # table for fold changes of genes
 
 ```
 

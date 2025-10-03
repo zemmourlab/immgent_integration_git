@@ -876,6 +876,38 @@ so[['RNA']] = NULL
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
 ```
 
+**12. Split by lineage**
+```{r}
+prefix = "igt1_96_withtotalvi20250710_clean.Rds"
+so = readRDS(prefix)
+
+cd4 = so[,so$annotation_level1 == "CD4"]
+cd4
+saveRDS(cd4,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4_%s", prefix))
+
+cd8 = so[,so$annotation_level1 == "CD8"]
+saveRDS(cd8,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8_%s", prefix))
+
+treg = so[,so$annotation_level1 == "Treg"]
+saveRDS(treg,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg_%s", prefix))
+
+gdt = so[,so$annotation_level1 == "gdT"]
+saveRDS(gdt,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/gdT_%s", prefix))
+
+cd8aa = so[,so$annotation_level1 == "CD8aa"]
+saveRDS(cd8aa,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8aa_%s", prefix))
+
+dn = so[,so$annotation_level1 == "DN"]
+saveRDS(dn,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DN_%s", prefix))
+
+dp = so[,so$annotation_level1 == "DP"]
+saveRDS(dp,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP_%s", prefix))
+
+nonconv = so[,so$annotation_level1 == "nonconv"]
+saveRDS(nonconv,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv_%s", prefix))
+
+```
+
 
 **if needed, small adjustments**
 ```{r}

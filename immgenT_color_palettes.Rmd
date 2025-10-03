@@ -53,7 +53,7 @@ options(max.print=1000)
 # setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("gridExtra","fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+libs = c("ZemmourLib","Seurat","ggplot2", "dplyr", "reshape2", "RColorBrewer", "pals", "scales") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
 ```
@@ -244,7 +244,6 @@ DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "organ_simplifi
 
 ```
 
-
 **Print palettes**
 ```{r}
 
@@ -284,11 +283,38 @@ dev.off()
 
 ```
 
+**Palette for Topics**
+```{r}
+# cls = colors()[!grepl("gray|grey",colors()) ]
+# mypal_topics = sample(cls, 200)
+mypal_topics = RColorBrewer::brewer.pal(8,name = "Accent")
+names(mypal_topics) = paste("F", 1:200, sep = "")
+mypal_topics["F1"] = "blue"
+mypal_topics["F68"] = "deeppink"
+
+mypal_list[["topics"]] = mypal_topics
+
+sample_df <- data.frame(
+  category = factor(names(mypal_topics), levels = names(mypal_topics)),
+  value = 1)
+
+pdf(sprintf("%s/Topic_color_palette_organ_simplified.pdf", prefix), 60,10, useDingbats = F)
+ggplot(sample_df, aes(x = category, y = value, fill = category)) +
+  geom_col() +
+  scale_fill_manual(values = mypal_topics) +
+  theme_minimal() +
+  labs(title = "mypal_topics Palette") + NoLegend() + NoGrid()
+dev.off()
+
+```
+
+
 **Save palettes**
 ```{r}
 
 # saveRDS(mypal_list, "immgent_color_palettes_list_20250708.Rds")
 saveRDS(mypal_list, sprintf("%s/immgent_color_palettes_list_%s.Rds", prefix, prefix))
+# mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", prefix, prefix))
 
 for (i in names(mypal_list)) {
     write.table(mypal_list[[i]],file = sprintf("%s/immgent_color_palettes_%s.csv",prefix,i),quote = F, sep = ",", col.names = F)

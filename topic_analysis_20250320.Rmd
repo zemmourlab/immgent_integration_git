@@ -43,9 +43,9 @@ R
 ```{r}
 options(max.print=1000)
 # setwd("/project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_96")
-source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+# source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
-libs = c("fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2","scattermore", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
+libs = c("ZemmourLib","fgsea","fastTopics", "flashier", "Matrix", "Seurat","BPCells", "ggplot2","scattermore", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib", "limma") 
 #libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
@@ -74,14 +74,19 @@ mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 mypal1 = mypal1[-4]
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
+
+mypal_organ = immgent_colors$organ_simplified
+mypal_level1 = immgent_colors$level1
+mypal_level2 = immgent_colors$level2
+
 #pal.bands(mypal, main="Colormap suggestions")
-mypal_organ = setNames(mypal, unique(so$organ_simplified))
-mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
-mypal_level1 = setNames(mypal, unique(so$annotation_level1))
-mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
-mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
-mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
-mypal_level2["CD4_cl18"] = "blue"
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
 mypal_igt = setNames(mypal, unique(so$IGT))
 mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 
@@ -94,8 +99,9 @@ https://willwerscheid.github.io/flashier/articles/flashier_intro.html
 
 ```{r}
 # so_orig = readRDS(file = "igt1_96_withtotalvi20250317_clean.Rds")
-so_orig = readRDS(file = "igt1_96_withtotalvi20250513_clean.Rds")
-so = so_orig
+# so_orig = readRDS(file = "igt1_96_withtotalvi20250513_clean.Rds")
+so_orig = readRDS(file = "igt1_96_withtotalvi20250710_clean.Rds")
+so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 
 
 sampled_cellID = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_sampledcells200K.csv", header = F, as.is = T)[,1]
@@ -724,6 +730,551 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, pref
 
 ```
 
+**Treg topics**
+Load L1 and F1
+```{r}
+fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/Treg/paper_Treg/figures/bits_david"
+fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/paper_Treg/figures/bits_david"
+
+res = ldf(fit, type = "i")
+L1 = with(res, L %*% diag(D)  ) #same as res$L %*% diag(res$D)
+L1 = L1[colnames(so_orig),]
+all(colnames(so_orig) == rownames(L1))
+any(is.na(L1))
+colnames(L1) = sprintf("F%s", 1:ncol(L1))
+# sub_cells = sample(colnames(so_orig), 1500, replace = F)
+# sub_cells = c(sample(colnames(so_orig)[so_orig$annotation_level1 %in% "Treg"], 1500, replace = F), sample(colnames(so_orig)[!so_orig$annotation_level1 %in% "Treg"], 1500, replace = F))
+# sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% slice_sample(n = 1500, replace = FALSE) %>% pull(cellID),
+#               so_orig@meta.data %>% filter(annotation_level1 != "Treg") %>% group_by(annotation_level1) %>% slice_sample(n = 100, replace = FALSE) %>% ungroup() %>% pull(cellID))
+
+F1 = with(ldf(fit, type = "i"), F)
+colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+```
+
+F27+F68
+```{r}
+pdf(file = sprintf("%s/StructurePlot_F27F68.pdf", fig_dir), 10, 5, useDingbats = F)
+sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% slice_sample(n = 1500, replace = FALSE) %>% pull(cellID),
+              so_orig@meta.data %>% filter(annotation_level1 != "Treg") %>% group_by(annotation_level1) %>% slice_sample(n = 100, replace = FALSE) %>% ungroup() %>% pull(cellID))
+structure_plot(L1[sub_cells,], topics = c(27,68), gap = 25, colors = mypal_topics,loadings_order = sub_cells,grouping = so_orig$annotation_level1[sub_cells]) + ylim(values = c(0,5))
+ZemmourLib::MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F68"), colors = mypal_topics, y_limit = c(0, 4), bar_width = 4)
+ZemmourLib::MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F27"), colors = mypal_topics, y_limit = c(0, 4), bar_width = 4)
+
+sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% group_by(annotation_level2) %>% slice_sample(n = 500, replace = FALSE) %>% ungroup() %>% pull(cellID))
+structure_plot(L1[sub_cells,], topics = c(27,68), colors = mypal_topics, gap = 25, loadings_order = sub_cells,grouping = so_orig$annotation_level2[sub_cells]) + ylim(values = c(0,5))
+dev.off()
+
+#############
+
+#' Creates a structured bar plot for topic expression across cell groups.
+#'
+#' @param loadings_matrix A matrix or data frame where rows are cells and columns are topics. Rownames must be cell IDs.
+#' @param grouping_vector A vector with group assignments for each cell, in the same order as the rows in loadings_matrix.
+#' @param topics A character vector of the topic column names to include in the plot.
+#' @param colors A named vector of colors for the topics.
+#' @param y_limit A numeric vector of length 2 for the y-axis limits, e.g., c(0, 4).
+#' @return A ggplot object.
+MyStructurePlot <- function(loadings_matrix, grouping, topics, colors = mypal_topics, y_limit = c(0, 4), bar_width = 1) {
+    
+    # --- 1. Combine inputs into a single data frame ---
+    plot_data <- as.data.frame(loadings_matrix) %>%
+        rownames_to_column(var = "cellID") %>%
+        mutate(grouping = grouping)
+    
+    # --- 2. Reshape and prepare data for plotting ---
+    # pivot_longer(
+    #   cols = -c(cellID, grouping),
+    #   names_to = "variable",
+    #   values_to = "value"
+    # ) %>%
+    # filter(variable %in% topics) %>%
+    # arrange(grouping, desc(value)) %>%
+    # mutate(cellID = factor(cellID, levels = unique(cellID)))
+    
+    plot_data = melt(plot_data)
+    plot_data = plot_data[plot_data$variable %in% topics,]
+    
+    # --- 3. Create the Plot ---
+    p <- ggplot(plot_data, aes(x = cellID, y = value, fill = variable)) +
+        geom_col(width = bar_width) +
+        facet_grid(. ~ grouping,
+                   scales = "free_x",
+                   space  = "free_x") +
+        scale_fill_manual(values = colors) +
+        coord_cartesian(ylim = y_limit) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            strip.placement = "bottom", # This moves the facet labels to the bottom
+            strip.background = element_blank(),
+            strip.text.x = element_text(face = "bold", size = 10),
+            panel.spacing.x = unit(0.5, "cm"),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.x = element_blank(),
+            panel.border = element_blank(),
+            plot.title = element_text(hjust = 0.5, face = "bold"),
+            axis.title.x = element_blank(),
+            axis.title.y = element_text(size = 10, face = "bold")
+        ) +
+        NoGrid() +
+        labs(
+            title = "",
+            y = "Topic Expression",
+            fill = "Topic"
+        )
+    
+    return(p)
+}
+
+# MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F68"), colors = mypal_topics, y_limit = c(0, 4))
+# MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F27"), colors = mypal_topics, y_limit = c(0, 4))
+
+
+
+# topic_colors = mypal[1:ncol(fit$L_pm)]#c("skyblue","forestgreen","darkmagenta","dodgerblue","gold","darkorange")
+# topic_colors = rep(mypal, length.out = ncol(fit$L_pm))
+
+
+# Define your custom color palette (if desired)
+# custom_colors = c("F27" = "red", "F68" = "blue")
+
+pdf(file = sprintf("%s/StructurePlot_F68.pdf", fig_dir), 10, 5, useDingbats = F)
+sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% slice_sample(n = 1500, replace = FALSE) %>% pull(cellID),
+              so_orig@meta.data %>% filter(annotation_level1 != "Treg") %>% group_by(annotation_level1) %>% slice_sample(n = 100, replace = FALSE) %>% ungroup() %>% pull(cellID))
+
+df = data.frame(L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], cellID = sub_cells)
+topics = c("F68")
+plot_data = melt(df)
+plot_data = plot_data[plot_data$variable %in% topics,]
+
+
+p = ggplot(plot_data, aes(x = cellID,y = value, fill = variable)) +
+  geom_col(width = 1) + # width = 1 ensures no internal gaps between bars within a group
+  
+  # Facet by cell_group, with free x-scales and space for gaps between groups
+  facet_grid(. ~ grouping,
+             scales = "free_x",
+             space = "free_x") +
+  
+  # Custom colors
+  scale_fill_manual(values = mypal_topics) +
+  
+  # Clean up the theme
+  theme_minimal() +
+    ylim(values = c(0,4))+
+  theme(
+    # Rotate x-axis labels to prevent overlap (if many subtypes)
+    axis.text.x =  element_blank(),
+    
+    # Remove extra space/ticks on the x-axis where facets meet
+    axis.ticks.x = element_blank(),
+    
+    # Remove the background of the facet strips
+    strip.background = element_blank(),
+    
+    # Make facet titles bold
+    strip.text.x = element_text(face = "bold", size = 10),
+    
+    # Control the spacing between facets (creating the visible gap)
+    panel.spacing.x = unit(0.5, "cm"), # Adjust this for desired gap size
+    
+    # Remove grid lines for a cleaner look if desired
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    # panel.grid.major.y = element_blank(),
+    # panel.grid.minor.y = element_blank(),
+    
+    # Optionally remove plot border
+    panel.border = element_blank(),
+    
+    # Adjust overall plot title/labels
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_blank(), # Remove x-axis title as facet labels are clear
+    axis.title.y = element_text(size = 10, face = "bold")
+  ) +
+    NoGrid() +
+  labs(
+    title = "",
+    y = "Topic Expression",
+    fill = "Topic" # Legend title
+  )
+p
+
+
+
+
+```
+
+Gene tile plot
+```{r}
+pdf(file = sprintf("%s/GeneTilePlot_F27F68.pdf", fig_dir), 5, 5, useDingbats = F)
+ZemmourLib::MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F68", "F27"), n_genes_per_topic = 15, title = "Genes in GP")
+
+ZemmourLib::MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F68"), n_genes_per_topic = 15, title = "Genes in GP")
+ZemmourLib::MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F68"), n_genes_per_topic = 15,alpha_range = c(0,1), title = "Genes in GP")
+dev.off()
+
+#############
+# Load necessary libraries
+library(tidyverse)
+library(reshape2) # For melt, though pivot_longer is used
+
+#' Create a tile plot of top gene expression for specified topics.
+#'
+#' @param gene_factor_matrix A matrix with genes as rows and topics as columns. Rownames must be gene names.
+#' @param topics A character vector of the topic column names to plot.
+#' @param n_genes_per_topic The number of top genes to select from each topic.
+#' @param title A character vector of the title of the plot
+#' @param alpha_range A numeric vector of the range of values of expression to apply alpha. Default NULL is determined automatically
+#' @return A ggplot object.
+MyGeneTilePlot <- function(gene_factor_matrix = F1,
+                           topics = c("F68", "F27"),
+                           n_genes_per_topic = 15,
+                           alpha_range = NULL,
+                           title = "Dot Plot (Squares) of Gene Expression") {
+    # Dependencies
+    if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Please install.packages('ggplot2')")
+    if (!requireNamespace("reshape2", quietly = TRUE)) stop("Please install.packages('reshape2')")
+    
+    F1 = gene_factor_matrix
+    # Safety checks
+    if (is.null(colnames(F1))) stop("F1 must have column names (topic names).")
+    if (is.null(rownames(F1))) stop("F1 must have rownames (gene names).")
+    missing_topics <- setdiff(topics, colnames(F1))
+    if (length(missing_topics)) stop(sprintf("These topics are not in F1: %s", paste(missing_topics, collapse = ", ")))
+    
+    # Get top genes per topic (indices), then unique gene names
+    idx_mat <- apply(F1[, topics, drop = FALSE], 2, function(col)
+        head(order(col, decreasing = TRUE), n_genes_per_topic)
+    )
+    # idx_mat can be vector if length(topics)==1
+    idx_vec <- unique(as.vector(idx_mat))
+    top_genes <- rownames(F1)[idx_vec]
+    
+    # Build plotting data
+    F_sub <- F1[top_genes, topics, drop = FALSE]
+    plot_data <- reshape2::melt(F_sub, varnames = c("Gene", "Factor"), value.name = "Expression")
+    plot_data$Factor <- factor(plot_data$Factor, levels = topics)
+    
+    # Ensure genes appear ordered by first topic (highest to lowest), like your original reverse scale
+    ordering_topic <- topics[1]
+    gene_order <- names(sort(F1[top_genes, ordering_topic], decreasing = TRUE))
+    plot_data$Gene <- factor(plot_data$Gene, levels = rev(gene_order))
+    
+    # Plot
+    # if (do_alpha) {
+    #     p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression, alpha = Expression))
+    # } else {
+    #     p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression))
+    # }
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression, alpha = Expression)) +
+        ggplot2::geom_tile(width = 0.9, height = 0.9) +
+        ggplot2::scale_fill_gradient(low = "white", high = "brown", limits = c(0, NA), na.value = "white")
+    if (!is.null(alpha_range)) {
+        p = p + scale_alpha_continuous(limits = alpha_range)
+    }
+    
+    p = p + 
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+            panel.grid = ggplot2::element_blank(),
+            panel.border = ggplot2::element_blank()
+        ) +
+        ggplot2::coord_fixed(ratio = 1) +
+        NoGrid() +
+        ggplot2::labs(title = title, x = "", y = "", fill = "Expression (Color)", alpha = "Expression (alpha)")
+    
+    return(p)
+}
+
+
+top_genes = apply(F1, 2, order, decreasing = TRUE)[1:15, c("F68", "F27")]
+# top_genes = unique(c("Ifng",rownames(fit$F_pm)[top_genes]))
+top_genes
+
+plot_data = melt(F1[top_genes,c("F68","F27")], varnames = c("Gene", "Factor"), value.name = "Expression")
+plot_data$Factor = factor(plot_data$Factor, levels = c("F68","F27"))
+
+# Create the dot plot
+
+pdf(sprintf("%s/GeneTileF27F68.pdf", fig_dir), 3, 7, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = Gene, fill = Expression, alpha = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+  scale_fill_gradient(low = "white", high = "brown",limits = c(0, NA), na.value = "white") +# Adjust color gradient
+    # scale_alpha(range = c(0, 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Gene))) + 
+  coord_fixed(ratio = 1) +  # Ensure tiles are square
+  labs(title = "Dot Plot (Squares) of Gene Expression", x = "Layer", y = "Gene",
+       fill = "Expression (Color)",
+       alpha = "Expression (alpha)",)
+print(p)
+# dev.off()
+
+
+####Just F68
+top_genes = apply(F1, 2, order, decreasing = TRUE)[1:15, c("F68")]
+top_genes
+
+plot_data = melt(F1[top_genes,c("F68")], varnames = c("Gene", "Factor"), value.name = "Expression")
+plot_data$Factor = "F68"#factor(plot_data$Factor, levels = c("F68"))
+plot_data$Gene = factor(rownames(plot_data), levels = rownames(plot_data))
+
+# pdf(sprintf("%s/GeneTileF27F68.pdf", fig_dir), 3, 7, useDingbats = F)
+p = ggplot(plot_data, aes(x = Factor, y = Gene, fill = Expression)) +
+  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
+  scale_fill_gradient(low = "white", high = "brown",limits = c(0, NA), na.value = "white" ) +  # Adjust color gradient
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    panel.grid = element_blank(),  # Remove gridlines
+    panel.border = element_blank()  # Optional: remove the border around the plot
+  ) +
+    scale_y_discrete(limits = rev(levels(plot_data$Gene))) + 
+  coord_fixed(ratio = 1) +  # Ensure tiles are square
+  labs(title = "Dot Plot (Squares) of Gene Expression", x = "Layer", y = "Gene")
+print(p)
+dev.off()
+```
+
+Activated Treg topics
+
+F27 for all eff
+F12 for cl3
+F6 for 2/8
+F80 for cl4
+F15 for cl6
+F174 for cl6
+F152 for cl8
+F5 for prolif
+```{r}
+sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg" & !(annotation_level2 %in% c("Treg_miniverse", "Treg_prolif"))) %>% group_by(annotation_level2) %>% slice_sample(n = 500, replace = FALSE) %>% ungroup() %>% pull(cellID))
+mypal_topics = setNames(object = RColorBrewer::brewer.pal(8,name = "Set1"), c("F27","F12", "F6", "F80", "F15", "F152")) #RColorBrewer::brewer.pal(8,name = "Accent") sample(gtex_colors)
+mypal_topics = mypal_topics[!is.na(names(mypal_topics))]
+
+pdf(file = sprintf("%s/StructurePlot_ActTregGP.pdf", fig_dir), 10, 5, useDingbats = F)
+structure_plot(L1[sub_cells,rev(c("F27","F12", "F15", "F152","F6", "F80"))], topics = rev(c("F27","F12", "F15", "F152","F6", "F80")), colors = mypal_topics, gap = 25, loadings_order = sub_cells,grouping = so_orig$annotation_level2[sub_cells]) + ylim(values = c(0,10)) #
+structure_plot(L1[sub_cells,rev(c("F27","F12", "F15", "F152","F6", "F80"))], topics = rev(c("F27","F12", "F15", "F152","F6", "F80")), colors = mypal_topics, gap = 25,loadings_order = "embed", grouping = factor(so_orig$annotation_level2[sub_cells])) + ylim(values = c(0,10)) 
+# structure_plot(L1[sub_cells,], topics = c("F27","F12", "F6", "F80", "F15", "F152"), gap = 25, n = 1000,grouping = so_orig$annotation_level2[sub_cells])
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = rev(c("F27","F12", "F15", "F152","F6", "F80")), colors = mypal_topics, y_limit = c(0, 10), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F27"), colors = mypal_topics, y_limit = c(0, 2.5), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F12"), colors = mypal_topics, y_limit = c(0, 2.5), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F15"), colors = mypal_topics, y_limit = c(0, 2.5), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F152"), colors = mypal_topics, y_limit = c(0, 2.5), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F6"), colors = mypal_topics, y_limit = c(0, 3), bar_width = 2)
+MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level2[sub_cells], topics = c("F80"), colors = mypal_topics, y_limit = c(0, 2.5), bar_width = 2)
+dev.off()
+
+##GeneTile plot
+pdf(file = sprintf("%s/GeneTilePlot_ActTregG.pdf", fig_dir), 5, 10, useDingbats = F)
+MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F27","F12", "F15", "F152","F6", "F80"), n_genes_per_topic = 15,alpha_range = c(0,1), title = "Genes in GP")
+MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F27","F12", "F15", "F152","F6", "F80"), n_genes_per_topic = 15, title = "Genes in GP")
+dev.off()
+
+###DotPlot of classic genes in association with GP
+idx_mat <- apply(F1[,c("F27","F12", "F15", "F152","F6", "F80")], 2, function(col) head(order(col, decreasing = TRUE), 15))
+idx_vec <- as.vector(idx_mat)
+idx_vec <- unique(as.vector(idx_mat))
+top_genes <- rownames(F1)[idx_vec]
+
+so = so_orig[,sub_cells] %>% NormalizeData()
+
+pdf(file = sprintf("%s/DotPlot_ActTregG.pdf", fig_dir), 20, 5, useDingbats = F)
+DotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2")  + scale_colour_gradientn(colours =  rev(magma(10))) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+DotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2") + scale_colour_gradientn(colours =  colorRampPalette(c('white','red'))(20)) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+DotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2") + scale_colour_gradientn(colours =  rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(20))) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off() 
+
+idx_mat <- apply(F1[,c("F27","F12", "F15", "F152","F6", "F80")], 2, function(col) head(order(col, decreasing = TRUE), 15))
+p = list()
+for (topic in c("F27","F12", "F15", "F152","F6", "F80")) {
+    print(topic)
+    idx_vec <- as.vector(idx_mat[,topic])
+    top_genes <- rownames(F1)[idx_vec]
+    # p[[topic]] = DotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2", dot.scale = 6, scale = T, scale.by = "radius")  + 
+    #     labs(y = topic, x = NULL) +
+    #     scale_colour_gradientn(colours =  colorRampPalette(c('white',mypal_topics[topic]))(10)) + 
+    #     theme(axis.text.x = element_text(angle = 45, hjust = 1)) + coord_flip()
+    p[[topic]] = MyDotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2", dot.scale = 6, scale = T, scale.by = "radius",point.shape = 21, alpha.range = c(0, 1), show.alpha.legend = F)  + 
+    labs(y = topic, x = NULL) +
+    scale_fill_gradientn(colours =  colorRampPalette(c("grey",'white',mypal_topics[topic]))(10)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + coord_flip()
+
+}
+
+stacked = wrap_plots(p, ncol = 1) + plot_layout(axes = "collect_x", guides = "collect")  # collect x-axes & legends
+pdf(file = sprintf("%s/GeneTilePlot_ActTregG_stacked.pdf", fig_dir), 5, 18, useDingbats = F)
+stacked
+dev.off()
+
+
+MyDotPlot <- function (
+        object, features, assay = NULL,
+        cols = c("lightgrey","blue"), col.min = -2.5, col.max = 2.5,
+        dot.min = 0, dot.scale = 6, idents = NULL, group.by = NULL,
+        split.by = NULL, cluster.idents = FALSE, scale = TRUE,
+        scale.by = "radius", scale.min = NA, scale.max = NA,
+        point.shape = 21,                 # 21 has fill + outline
+        alpha.range = c(0.2, 1.0),
+        show.alpha.legend = FALSE
+) {
+    if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Install ggplot2")
+    if (!requireNamespace("rlang", quietly = TRUE)) stop("Install rlang")
+    
+    `%||%` <- Seurat::`%||%`
+    assay <- assay %||% Seurat::DefaultAssay(object)
+    Seurat::DefaultAssay(object) <- assay
+    
+    split.colors <- !is.null(split.by) && !any(cols %in% rownames(RColorBrewer::brewer.pal.info))
+    scale.func <- switch(scale.by,
+                         size   = ggplot2::scale_size,
+                         radius = ggplot2::scale_radius,
+                         stop("'scale.by' must be either 'size' or 'radius'"))
+    
+    feature.groups <- NULL
+    if (is.list(features) || any(!is.na(names(features)))) {
+        feature.groups <- unlist(lapply(seq_along(features), function(i) rep(names(features)[i], length(features[[i]]))))
+        if (any(is.na(feature.groups))) warning("Some feature groups are unnamed.", call. = FALSE, immediate. = TRUE)
+        features <- unlist(features)
+        names(feature.groups) <- features
+    }
+    
+    cells <- unlist(Seurat::CellsByIdentities(object, cells = colnames(object[[assay]]), idents = idents))
+    data.features <- Seurat::FetchData(object, vars = features, cells = cells)
+    
+    data.features$id <- if (is.null(group.by)) Seurat::Idents(object)[cells, drop = TRUE] else object[[group.by, drop = TRUE]][cells, drop = TRUE]
+    if (!is.factor(data.features$id)) data.features$id <- factor(data.features$id)
+    id.levels <- levels(data.features$id)
+    data.features$id <- as.vector(data.features$id)
+    
+    if (!is.null(split.by)) {
+        splits <- Seurat::FetchData(object, vars = split.by)[cells, split.by]
+        if (split.colors) {
+            if (length(unique(splits)) > length(cols)) stop(sprintf("Need at least %d colors in 'cols'", length(unique(splits))))
+            cols <- cols[seq_along(unique(splits))]
+            names(cols) <- unique(splits)
+        }
+        data.features$id <- paste(data.features$id, splits, sep = "_")
+        us <- unique(splits)
+        id.levels <- paste0(rep(id.levels, each = length(us)), "_", rep(us, times = length(id.levels)))
+    }
+    
+    data.plot <- lapply(unique(data.features$id), function(ident) {
+        df <- data.features[data.features$id == ident, 1:(ncol(data.features) - 1), drop = FALSE]
+        avg.exp <- apply(df, 2, function(x) mean(expm1(x)))
+        pct.exp <- apply(df, 2, Seurat:::PercentAbove, threshold = 0)
+        list(avg.exp = avg.exp, pct.exp = pct.exp)
+    })
+    names(data.plot) <- unique(data.features$id)
+    
+    if (cluster.idents) {
+        mat <- do.call(rbind, lapply(data.plot, unlist))
+        mat <- scale(mat)
+        id.levels <- id.levels[hclust(dist(mat))$order]
+    }
+    
+    data.plot <- do.call(rbind, lapply(names(data.plot), function(x) {
+        d <- as.data.frame(data.plot[[x]])
+        d$features.plot <- rownames(d); d$id <- x; d
+    }))
+    if (!is.null(id.levels)) data.plot$id <- factor(data.plot$id, levels = id.levels)
+    
+    ngroup <- length(levels(data.plot$id))
+    if (ngroup == 1) { scale <- FALSE; warning("Only one identity present; expression values will not be scaled", call. = FALSE, immediate. = TRUE) }
+    else if (ngroup < 5 && scale) { warning("Scaling with few groups can be misleading", call. = FALSE, immediate. = TRUE) }
+    
+    # color-like variable (kept for fill mapping)
+    avg.exp.scaled <- sapply(unique(data.plot$features.plot), function(x) {
+        v <- data.plot[data.plot$features.plot == x, "avg.exp"]
+        if (scale) Seurat:::MinMax(scale(log1p(v)), min = col.min, max = col.max) else log1p(v)
+    })
+    avg.exp.scaled <- as.vector(t(avg.exp.scaled))
+    if (split.colors) avg.exp.scaled <- as.numeric(cut(avg.exp.scaled, breaks = 20))
+    data.plot$avg.exp.scaled <- avg.exp.scaled
+    
+    # alpha driver: per-feature log1p → [0,1]
+    avg.exp.alpha <- sapply(unique(data.plot$features.plot), function(x) {
+        v <- data.plot[data.plot$features.plot == x, "avg.exp"]; v <- log1p(v); Seurat:::MinMax(v, min = 0, max = 1)
+    })
+    data.plot$alpha <- as.vector(t(avg.exp.alpha))
+    
+    data.plot$features.plot <- factor(data.plot$features.plot, levels = features)
+    data.plot$pct.exp[data.plot$pct.exp < dot.min] <- NA
+    data.plot$pct.exp <- data.plot$pct.exp * 100
+    
+    if (split.colors) {
+        splits.use <- unlist(lapply(data.plot$id, function(x)
+            sub(paste0(".*_(", paste(sort(unique(splits), decreasing = TRUE), collapse = "|"), ")$"), "\\1", x)))
+        data.plot$colors <- mapply(function(color, value) colorRampPalette(c("grey", color))(20)[value],
+                                   color = cols[splits.use], value = avg.exp.scaled)
+    }
+    
+    fill.by <- if (split.colors) "colors" else "avg.exp.scaled"
+    
+    if (!is.na(scale.min)) data.plot[data.plot$pct.exp < scale.min, "pct.exp"] <- scale.min
+    if (!is.na(scale.max)) data.plot[data.plot$pct.exp > scale.max, "pct.exp"] <- scale.max
+    if (!is.null(feature.groups)) data.plot$feature.groups <- factor(feature.groups[data.plot$features.plot], levels = unique(feature.groups))
+    
+    library(ggplot2)
+    plot <- ggplot(data.plot, aes(x = .data$features.plot, y = .data$id)) +
+        geom_point(
+            aes(size = .data$pct.exp,
+                fill = .data[[fill.by]],
+                alpha = .data$alpha),
+            shape = point.shape, colour = "black", stroke = 0.25
+        ) +
+        scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
+        scale_alpha(range = alpha.range, limits = c(0, 1)) +
+        theme_minimal(base_size = 11) +
+        theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+    
+    if (!is.null(feature.groups)) {
+        plot <- plot +
+            facet_grid(~feature.groups, scales = "free_x", space = "free_x", switch = "y") +
+            theme(panel.spacing = grid::unit(1, "lines"), strip.background = element_blank())
+    }
+    
+    if (split.colors) {
+        plot <- plot + scale_fill_identity()
+    } else if (length(cols) == 1) {
+        plot <- plot + scale_fill_distiller(palette = cols)
+    } else if (length(cols) == 2) {
+        plot <- plot + scale_fill_gradient(low = cols[1], high = cols[2])
+    } else {
+        plot <- plot + scale_fill_gradientn(colours = cols)
+    }
+    
+    if (!split.colors) {
+        plot <- plot +
+            NoGrid()+
+            guides(
+                fill  = guide_colorbar(title = "Average Expression"),
+                size  = guide_legend(title = "Percent Expressed"),
+                alpha = if (show.alpha.legend) guide_legend(title = "Avg exp (α)") else "none"
+            )
+    }
+    plot
+}
+
+MyDotPlot(
+  so, features = top_genes, assay = "RNA",
+  group.by = "annotation_level2",
+  cols = colorRampPalette(c('white','orange'))(20),#rev(viridisLite::magma(10)),
+  point.shape = 21, alpha.range = c(0.5, 1), show.alpha.legend = T
+) +coord_flip()
+
+
+
+```
+
+
 **Limma with annotation level2**
 ~ 0 + annotation_level2 + IGT
 
@@ -1038,12 +1589,11 @@ message("Table saved to: ", sprintf("%s/%s/%s/ttlist.txt", prefix, prefix2, pref
 Th1 topics
 26: Ifng, ccl5 etc
 X10
-X26
 
 Th2 topics
 56: IL4, il13
 159: Il1rl1 gata3 areg
-X25
+25
 
 Th17 topics
 152: Treg_cl8 (Maf, Il10, Ctla4)
@@ -1181,7 +1731,7 @@ Are all topic orthogonal?
 
 ```
 
-
+**Treg topic**
 
 
 

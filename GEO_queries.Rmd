@@ -1,0 +1,714 @@
+---
+title: "GEO_queries"
+output: html_document
+date: "2025-09-24"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/GEO_queries")
+libs = c("ZemmourLib", "rentrez", "dplyr", "purrr", "tidyr", "stringr", "GEOquery")
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+```
+
+
+
+0) Config (add your NCBI key if you have one to raise limits)
+```{r}
+# rentrez::set_entrez_key("YOUR_NCBI_API_KEY")  # optional but recommended
+RATE_DELAY <- 0.34  # ~3 req/s to be nice to NCBI
+```
+
+1) Your GEO search query (Series only)
+
+20250924
+```{r}
+dest_dir = "20250924"
+
+ensure_directory(dest_dir)
+geo_query <- '("10x"[Description] AND "Mus musculus"[Organism]) \
+AND (T cell[Title] OR T cells[Title] OR CD3[Title] OR CD4[Title] OR CD8[Title] OR Treg[Title] OR gamma delta[Title] OR MAIT[Title] OR NKT[Title] \
+     OR T cell[Description] OR T cells[Description] OR CD3[Description] OR CD4[Description] OR CD8[Description] OR Treg[Description] OR gamma delta[Description] OR MAIT[Description] OR NKT[Description]) \
+NOT (knockout[All Fields] OR KO[All Fields] OR deficient[All Fields] OR null[All Fields] OR "-/-"[All Fields] OR deleted[All Fields])'
+
+# geo_query <- '("10x"[Description] \
+# AND "Mus musculus"[Organism]) \
+# AND (CD8[Title] OR CD8[Description]) \
+# NOT (knockout[All Fields] OR KO[All Fields] OR deficient[All Fields] OR null[All Fields] OR "-/-"[All Fields] OR deleted[All Fields])'
+series_query <- sprintf("(%s) AND gse[Filter]", geo_query)
+```
+
+20250925
+```{r}
+dest_dir = "20250925"
+ensure_directory(dest_dir)
+gse_ids = c(
+  "GSE122675","GSE122712","GSE182275","GSE182509","GSE131535","GSE222454",
+  "GSE221488","GSE195820","GSE253394","GSE146626",
+  "GSE248440","GSE196338","GSE234317","GSE141895","GSE152786","GSE130184",
+  "GSE161495","GSE189483","GSE189485","GSE189484","GSE160053","GSE288901",
+  "GSE186164","GSE164978","GSE131935","GSE188320","GSE188321","GSE261624",
+  "GSE243727","GSE254051","GSE131847","GSE262740","GSE199357"
+)
+
+```
+
+
+Search
+```{r}
+message("Searching GEO DataSets (Series only)…")
+first <- entrez_search(db = "gds", term = series_query, retmax = 0)
+message("Total GDS matches (Series): ", first$count)
+
+fetch_ids_paginated <- function(db, term, batch = 500) {
+  if (first$count == 0) return(character())
+  ids <- character()
+  for (retstart in seq(0, first$count - 1, by = batch)) {
+    Sys.sleep(RATE_DELAY)
+    s <- entrez_search(db = db, term = term, retstart = retstart, retmax = batch)
+    ids <- c(ids, s$ids)
+  }
+  unique(ids)
+}
+
+gds_ids <- fetch_ids_paginated("gds", series_query, batch = 500)
+stopifnot(length(gds_ids) > 0)
+
+```
+
+2. GSE table with accession, title, contributors, supplementary files
+```{r}
+extract_from_esummary <- function(esum_list, field) {
+  # returns a character vector aligned to list order
+  map_chr(esum_list, ~{
+    val <- tryCatch(.x[[field]], error = function(e) NULL)
+    if (is.null(val)) NA_character_ else as.character(val)
+  })
+}
+
+# parse_pmids_from_extrelations <- function(x) {
+#     # Return a semicolon-joined string of PubMed IDs, or NA_character_
+#     if (is.null(x)) return(NA_character_)
+#     
+#     # If it's a data.frame (common case)
+#     if (is.data.frame(x)) {
+#         df <- x
+#         df[] <- lapply(df, as.character)
+#         # mark rows that mention PubMed in ANY column
+#         is_pubmed_row <- apply(df, 1, function(r) any(grepl("pubmed", tolower(r), fixed = TRUE)))
+#         if (any(is_pubmed_row)) {
+#             ids_df <- df[is_pubmed_row, , drop = FALSE]
+#             # look for an id-like column
+#             id_col <- which(tolower(names(ids_df)) %in% c("id","uid","pmid","targetid"))
+#             if (length(id_col) > 0) {
+#                 vals <- unique(na.omit(ids_df[[id_col[1]]]))
+#                 vals <- vals[grepl("^\\d{5,9}$", vals)]
+#                 if (length(vals)) return(paste(vals, collapse = ";"))
+#                 end
+#                 # fallback: pull any 5–9 digit number from the pubmed rows
+#                 blob <- apply(ids_df, 1, paste, collapse = " ")
+#                 nums <- stringr::str_extract_all(paste(blob, collapse = " "), "\\b\\d{5,9}\\b")[[1]]
+#                 nums <- unique(nums)
+#                 if (length(nums)) return(paste(nums, collapse = ";"))
+#             }
+#             return(NA_character_)
+#         }
+#         
+#         # If it's a list: flatten and try to extract "...pubmed...<digits>"
+#         if (is.list(x)) {
+#             flat <- toString(x)
+#             m1 <- stringr::str_match_all(flat, "(?i)pubmed.*?(\\d{5,9})")[[1]]
+#             if (!is.null(m1) && nrow(m1) > 0) return(paste(unique(m1[,2]), collapse = ";"))
+#             # fallback: any 5–9 digit numbers
+#             m2 <- stringr::str_extract_all(flat, "\\b\\d{5,9}\\b")[[1]]
+#             m2 <- unique(m2)
+#             if (length(m2)) return(paste(m2, collapse = ";"))
+#             return(NA_character_)
+#         }
+#         
+#         # If it's a character or something else coercible
+#         ch <- as.character(x)
+#         m <- stringr::str_match_all(ch, "(?i)pubmed.*?(\\d{5,9})")[[1]]
+#         if (!is.null(m) && nrow(m) > 0) return(paste(unique(m[,2]), collapse = ";"))
+#         m2 <- stringr::str_extract_all(ch, "\\b\\d{5,9}\\b")[[1]]
+#         m2 <- unique(m2)
+#         if (length(m2)) return(paste(m2, collapse = ";"))
+#         NA_character_
+#     }
+# }
+
+# summarize_gse <- function(ids, batch = 200) {
+#   chunks <- split(ids, ceiling(seq_along(ids) / batch))
+#   bind_rows(lapply(chunks, function(ch) {
+#     Sys.sleep(RATE_DELAY)
+#     esums <- entrez_summary(db = "gds", id = ch)
+#     tibble(
+#       id          = ch,
+#       accession   = extract_from_esummary(esums, "accession"),
+#       gds_type    = extract_from_esummary(esums, "gdstype"),
+#       title       = extract_from_esummary(esums, "title"),
+#       contributors_raw = extract_from_esummary(esums, "contributor"),
+#       extrelations     = map(esums, ~ tryCatch(.x[["extrelations"]], error = function(e) NULL))
+#     )
+#   })) %>%
+#     filter(str_detect(accession, regex("^GSE", ignore_case = TRUE)) | toupper(gds_type) == "GSE") %>%
+#     mutate(pubmed_ids = map_chr(extrelations, parse_pmids_from_extrelations)) %>%
+#     select(accession, title, contributors_raw, pubmed_ids) %>%
+#     distinct()
+# }
+
+summarize_gse <- function(ids, batch = 200) {
+  chunks <- split(ids, ceiling(seq_along(ids) / batch))
+  dplyr::bind_rows(lapply(chunks, function(ch) {
+    Sys.sleep(RATE_DELAY)
+    esums <- rentrez::entrez_summary(db = "gds", id = ch)
+    tibble::tibble(
+      id               = ch,
+      accession        = extract_from_esummary(esums, "accession"),
+      gds_type         = extract_from_esummary(esums, "gdstype"),
+      title            = extract_from_esummary(esums, "title"),
+      contributors_raw = extract_from_esummary(esums, "contributor")
+    )
+  })) %>%
+    dplyr::filter(grepl("^GSE", accession, ignore.case = TRUE) | toupper(gds_type) == "GSE") %>%
+      mutate()
+    dplyr::select(accession, title, contributors_raw) %>%
+    dplyr::distinct()
+}
+
+# supp_links_for_gse <- function(gse_id) {
+#   Sys.sleep(RATE_DELAY)  # be nice to NCBI if looping many
+#   df <- tryCatch(
+#     GEOquery::getGEOSuppFiles(gse_id, makeDirectory = FALSE, fetch_files = FALSE),
+#     error = function(e) NULL
+#   )
+#   if (is.null(df) || !nrow(df)) return(NA_character_)
+#   paste(df$URL, collapse = "; ")
+# }
+
+summarize_gse <- function(ids, batch = 200) {
+  chunks <- split(ids, ceiling(seq_along(ids) / batch))
+  dplyr::bind_rows(lapply(chunks, function(ch) {
+    Sys.sleep(RATE_DELAY)
+    esums <- rentrez::entrez_summary(db = "gds", id = ch)
+    tibble::tibble(
+      id               = ch,
+      accession        = extract_from_esummary(esums, "accession"),
+      gds_type         = extract_from_esummary(esums, "gdstype"),
+      title            = extract_from_esummary(esums, "title"),
+      contributors_raw = extract_from_esummary(esums, "contributor")
+    )
+  })) %>%
+    dplyr::filter(grepl("^GSE", accession, ignore.case = TRUE) | toupper(gds_type) == "GSE") %>%
+      dplyr::mutate(
+      weblink     = paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", accession)
+      # supp_files  = purrr::map_chr(accession, supp_links_for_gse)
+    ) %>%
+    dplyr::select(accession, title, contributors_raw, weblink) %>%
+    dplyr::distinct()
+}
+
+esums <- rentrez::entrez_summary(db = "gds", id = gds_ids[1:10])
+gse_tbl <- summarize_gse(gds_ids[1:10]) %>% arrange(accession)
+
+# GEOquery::getGEOSuppFiles("GSE123067", makeDirectory = FALSE, fetch_files = FALSE)
+
+# gse <- getGEO("GSE116390", GSEMatrix = FALSE)
+# Meta(gse)$pubmed_id
+
+message("Found GSE Series: ", nrow(gse_tbl))
+
+```
+
+```{r}
+# Null-coalescing
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
+entrez_summary_chunks <- function(db, ids, chunk = 200L, delay = 0.34) {
+    # usage
+    # esums_list <- entrez_summary_chunks("gds", gds_ids, chunk = 200)
+    chunks <- split(ids, ceiling(seq_along(ids) / chunk))
+    map(chunks, function(ch) {
+        Sys.sleep(delay)
+        entrez_summary(db = db, id = ch)
+    })
+}
+
+extract_from_esummary <- function(esum_list, field) {
+  # returns a character vector aligned to list order
+  map_chr(esum_list, ~{
+    val <- tryCatch(.x[[field]], error = function(e) NULL)
+    if (is.null(val)) NA_character_ else as.character(val)
+  })
+}
+
+# ---- single GSE -> one tibble row
+get_gse_series_meta <- function(gse_id) {
+  gse <- tryCatch(getGEO(gse_id, GSEMatrix = FALSE), error = function(e) NULL)
+  if (is.null(gse)) {
+    return(tibble(
+      accession = gse_id,
+      title = NA_character_,
+      contributors = NA_character_,
+      summary = NA_character_,
+      supp_files = NA_character_,
+      weblink = paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", gse_id)
+    ))
+  }
+
+  M <- Meta(gse)
+
+  # helpers to coerce/clean
+  to_chr_collapse <- function(x) {
+    if (is.null(x)) return(NA_character_)
+    x <- unlist(x, use.names = FALSE)
+    x <- as.character(x)
+    x <- x[nzchar(x)]
+    if (!length(x)) return(NA_character_)
+    paste(unique(x), collapse = "; ")
+  }
+
+  accession   <- (M$geo_accession %||% M$series_id %||% gse_id) |> as.character()
+  title       <- (M$title %||% NA_character_) |> as.character()
+  # combine common contributor-like fields
+  contributors <- to_chr_collapse(c(M$contributor, M$contact_name, M$lab, M$project))
+  summary_txt <- (M$summary %||% NA_character_) |> as.character()
+  supp_files  <- to_chr_collapse(M$supplementary_file)
+  weblink     <- paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", accession)
+
+  tibble(
+    accession = accession,
+    title = title,
+    contributors = contributors,
+    summary = summary_txt,
+    supp_files = supp_files,
+    weblink = weblink
+  )
+}
+
+# ---- vectorized wrapper
+get_gse_series_meta_many <- function(gse_ids, delay = 0) {
+  map_dfr(gse_ids, function(id) {
+    if (delay > 0) Sys.sleep(delay)
+    get_gse_series_meta(id)
+  })
+}
+
+# extract fields from each chunk then combine
+extract_from_esummary <- function(esum_list, field) {
+  map_chr(esum_list, ~{
+    val <- tryCatch(.x[[field]], error = function(e) NULL)
+    if (is.null(val)) NA_character_ else as.character(val)
+  })
+}
+
+esums_list <- entrez_summary_chunks("gds", gds_ids, chunk = 200)
+gse_ids <- unlist(map(esums_list, extract_from_esummary, "accession"), use.names = FALSE)
+
+
+gse_tbl <- get_gse_series_meta_many(gse_ids) %>% arrange(accession)
+
+write.csv(gse_tbl, sprintf("%s/geo_mouse_10x_Tcells_gse_table.csv", dest_dir), row.names = FALSE)
+saveRDS(gse_tbl, file =  sprintf("%s/geo_mouse_10x_Tcells_gse_table.Rds", dest_dir))
+```
+
+Add classifier of T cells in a column
+```{r}
+# install.packages(c("dplyr","stringr","readr"))
+library(dplyr)
+library(stringr)
+library(readr)
+
+# 1) Load your table (change the path if needed)
+df = gse_tbl
+# df = read_csv("geo_mouse_10x_Tcells_gsm_table_20250924.csv")
+
+# 2) Utility: coalesce text fields you want to scan
+#    If you have a GSM-level table, include `Cells Profiled` / `Sample Name` too.
+text_blob <- function(row) {
+  fields <- c(
+    row[["Study Title"]], row[["title"]], row[["summary"]],
+    row[["Cells Profiled"]], row[["Sample Name"]]
+  )
+  txt <- paste(na.omit(as.character(fields)), collapse = " ; ")
+  # normalize a bit
+  txt <- str_to_lower(txt)
+  # common unicode: replace greek gamma/delta with ascii words for matching
+  txt <- str_replace_all(txt, "γ", "gamma")
+  txt <- str_replace_all(txt, "δ", "delta")
+  txt
+}
+
+# 3) Classifier with explicit priority
+classify_subset <- function(txt) {
+  if (is.na(txt) || !nzchar(txt)) return(NA_character_)
+  # ----- gamma delta T cells -----
+  if (str_detect(txt, "(gamma\\s*delta|gd\\s*t|trd[vcd]|tcrd|tcr\\s*δ|tcr\\s*delta)")) {
+    return("gamma delta T cells")
+  }
+  # ----- Treg -----
+  if (str_detect(txt, "\\btreg\\b|foxp3\\+?|\\bfoxp3\\b|regulatory\\s+t\\s*cells?")) {
+    return("Treg")
+  }
+  # ----- CD4 -----
+  if (str_detect(txt, "\\bcd4\\+?\\b|\\bcd4\\b|helper\\s+t\\s*cells?|t\\s*fh|follicular\\s*helper")) {
+    return("CD4")
+  }
+  # ----- CD8 -----
+  if (str_detect(txt, "\\bcd8\\+?\\b|\\bcd8\\b|cytotoxic\\s+t\\s*cells?|ctl\\b|tc1\\b|tcx\\b")) {
+    return("CD8")
+  }
+  # ----- all T cells (pan/total/CD3/αβ/TCRβ, but not CD4/CD8/Treg/γδ) -----
+  if (
+    str_detect(txt, "\\bpan[- ]?t\\b|total\\s+t\\s*cells?|\\bcd3\\+?\\b|\\btcrb\\b|tcr\\s*β|tcr\\s*beta|alpha[- ]?beta|αβ\\s*t") ||
+    (str_detect(txt, "\\bt\\s*cells?\\b|\\bt\\b") && !str_detect(txt, "b\\s*cells?"))  # generic "t cells"
+  ) {
+    return("all T cells")
+  }
+  # ----- T cells other than CD4/CD8/Treg -----
+  if (str_detect(txt, "\\bmait\\b|\\bnkt\\b|\\binkt\\b|mucosal[- ]?associated|invariant\\s*nk\\s*t|t\\s*rm\\b|resident\\s*memory\\s*t|iel\\b|intraepithelial\\s*lymphocyte|tfh\\b|tfr\\b|th\\d\\b")) {
+    return("T cells other than CD4/CD8/Treg")
+  }
+  NA_character_
+}
+
+# 4) Apply to your data frame
+df2 <- df %>%
+  rowwise() %>%
+  mutate(
+    .text_for_class = text_blob(cur_data()),
+    Tcell_subset_category = classify_subset(.text_for_class)
+  ) %>%
+  ungroup() %>%
+  select(-.text_for_class)
+
+
+# 5) Save (optional)
+gse_tbl = df2
+write.csv(gse_tbl, sprintf("%s/geo_mouse_10x_Tcells_gse_table.csv", dest_dir), row.names = FALSE)
+saveRDS(gse_tbl, file =  sprintf("%s/geo_mouse_10x_Tcells_gse_table.Rds", dest_dir))
+
+# Peek
+df2 %>% count(Tcell_subset_category, sort = TRUE)
+
+df2 %>% filter(is.na(Tcell_subset_category))
+
+df2 %>% filter(Tcell_subset_category == "CD8") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "Treg") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "CD4") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "gamma delta T cells") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "T cells other than CD4/CD8/Treg")
+```
+
+
+3. pubmed table
+```{r}
+.format_authors <- function(rec_authors) {
+  if (is.null(rec_authors)) return(NA_character_)
+
+  # Case A: data.frame (common from entrez_summary)
+  if (is.data.frame(rec_authors)) {
+    if ("name" %in% names(rec_authors)) {
+      vals <- rec_authors$name
+    } else {
+      # fallback if PubMed returns lastname/initials columns
+      last <- rec_authors$lastname %||% NA_character_
+      ini  <- rec_authors$initials %||% ""
+      vals <- if (!all(is.na(last))) paste0(last, ifelse(nzchar(ini), paste0(" ", ini), "")) else
+              unlist(rec_authors, use.names = FALSE)
+    }
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    return(if (length(vals)) paste(unique(vals), collapse = ", ") else NA_character_)
+  }
+
+  # Case B: already a character vector
+  if (is.character(rec_authors)) {
+    vals <- rec_authors[nzchar(rec_authors)]
+    return(if (length(vals)) paste(unique(vals), collapse = ", ") else NA_character_)
+  }
+
+  # Case C: list-of-rows (rare)
+  if (is.list(rec_authors)) {
+    vals <- vapply(rec_authors, function(a) {
+      if (is.list(a)) {
+        if (!is.null(a$name)) {
+          as.character(a$name)
+        } else if (!is.null(a$lastname)) {
+          paste0(as.character(a$lastname),
+                 if (!is.null(a$initials) && nzchar(a$initials)) paste0(" ", as.character(a$initials)) else "")
+        } else {
+          as.character(toString(a))
+        }
+      } else {
+        as.character(a)
+      }
+    }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+    vals <- vals[nzchar(vals)]
+    return(if (length(vals)) paste(unique(vals), collapse = ", ") else NA_character_)
+  }
+
+  # Fallback: coerce to character
+  ch <- as.character(rec_authors)
+  if (length(ch)) paste(unique(ch[nzchar(ch)]), collapse = ", ") else NA_character_
+}
+
+# PubMed fetch for one PMID
+get_pubmed_info <- function(pmid) {
+  if (is.na(pmid) || !nzchar(pmid)) {
+    return(tibble(pubmed_id = pmid,
+                  paper_title = NA_character_,
+                  journal = NA_character_,
+                  year = NA_character_,
+                  authors = NA_character_))
+  }
+  rec <- tryCatch(entrez_summary(db = "pubmed", id = pmid), error = function(e) NULL)
+  if (is.null(rec)) {
+    return(tibble(pubmed_id = pmid,
+                  paper_title = NA_character_,
+                  journal = NA_character_,
+                  year = NA_character_,
+                  authors = NA_character_))
+  }
+  tibble(
+    pubmed_id   = as.character(pmid),
+    paper_title = rec$title %||% NA_character_,
+    journal     = rec$fulljournalname %||% NA_character_,
+    year        = rec$pubdate %||% NA_character_,
+    authors     = .format_authors(rec$authors)
+  )
+}
+
+# Main: vector of GSEs -> rows of (GSE, PMID, Title, Journal, Year, Authors)
+get_gse_pubmed_info <- function(gse_ids, delay = RATE_DELAY) {
+  map_dfr(gse_ids, function(gse_id) {
+    message("Processing ", gse_id, " …")
+    Sys.sleep(delay)
+
+    gse <- tryCatch(GEOquery::getGEO(gse_id, GSEMatrix = FALSE), error = function(e) NULL)
+    if (is.null(gse)) {
+      return(tibble::tibble(GSE = gse_id, pubmed_id = NA, paper_title = NA,
+                            journal = NA, year = NA, authors = NA))
+    }
+
+    # ---- Robust PMID extraction (handles length>1, mixed separators) ----
+    pmid_raw <- GEOquery::Meta(gse)$pubmed_id
+    # coerce to character vector safely
+    pmid_vec <- unique(as.character(unlist(pmid_raw)))
+    # collapse then re-split on commas/semicolons/whitespace in case some elements contain lists
+    pmids <- stringr::str_split(paste(pmid_vec, collapse = ";"),
+                                pattern = "[,;\\s]+", simplify = FALSE)[[1]]
+    pmids <- unique(pmids[nchar(pmids) > 0])
+
+    if (length(pmids) == 0) {
+      return(tibble::tibble(GSE = gse_id, pubmed_id = NA, paper_title = NA,
+                            journal = NA, year = NA, authors = NA))
+    }
+
+    # ---- Fetch each PMID's citation ----
+    dplyr::bind_rows(lapply(pmids, function(p) {
+      info <- get_pubmed_info(p)  # uses your robust version with .format_authors()
+      dplyr::mutate(info, GSE = gse_id, .before = 1)
+    }))
+  })
+}
+
+pmid_tbl = get_gse_pubmed_info(gse_tbl$accession)
+
+write.csv(pmid_tbl, sprintf("%s/geo_mouse_10x_Tcells_pmid_table.csv", dest_dir), row.names = FALSE)
+saveRDS(pmid_tbl, file = sprintf("%s/geo_mouse_10x_Tcells_pmid_table.Rds", dest_dir))
+
+
+# gse = getGEO("GSE120409", GSEMatrix = FALSE)
+# Meta(gse)$pubmed_id
+# 
+# rec = entrez_summary(db = "pubmed", id = Meta(gse)$pubmed_id[2])
+# rec$title
+# rec$fulljournalname
+# rec$pubdate
+# .format_authors(rec$authors)
+```
+
+
+4. GSM table 
+```{r}
+.collapse_chr <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  x <- unique(as.character(unlist(x)))
+  x <- x[nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  paste(x, collapse = "; ")
+}
+
+cells_profiled_from_gsm <- function(gsm_obj) {
+  mm <- Meta(gsm_obj)
+  fields <- c(
+    mm$source_name_ch1,
+    mm$characteristics_ch1,
+    mm$characteristics_ch1.1,
+    mm$characteristics_ch1.2,
+    mm$characteristics_ch1.3,
+    mm$description
+  )
+  fields <- fields[!vapply(fields, is.null, logical(1))]
+  txt <- fields %>% unlist(use.names = FALSE) %>% unique() %>% paste(collapse = "; ")
+  # mildly compress whitespace
+  txt <- str_squish(txt)
+  if (identical(txt, "")) NA_character_ else txt
+}
+
+# Helper: Contributors (prefer GSE Meta contributor/contact if present)
+contributors_from_gse <- function(gse_obj) {
+  meta <- Meta(gse_obj)
+  cand <- c(meta$contributor, meta$contact_name, meta$lab, meta$project)
+  cand <- cand[!vapply(cand, is.null, logical(1))]
+  if (!length(cand)) return(NA_character_)
+  cand %>% unlist(use.names = FALSE) %>% unique() %>% paste(collapse = "; ")
+}
+
+# # Helper: Supplementary links (no download)
+# supp_links_for_gse <- function(gse_id) {
+#     gse <- tryCatch(GEOquery::getGEO(gse_id, GSEMatrix = FALSE), error = function(e) NULL)
+#     df <- tryCatch(
+#         URL = paste(Meta(gse)$supplementary_file, collapse = "; "),#GEOquery::getGEOSuppFiles(gse_id, makeDirectory = FALSE, fetch_files = FALSE),
+#         error = function(e) NULL
+#     )
+#     if (is.null(df) || !nrow(df)) return(NA_character_)
+#     # paste(df$URL, collapse = "; ")
+# }
+
+gsm_supp_links <- function(gsm_acc, delay = 0) {
+  if (delay > 0) Sys.sleep(delay)
+  # 1) from GSM meta
+  gsm <- tryCatch(GEOquery::getGEO(gsm_acc, GSEMatrix = FALSE), error = function(e) NULL)
+  if (!is.null(gsm)) {
+    supp <- tryCatch(GEOquery::Meta(gsm)$supplementary_file, error = function(e) NULL)
+    link <- .collapse_chr(supp)
+    if (!is.na(link)) return(link)
+  }
+  # 2) fallback: list files via getGEOSuppFiles(GSM)
+  df <- tryCatch(GEOquery::getGEOSuppFiles(gsm_acc, makeDirectory = FALSE, fetch_files = FALSE),
+                 error = function(e) NULL)
+  if (!is.null(df) && nrow(df) > 0) {
+    url_col <- names(df)[tolower(names(df)) == "url"]
+    if (length(url_col) == 1) return(.collapse_chr(df[[url_col]]))
+  }
+  NA_character_
+}
+
+# Expand all GSEs
+expand_gse_to_gsm <- function(gse_id) {
+  message("Processing ", gse_id, " …")
+  Sys.sleep(RATE_DELAY)
+
+  gse <- tryCatch(GEOquery::getGEO(gse_id, GSEMatrix = FALSE), error = function(e) NULL)
+  if (is.null(gse)) return(NULL)
+
+  gsm_list <- tryCatch(GSMList(gse), error = function(e) NULL)
+  if (is.null(gsm_list) || !length(gsm_list)) return(NULL)
+
+  contrib <- contributors_from_gse(gse)
+  title   <- Meta(gse)$title %||% NA_character_
+
+  rows <- purrr::imap_dfr(gsm_list, function(gsm_obj, gsm_name) {
+    gsm_meta <- Meta(gsm_obj)
+    tibble::tibble(
+      # Weblink  = paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", gse_id),
+      GSE      = gse_id,
+      `Study Title` = title,
+      GSM      = gsm_name,
+      `Sample Name`   = gsm_meta$title %||% gsm_name,
+      `Cells Profiled`= cells_profiled_from_gsm(gsm_obj),
+      Contributors    = contrib
+      # `Link to Supplementary Files` = gsm_supp_links(gsm_name, delay = RATE_DELAY)
+    )
+  })
+
+  rows
+}
+
+# Safely map over many GSEs
+gsm_tbl = map_dfr(gse_tbl$accession, ~ tryCatch(expand_gse_to_gsm(.x), error = function(e) NULL))
+
+write.csv(gsm_tbl, sprintf("%s/geo_mouse_10x_Tcells_gsm_table.csv", dest_dir), row.names = FALSE)
+saveRDS(gsm_tbl, file = sprintf("%s/geo_mouse_10x_Tcells_gsm_table.Rds", dest_dir))
+
+
+```
+
+Add classifier of T cells in a column
+```{r}
+
+df = gsm_tbl
+
+df2 <- df %>%
+  rowwise() %>%
+  mutate(
+    .text_for_class = text_blob(cur_data()),
+    Tcell_subset_category = classify_subset(.text_for_class)
+  ) %>%
+  ungroup() %>%
+  select(-.text_for_class)
+
+gsm_tbl = df2
+write.csv(gsm_tbl, sprintf("%s/geo_mouse_10x_Tcells_gsm_table.csv", dest_dir), row.names = FALSE)
+saveRDS(gsm_tbl, file = sprintf("%s/geo_mouse_10x_Tcells_gsm_table.Rds", dest_dir))
+
+
+# Peek
+df2 %>% count(Tcell_subset_category, sort = TRUE)
+
+df2 %>% filter(is.na(Tcell_subset_category))
+
+df2 %>% filter(Tcell_subset_category == "CD8") %>% pull(`Cells Profiled`)
+df2 %>% filter(Tcell_subset_category == "Treg") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "CD4") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "gamma delta T cells") %>% pull(title)
+df2 %>% filter(Tcell_subset_category == "T cells other than CD4/CD8/Treg")
+```
+
+
+Merge gse_tbl, gse_pmid_tbl, gse_gsm_tbl and save
+
+```{r}
+gse_pmid_tbl = merge(x = gse_tbl, y = pmid_tbl, by.x = "accession", by.y = "GSE")
+write.csv(gse_pmid_tbl, sprintf("%s/geo_mouse_10x_Tcells_gse_pmid_table.csv", dest_dir), row.names = FALSE)
+saveRDS(gse_pmid_tbl, file = sprintf("%s/geo_mouse_10x_Tcells_gse_pmid_table.Rds", dest_dir))
+
+tmp2 = merge(x = gse_pmid_tbl, y = gsm_tbl, by.x = "accession", by.y = "GSE")
+tmp2$`Study Title` = NULL
+tmp2$Contributors = NULL
+tmp2$'Tcell_subset_category.x' = NULL
+tmp2$Tcell_subset_category = tmp2$Tcell_subset_category.y
+tmp2$Tcell_subset_category.y = NULL
+write.csv(tmp2, sprintf("%s/geo_mouse_10x_Tcells_gse_gsm_pmid_table.csv", dest_dir), row.names = FALSE)
+saveRDS(tmp2, file = sprintf("%s/geo_mouse_10x_Tcells_gse_gsm_pmid_table.Rds", dest_dir))
+
+
+```
+
+Filter database to share
+```{r}
+
+gse_pmid_tbl = readRDS(sprintf("%s/geo_mouse_10x_Tcells_gse_pmid_table.Rds", dest_dir))
+
+gse_pmid_tbl %>% filter(Tcell_subset_category == "CD8" & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/CD8_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% filter(Tcell_subset_category == "CD4" & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/CD4_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% filter(Tcell_subset_category == "Treg" & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/Treg_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% filter(Tcell_subset_category %in%  c("gamma delta T cells", "T cells other than CD4/CD8/Treg")  & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/OtherT_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% filter(Tcell_subset_category %in%  c("all T cells")  & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/AnyT_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% filter(!is.na(Tcell_subset_category)  & !is.na(pubmed_id)) %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(Tcell_subset_category,desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/All_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+gse_pmid_tbl %>% mutate(date = year, year = str_extract(year, "\\d{4}") |> as.integer()) %>% arrange(Tcell_subset_category,desc(year)) %>% select(Tcell_subset_category, accession, title, pubmed_id,paper_title, authors, journal, year, weblink) %>% write.table(sprintf("%s/All_geo_mouse_10x_gse_pmid_table.txt", dest_dir), sep = "\t", quote = F, row.names = F)
+
+
+```
+
+
+

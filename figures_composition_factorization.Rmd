@@ -27,6 +27,11 @@ R
 ```
 
 ```{r}
+output_fig_dir = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/paper_cosmology/figures/bits'
+```
+
+
+```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
 libs = c("stringr","ZemmourLib", "fastTopics", "flashier", "Seurat", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
@@ -254,9 +259,83 @@ dev.off()
 
 ```
 
-**Show Single Sample**
+**Power law / long tails of sample distribution**
+```{r}
+mdata = mdata_s
+
+df = mdata %>% select(IGTHT, ends_with("prop"))
+df_long = df %>%  pivot_longer(
+    cols      = ends_with("prop"),
+    names_to  = "population",
+    values_to = "prop"
+  ) 
+
+df_long$population = gsub("\\.prop","", df_long$population )
+df_long$level1 = sub("\\_.*","", df_long$population )
+
+library(ggridges)
+
+ggplot(
+  df_long %>% filter(prop > 0),        # get rid of exact zeros so log‐scale doesn’t explode
+  aes(x = prop, y = population, fill = population)
+) +
+  geom_density_ridges(alpha = 0.6, scale = 1.2, rel_min_height = 0.01) +
+  facet_wrap(~ level1, scales = "free_y") +
+  scale_fill_manual(values = mypal_level2) +
+  scale_x_log10(
+    labels = scales::trans_format("log10", scales::math_format(10^.x)),
+    breaks = scales::trans_breaks("log10", function(x) 10^x)
+  ) +
+  annotation_logticks(sides = "b") +
+  theme_ridges(center_axis_labels = TRUE) +
+  theme(
+    strip.text       = element_text(face = "bold"),
+    axis.text.x      = element_text(angle = 45, hjust = 1),
+    legend.position  = "none"
+  ) +
+  labs(
+    x     = "Proportions",
+    y     = NULL,
+    title = "Ridgeline Density of Proportions by Level1"
+  )
+
+
+
+ggplot(df_long, aes(x = prop, color = population)) +
+    geom_density(size = 1) +
+    facet_wrap(~ level1, scales = "free") +
+    scale_color_manual(values = mypal_level2)+
+    # scale_x_log10(
+    #     labels = scales::trans_format("log10", scales::math_format(10^.x)),
+    #     breaks = scales::trans_breaks("log10", function(x) 10^x)
+    # ) +
+    # scale_y_log10(
+    #     labels = scales::trans_format("log10", scales::math_format(10^.x)),
+    #     breaks = scales::trans_breaks("log10", function(x) 10^x)
+    # )
+    annotation_logticks(sides = "b") +
+    theme_minimal() +
+    labs(
+        x     = "Proportion",
+        y     = "Density",
+        color = "Population",
+        title = "Density of Proportions by Level 1"
+    ) +
+    theme(
+        strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+
+```
+
+
+**Show single samples**
 
 CD8 in I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142 to show Trm at memory timepoint
+
+CD8 in I32H7_colonLP_CD45p_mouse0103
+
+I21H8_smallintestineLP_allT_mouse0035
 
 (I20H7_colonLP_allT_mouse0035 to show rare Trm at baseline
 I9H10_smallintestineLP_allT_mouse0018 to show rare Trm at baseline (no CITEseq))
@@ -307,7 +386,7 @@ df_long$variable = factor(df_long$variable, levels = levels(so_orig$annotation_l
 #   )
 # p1 + NoLegend()
 
-pdf("paper_cosmology/figures/bits/barplot_example_sample_sl1.pdf", width = 15, 5,useDingbats = F)
+pdf(sprintf("%s/barplot_example_sample_sl1.pdf",output_fig_dir), width = 15, 5,useDingbats = F)
 # pdf("paper_cosmology/figures/bits/barplot_example_sample_s.pdf", width = 15, 5,useDingbats = F)
 p1 = ggplot(df_long, aes(x = variable, y = value, alpha = 0.5), fill = "grey") +
   geom_boxplot(outlier.shape = NA) 
@@ -332,6 +411,30 @@ p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples la
     fill  = "Population"
   ) + 
     ggtitle("I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142")
+
+print(p + NoLegend() + NoGrid())
+
+
+example = df_long %>% filter(IGTHT == "I21H9")
+# p2 = geom_bar(data = example, mapping = aes(variable, value, fill =variable ), stat = "identity")
+p2 = geom_point(data = example, mapping = aes(variable, value, color =variable, size = 1, alpha = 1))
+p = p1+p2 + facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  # scale_fill_manual(values = mypal_level2) +
+    scale_color_manual(values = mypal_level2) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + 
+    ggtitle("I21H9_smallintestineLP_allT_mouse0036")
 
 print(p + NoLegend() + NoGrid())
 
@@ -423,7 +526,7 @@ igt40 = igt40[,!is.na(igt40$annotation_level2)]
 s = "I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142"
 cl = "CD8_cl10"
 
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_IGTUMAP.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt40_2 = igt40[,igt40$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
 cells_to_highlight = igt40_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
 p = MyDimPlotHighlight(seurat_object = igt40_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT40 CD8 cells, %s %s highlighted", s, cl))
@@ -443,6 +546,37 @@ p$plot2
 p$plot3
 dev.off()
 
+#IGT21
+igt21 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220812_exp_id_13_ColonSI/IGT21/dataset_clean.Rds')
+
+igt21$annotation_level2 = so_orig@meta.data[colnames(igt21),"annotation_level2"]
+igt21$annotation_level1 = so_orig@meta.data[colnames(igt21),"annotation_level1"]
+igt21$cellID = so_orig@meta.data[colnames(igt21),"cellID"]
+igt21$sample_code = so_orig@meta.data[colnames(igt21),"sample_code"]
+igt21 = igt21[,!is.na(igt21$annotation_level2)]
+s = "I21H9_smallintestineLP_allT_mouse0036"
+cl = "CD8_cl10"
+
+pdf(sprintf("%s/%s_CD8cl10_IGTUMAP.pdf",output_fig_dir,s), 5,5, useDingbats = F)
+igt21_2 = igt21[,igt21$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt21_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt21_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT21 CD8 cells, %s %s highlighted", s, cl))
+# p$plot1
+p$plot2
+p$plot3
+
+igt21_2 = igt21[,igt21$sample_code == s] %>% NormalizeData() %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
+cells_to_highlight = igt21_2@meta.data %>% filter(annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt21_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in %s cells, %s highlighted", s, cl))
+p$plot2
+p$plot3
+
+cells_to_highlight = igt21@meta.data %>% filter(sample_code == s & annotation_level2 == "CD8_cl10") %>% pull(cellID)
+p = MyDimPlotHighlight(seurat_object = igt21 , umap_to_plot = "umap_rna", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(512,512), highlight_size = 2, title = sprintf("UMAP in all IGT21 cells, %s %s highlighted", s, cl))
+p$plot2
+p$plot3
+dev.off()
+
 #IGT32
 igt32 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221115_exp_id_24_DSS_Kaede/IGT32/dataset_clean.Rds')
 
@@ -454,7 +588,7 @@ igt32 = igt32[,!is.na(igt32$annotation_level2)]
 s = "I32H7_colonLP_CD45p_mouse0103"
 cl = "CD8_cl10"
 
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_IGTUMAP.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt32_2 = igt32[,igt32$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
 cells_to_highlight = igt32_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
 p = MyDimPlotHighlight(seurat_object = igt32_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT32 CD8 cells, %s %s highlighted", s, cl))
@@ -486,7 +620,7 @@ igt20 = igt20[,!is.na(igt20$annotation_level2)]
 s = "I20H7_colonLP_allT_mouse0035"
 cl = "CD8_cl10"
 
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_IGTUMAP.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt20_2 = igt20[,igt20$annotation_level1 == "CD8"] %>% NormalizeData() %>% ScaleData() %>% RunPCA(npcs = 20) %>% FindNeighbors(reduction = "pca",dims = 1:20) %>% RunUMAP(reduction = "pca", dims = 1:20)
 cells_to_highlight = igt20_2@meta.data %>% filter(sample_code == s & annotation_level2 == cl) %>% pull(cellID)
 p = MyDimPlotHighlight(seurat_object = igt20_2, umap_to_plot = "umap", cells_to_highlight = cells_to_highlight, highlight_column_name = "annotation_level2", mycols = ZemmourLib::immgent_colors$level2, labelclusters = T, pixels = c(256,256), highlight_size = 2, title = sprintf("UMAP in all IGT40 CD8 cells, %s %s highlighted", s, cl))
@@ -508,7 +642,7 @@ p$plot3
 dev.off()
 
 #IGT9
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_IGTUMAP.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_IGTUMAP.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt9 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220526_exp_id_07_OneMouse/IGT9/dataset_clean.Rds')
 igt9$annotation_level2 = so_orig@meta.data[colnames(igt9),"annotation_level2"]
 igt9$annotation_level1 = so_orig@meta.data[colnames(igt9),"annotation_level1"]
@@ -546,15 +680,23 @@ CITEseq plot CD103 ITB7
 ```{r}
 # igt40 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221216_exp_id_27_28_32_33_Goldrath/IGT40/dataset_clean.Rds')
 s = "I40H8_smallintestineLP_LCMVarm_D60_allT_P14_SMARTA_mouse0142"
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_CD103_ITB7.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt40 = so_orig[,so_orig$IGT == "IGT40"]
 igt40 = NormalizeData(igt40, assay = "ADT", normalization.method = "LogNormalize")
 igt40$is_cl10 = igt40$annotation_level2 == "CD8_cl10" & igt40$sample_code == s 
 MyFeatureScatter(igt40, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10", highlight_size = 2, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) + ggtitle(s)
 dev.off()
 
+s = "I21H9_smallintestineLP_allT_mouse0036"
+pdf(sprintf("%s/%s_CD8cl10_CD103_ITB7.pdf",output_fig_dir,s), 5,5, useDingbats = F)
+igt21 = so_orig[,so_orig$IGT == "IGT21"]
+igt21 = NormalizeData(igt21, assay = "ADT", normalization.method = "LogNormalize")
+igt21$is_cl10 = igt21$annotation_level2 == "CD8_cl10" & igt21$sample_code == s 
+MyFeatureScatter(igt21, assay = "ADT", slot = "data", feature1 = "ITB7", feature2 = "CD103", group.by = "is_cl10",highlight_size = 5, highlight_alpha = 1, raster = F, cols = immgent_colors$level2["CD8_cl10"]) + ggtitle(s)
+dev.off()
+
 s = "I32H7_colonLP_CD45p_mouse0103"
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_CD103_ITB7.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt32 = so_orig[,so_orig$IGT == "IGT32"]
 igt32 = NormalizeData(igt32, assay = "ADT", normalization.method = "LogNormalize")
 igt32$is_cl10 = igt32$annotation_level2 == "CD8_cl10" & igt32$sample_code == s 
@@ -563,7 +705,7 @@ dev.off()
 
 
 s = "I20H7_colonLP_allT_mouse0035"
-pdf(sprintf("paper_cosmology/figures/bits/%s_CD8cl10_CD103_ITB7.pdf", s), 5,5, useDingbats = F)
+pdf(sprintf("%s/%s_CD8cl10_CD103_ITB7.pdf",output_fig_dir,s), 5,5, useDingbats = F)
 igt20 = so_orig[,so_orig$IGT == "IGT20"]
 igt20 = NormalizeData(igt20, assay = "ADT", normalization.method = "LogNormalize")
 igt20$is_cl10 = igt20$annotation_level2 == "CD8_cl10" & igt20$sample_code == s 
@@ -608,8 +750,7 @@ iel = c("CD8_cl26", "CD4_cl28", "gdt_cl42", "gdT_cl2", "gdT_cl12", "gdT_cl35", "
 
 # so_orig@meta.data %>% filter(annotation_level1 %in% "gdT" & !(annotation_level2 %in% c("gdT_prolif", "gdT_miniverse")) & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% summarize(count = n(), .groups = "drop") 
 
-
-pdf("paper_cosmology/figures/bits/AlluvialPlot_IEL_tissue.pdf", 25, 8, useDingbats = F) #all cells
+pdf(sprintf("%s/AlluvialPlot_IEL_tissue.pdf",output_fig_dir), 25, 8, useDingbats = F) #all cells
 df = so_orig@meta.data %>% filter(annotation_level2 %in% iel & condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()
 #& condition_broad == "healthy"
 
@@ -721,7 +862,7 @@ lab_vec = label_map$condition_detailed_organ
 names(lab_vec) = label_map$sample_code
 
 
-pdf("paper_cosmology/figures/bits/Rorc_clusters_in_topsamples.pdf", 10, 8, useDingbats = F) #all cells
+pdf(sprintf("%s/Rorc_clusters_in_topsamples.pdf",output_fig_dir), 10, 8, useDingbats = F) #all cells
 p = ggplot(tmp_long, aes(x = sample_code, y = prop, fill = population)) +
     geom_bar(stat = "identity") +
     scale_fill_manual(values = immgent_colors$level2_option2) +
@@ -755,7 +896,7 @@ dev.off()
 pseudobulk = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K_seurat.Rds')
 
 gs = c("Rorc", "Ahrr")
-pdf("paper_cosmology/figures/bits/Barplot_Rorc_Ahr.pdf", 12, 7, useDingbats = F)
+pdf(sprintf("%s/Barplot_Rorc_Ahr.pdf",output_fig_dir), 12, 7, useDingbats = F)
 for (g in gs) {
     print(g)
     gene_to_plot = g
@@ -822,8 +963,7 @@ plot_data$Cluster = gsub(pattern = "\\.prop", replacement = "", plot_data$Cluste
 plot_data$Cluster = factor(plot_data$Cluster , levels = unique(plot_data$Cluster))
 
 # Create the dot plot
-
-pdf("paper_cosmology/figures/bits/cluster_factor_geom_tile.pdf", 5, 8, useDingbats = F)
+pdf(sprintf("%s/cluster_factor_geom_tile.pdf",output_fig_dir), 5, 8, useDingbats = F)
 p = ggplot(plot_data, aes(x = Factor, y = Cluster, fill = Expression, alpha = Expression)) +
   geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
     scale_fill_gradientn(
@@ -861,8 +1001,7 @@ dev.off()
 alternate viz heatmaps
 ```{r}
 
-
-pdf("paper_cosmology/figures/bits/cluster_factor_heatmap_viz1.pdf", 10,20, useDingbats = F)
+pdf(sprintf("%s/cluster_factor_heatmap_viz1.pdf",output_fig_dir), 10,20, useDingbats = F)
 tmp3 = F1
 # ColorRamp = colorRampPalette(c('white','red'))(20)
 ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(100))
@@ -870,7 +1009,7 @@ pheatmap(mat = tmp3, cluster_rows = F, cluster_cols = F, color = c("white",brewe
 pheatmap(mat = tmp3, cluster_rows = T, cluster_cols = T, col = ColorRamp, breaks = seq(-max(abs(tmp3)),max(abs(tmp3)),length.out = length(ColorRamp)+1), fontsize_row = 10, fontsize_col = 10,  main = "Factors")
 dev.off()
 
-pdf("paper_cosmology/figures/bits/cluster_factor_heatmap_viz2_to match sample heatmap.pdf", 15,4, useDingbats = F)
+pdf(sprintf("%s/cluster_factor_heatmap_viz2_to match sample heatmap.pdf",output_fig_dir), 15,4, useDingbats = F)
 df_long = melt(F1)
 colnames(df_long) = c("Cluster", "Factor", "Value")
 df_long$Cluster = gsub(pattern = "\\.prop", replacement = "", df_long$Cluster)
@@ -926,7 +1065,7 @@ heatmap_plot + NoLegend()
 dev.off()
 
 gs = c("F2", "F16")
-pdf("paper_cosmology/figures/bits/Barplot_F2_F16.pdf", 12, 7, useDingbats = F)
+pdf(sprintf("%s/Barplot_F2_F16.pdf",output_fig_dir), 12, 7, useDingbats = F)
 for (g in gs) {
     print(g)
     gene_to_plot = g
@@ -984,7 +1123,7 @@ tmp_long2 = merge(tmp_long, m, by = "IGTHT", all.x = T, all.y = F, suffixes = c(
 tmp_long2$is_healthy = tmp_long2$condition_broad == "healthy"
 tmp_long2$is_SLO = tmp_long2$organ_simplified %in% c("spleen", "LN", "blood", "SLO", "thymus")
 
-pdf("paper_cosmology/figures/bits/sample_factor_distrib.pdf", 5,5, useDingbats = F)
+pdf(sprintf("%s/sample_factor_distrib.pdf",output_fig_dir), 5,5, useDingbats = F)
 ggplot(tmp_long2, aes(x = value)) +
   geom_histogram(
     binwidth   = 1,           # adjust to taste
@@ -1088,7 +1227,7 @@ label_map = plot_data %>%
 lab_vec = label_map$condition_detailed_organ
 names(lab_vec) = label_map$sample_code
 
-pdf("paper_cosmology/figures/bits/Sample_factor_geom_tile.pdf", 10, 10, useDingbats = F)
+pdf(sprintf("%s/Sample_factor_geom_tile.pdf",output_fig_dir), 10, 10, useDingbats = F)
 p = ggplot(plot_data, aes(x = Factor, y = sample_code, fill = Expression, alpha = Expression)) +
     geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
     scale_fill_gradientn(

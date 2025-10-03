@@ -6,7 +6,7 @@ conda remove --prefix /project/zemmour/david/envs/scarches_20240424 --all
 conda remove --prefix /project/zemmour/david/envs/scarches --all
 conda remove --prefix /project/zemmour/david/envs/scarches_test --all
 conda remove --prefix /project/zemmour/david/envs/scarches_test2 --all
-conda remove --prefix /project/zemmour/david/envs/scarches_test3 --all
+<!-- conda remove --prefix /project/zemmour/david/envs/scarches_test3 --all -->
 conda remove --prefix /project/zemmour/david/envs/scarches_test4 --all
 conda remove --prefix /project/zemmour/david/envs/scarches_test8 --all
 conda remove --prefix /project/zemmour/david/envs/scarches --all
@@ -39,7 +39,6 @@ module load python/anaconda-2022.05
 
 source activate mamba-env  
 mamba create -p /project/zemmour/david/envs/r443 python=3.10
-conda install r-base=4.4.3
 
 module load python/anaconda-2022.05
 source activate /project/zemmour/david/envs/r443
@@ -57,8 +56,6 @@ BiocManager::install(version = "3.20")
 
 libs = c( "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma") 
 BiocManager::install(libs)
-
-
 
 ```
 

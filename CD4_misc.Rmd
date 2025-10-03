@@ -183,6 +183,16 @@ FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Rorc",
 FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tox2", order = T, raster = T, raster.dpi = c(1024,1024))
 ```
 
+**Downsample seurat object**
+```{r}
+sample_cells = so@meta.data %>%
+  group_by(!!sym("IGTHT")) %>%
+  sample_n(size = min(500, n()), replace = FALSE) %>% 
+    pull(IGT_cellID)
+
+so = so[,sample_cells]
+saveRDS(so, "/Users/david/Desktop/Treg_App/igt1_96_CD4_20250212_downsampled.Rds")
+```
 
 
 
