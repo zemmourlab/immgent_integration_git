@@ -34,7 +34,7 @@ fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/CD8/paper_CD8/figures
 
 ```{r}
 # setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD8")
-libs = c("ZemmourLib","Seurat", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore",  "ggbeeswarm") 
+libs = c("ZemmourLib","Seurat", "patchwork", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore",  "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 # source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
@@ -860,6 +860,206 @@ p1 + p2
 
 ```
 
+GSE202543 CAR T
+```{r}
+query_dir = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE202543_Giovanni_CAR_T/Trial_Final/'
+so_query = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE202543_Giovanni_CAR_T/Trial_Final/Final_Seurat_object.Rds') 
+so_query_orig = so_query
+
+head(so_query@meta.data)
+table(so_query$level2_plot)
+
+so_query@meta.data %>% group_by(IGTHT) %>% count()
+so_query@meta.data %>% group_by(level2_final) %>% count() %>% as.data.frame()
+so_query@meta.data %>% group_by(annotation) %>% count() %>% as.data.frame()
+so_query@meta.data %>% filter(!is.na(annotation)) %>% group_by(level2_final) %>% count() %>% as.data.frame()
+
+so_query = so_query_orig[,so_query_orig@meta.data %>% filter(!is.na(annotation)) %>% row.names()]
+
+p1 = DimPlot(so_query, reduction = "mde_incremental_level2", group.by = "annotation", cols = mypal)
+p2 = DimPlot(so_query, reduction = "mde_incremental_level2", group.by = "level2_final", cols = mypal_level2)
+p1 + p2
+FeaturePlot(so_query, reduction = "mde_incremental_level2", features = "Pdcd1")
+
+so_query$annotation = paste("cl", so_query$annotation, sep = "_")
+so_query$sample = so_query$IGTHT
+
+# sub = so_query@meta.data %>% filter(level1_final == "CD8" & !(level2_plot %in% c("not classified"))) %>% row.names()
+# so2 = merge(so, so_query[,sub], merge.dr = T)
+
+so2 = merge(so, so_query, merge.dr = T)
+so2@meta.data %>% group_by(sample) %>% count()
+
+# mypal_annotation = setNames(c("#BFD3EA", "#689AC5", "#E59339", "#487EB5", "#6FA649", "#B9E185", "#B29A39", "#EFD374", "#649B9F", "#A9CBC2", "#D2635A", "#F3B0B0"), c("cl_0", "cl_1", "cl_2", "cl_3", "cl_4", "cl_5", "cl_6", "cl_7", "cl_8", "cl_9", "cl_10", "cl_11"))
+mypal_annotation = c(cl_0 = "#BFD3EA", 
+                     cl_1 = "#689AC5", 
+                     cl_2 = "#DE4D3B", 
+                     cl_3= "#487EB5",
+                     cl_4 ="#C15935",
+                     cl_5 = "#F1B873",
+                     cl_6 = "#66549E",
+                     cl_7 = "#5B1318",
+                     cl_8 = "#B2D5A7",
+                     cl_9 = "#9E99C7",
+                     cl_10 = "#DEEAD1")
+mypal_annotation = mypal
+mypal_sample = mypal
+
+sub = so2@meta.data %>% filter(sample != "immgent") %>% row.names()
+pdf(sprintf("%s/RBI.pdf",query_dir),10, 10, useDingbats = F)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "sample", mycols = mypal, print_plot1 = T, print_plot2 = T,labelclusters = F)
+# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
+for (s in unique(so_query$sample)) {
+    print(s)
+    tmp = so2[,so2$sample %in% c(s) | so2$sample %in% c("immgent")]
+    print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 1, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 1, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    # print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 1, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    # print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 1, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    # print(MyDimPlotHighlight(so2[,so2$sample %in% c("immgent", s)], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample: %s", s)))
+}
+
+# p1 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "annotation", cols = mypal_annotation)
+# p2 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "level2_plot", cols = mypal_level2)
+# p1 + p2
+dev.off() 
+
+# pdf(sprintf("%s/RBI_sidebyside.pdf",query_dir),50, 10, useDingbats = F)
+p1_author = list()
+p1_immgent = list()
+stacked_list = list()
+for (s in unique(so_query$sample)) {
+    print(s)
+    tmp = so2[,so2$sample %in% c(s) | so2$sample %in% c("immgent")]
+    p = MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 1, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s))
+    p1_immgent[[s]] = p$plot1
+    p = MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 1, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s))
+    p1_author[[s]] = p$plot1
+    # print(p1_author[[s]] + NoGrid() + p1_immgent[[s]] + theme_void() + NoLegend() + ggtitle(label = NULL) )
+    stacked_list[[s]] = wrap_plots(list(p1_author[[s]] + theme_void() + NoLegend(), 
+                              p1_immgent[[s]] + theme_void() + NoLegend() + ggtitle(label = NULL) ), ncol = 1) + plot_layout(axes = "collect_x", guides = "collect") 
+    # print(stacked_list[[s]])
+    # print(MyDimPlotHighlight(so2[,so2$sample %in% c("immgent", s)], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample: %s", s)))
+}
+pdf(sprintf("%s/RBI_sidebyside.pdf",query_dir),50, 10, useDingbats = F)
+print(wrap_plots(stacked_list, nrow = 1) + plot_layout(axes = "collect_y", guides = "collect"))
+dev.off()
+
+for (s in unique(so_query$sample)) {
+    p1_immgent[[s]] + p1_author[[s]]
+}
+
+
+
+sub = so_query@meta.data %>% filter(!(level2_plot %in% c("not classified"))) %>% row.names()
+so2 = merge(so_orig, so_query[,sub], merge.dr = T)
+head(so2@meta.data)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "level2_plot", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T)
+
+
+```
+
+
+Laurent_CD8_nonconv... dataset is the CD8 atlas..
+```{r}
+query_dir = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/Laurent_CD8_nonconv/Trial_Final'
+so_query = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/Laurent_CD8_nonconv/Trial_Final/Final_Seurat_object.Rds') 
+so_query_orig = so_query
+
+head(so_query@meta.data)
+table(so_query$level2_plot)
+
+so_query@meta.data %>% group_by(IGTHT) %>% count()
+so_query@meta.data %>% group_by(level2_final) %>% count() %>% as.data.frame()
+
+so_query = so_query_orig[,so_query_orig@meta.data %>% filter(!is.na(annotation)) %>% row.names()]
+
+# p1 = DimPlot(so_query, reduction = "mde_incremental_level2", group.by = "annotation", cols = mypal)
+# p2 = DimPlot(so_query, reduction = "mde_incremental_level2", group.by = "level2_final", cols = mypal_level2)
+# p1 + p2
+# FeaturePlot(so_query, reduction = "mde_incremental_level2", features = "Pdcd1")
+
+# so_query$annotation = paste("cl", so_query$annotation, sep = "_")
+so_query$sample = so_query$IGTHT
+
+# sub = so_query@meta.data %>% filter(level1_final == "CD8" & !(level2_plot %in% c("not classified"))) %>% row.names()
+# so2 = merge(so, so_query[,sub], merge.dr = T)
+
+so2 = merge(so, so_query, merge.dr = T)
+so2@meta.data %>% group_by(sample) %>% count()
+
+# mypal_annotation = setNames(c("#BFD3EA", "#689AC5", "#E59339", "#487EB5", "#6FA649", "#B9E185", "#B29A39", "#EFD374", "#649B9F", "#A9CBC2", "#D2635A", "#F3B0B0"), c("cl_0", "cl_1", "cl_2", "cl_3", "cl_4", "cl_5", "cl_6", "cl_7", "cl_8", "cl_9", "cl_10", "cl_11"))
+# mypal_annotation = c(cl_0 = "#BFD3EA",
+#                      cl_1 = "#689AC5",
+#                      cl_2 = "#DE4D3B",
+#                      cl_3= "#487EB5",
+#                      cl_4 ="#C15935",
+#                      cl_5 = "#F1B873",
+#                      cl_6 = "#66549E",
+#                      cl_7 = "#5B1318",
+#                      cl_8 = "#B2D5A7",
+#                      cl_9 = "#9E99C7",
+#                      cl_10 = "#DEEAD1")
+# mypal_annotation = mypal
+mypal_sample = mypal
+
+sub = so2@meta.data %>% filter(sample != "immgent") %>% row.names()
+pdf(sprintf("%s/RBI.pdf",query_dir),7, 7, useDingbats = F)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, xlim = c(-3,3), ylim = c(-3,3))
+# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
+MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "sample", mycols = mypal, print_plot1 = T, print_plot2 = T,labelclusters = F, xlim = c(-3,3), ylim = c(-3,3))
+# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
+for (s in unique(so_query$sample)) {
+    print(s)
+    tmp = so2[,so2$sample %in% c(s) | so2$sample %in% c("immgent")]
+    print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 3, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    # print(MyDimPlotHighlight(so2[,so2$sample %in% c(s) | so2$sample %in% c("immgent")], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", highlight_size = 3, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
+    # print(MyDimPlotHighlight(so2[,so2$sample %in% c("immgent", s)], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample: %s", s)))
+}
+
+# p1 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "annotation", cols = mypal_annotation)
+# p2 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "level2_plot", cols = mypal_level2)
+# p1 + p2
+dev.off()
+
+# sub = so_query@meta.data %>% filter(!(level2_plot %in% c("not classified"))) %>% row.names()
+# so2 = merge(so_orig, so_query[,sub], merge.dr = T)
+# head(so2@meta.data)
+# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "level2_plot", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T)
+
+
+###UMAP from the samples
+so_query <- so_query %>%
+  NormalizeData(normalization.method = "LogNormalize", scale.factor = 1e4, verbose = T) %>%
+  FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = T) %>%
+  ScaleData(features = VariableFeatures(.), verbose = T) %>%     # note the "."
+  RunPCA(features = VariableFeatures(.), npcs = 50, verbose = T) %>%
+  FindNeighbors(dims = 1:30, verbose = T) %>%
+  RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
+DimPlot(so_query, reduction = "umap", group.by = "level2_final", cols = immgent_colors$level2)
+DimPlot(so_query, reduction = "umap", group.by = "level1_final", cols = immgent_colors$level1)
+FeaturePlot(so_query, features = c("Cd4"))
+p1 = DimPlot(so_query[,so_query$level1_final == "CD4"], reduction = "umap", group.by = "level1_final", cols = immgent_colors$level1)
+p2 = FeaturePlot(so_query, features = c("Cd4"))
+p1+p2
+
+p1 = DimPlot(so_query[,so_query$level1_final == "Treg"], reduction = "umap", group.by = "level2_final", cols = immgent_colors$level2) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p2 = FeaturePlot(so_query, features = c("Foxp3")) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p1+p2
+
+p1 = DimPlot(so_query[,so_query$level1_final == "CD8"], reduction = "umap", group.by = "level2_plot", cols = immgent_colors$level2) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p2 = FeaturePlot(so_query, features = c("Cd8b1")) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p1+p2
+
+p1 = DimPlot(so_query[,so_query$level1_final != "not classified"], reduction = "umap", group.by = "level1_final", cols = immgent_colors$level1) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p2 = FeaturePlot(so_query[,so_query$level1_final != "not classified"], features = c("Foxp3")) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
+p1+p2
+
+
+
+```
 
 
 

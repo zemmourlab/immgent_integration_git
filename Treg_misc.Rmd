@@ -334,7 +334,10 @@ for (mycl in unique(so_orig$annotation_level2[so_orig$annotation_level1 == "Treg
 General MDE with Treg highlighted
 ```{r}
 
-DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(512, 512)) + scale_alpha_manual(c())
+pdf("../MDE_level1_20251907.pdf", 5, 5, useDingbats = F)
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024))
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024)) + ggtitle(label = NULL) + theme_void() + NoLegend()
+dev.off()
 
 dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 1]
 dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 2]

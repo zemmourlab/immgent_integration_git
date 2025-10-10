@@ -116,6 +116,7 @@ flashier20250215_alldata_backfit -- all cells data + backfit + K=200
 
 *Plots for flashier object*
 ```{r}
+so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 prefix = "topic"
 prefix2 = "flashier20250215_alldata_backfit"
 fit_flash = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))

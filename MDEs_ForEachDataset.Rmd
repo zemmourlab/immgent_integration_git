@@ -101,7 +101,6 @@ output_dir = "MDE_InEachSample_20250712"
 
 **Feature plots in each MDE**
 
-
 ```{r}
 library(gridExtra)
 
@@ -117,6 +116,15 @@ ImmgenTFeaturePlots(so_orig, so_list, gene = "Cd4", slot = "data")
 dev.off()
 
 ```
+
+**General MDE plots**
+```{r}
+pdf("../MDE_level1_20251907.pdf", 5, 5, useDingbats = F)
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024))
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024)) + ggtitle(label = NULL) + theme_void() + NoLegend()
+dev.off()
+```
+
 
 **MDE plots in each sample**
 Too long so better to run on Midway with:
