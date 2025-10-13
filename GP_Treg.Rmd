@@ -149,7 +149,6 @@ cl2: 27,6,35
 cl4: 25,80
 cl8: 6,152,25,27,72
 
-
 ```{r}
 
 # group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl1") & organ_simplified %in% c("lung") & condition_detailed %in% c("baseline")) %>% pull(cellID) #c("HDM", "HDM_primaryD5", "HDM_secondaryD3")
@@ -172,7 +171,161 @@ for (pop in pops) {
     # print(results[[pop]]$p2)  # Second plot (MA plot of genes)
 }
 dev.off()
+
 ```
+
+topics_to_plot = c("F12", "F35", "F27","F72","F25","F80","F6") # --> v3 pdf for final figure
+Dot plot and structure plots
+```{r}
+# topics_to_plot = c("F9", "F27","F6", "F25", "F12", "F174", "F25", "F80", "F152", "F72")
+topics_to_plot = c("F9","F12", "F27","F174", "F72",  "F35", "F6","F152", "F25", "F80")  # --> v2 pdf
+mypal_level2[grepl("Treg",names(mypal_level2))]
+mypal_topics = c(F9 = "darkolivegreen",#as.character(mypal_level2["Treg_cl3"]),
+                 F12 = as.character(mypal_level2["Treg_cl3"]),
+                 F27 = as.character(mypal_level2["Treg_cl2"]),
+                 F174 = as.character(mypal_level2["Treg_cl6"]),
+                 F72 = as.character(mypal_level2["Treg_cl8"]), #cl8
+                 F35 = "chartreuse", #as.character(mypal_level2["Treg_cl8"])
+                 F6 = "chartreuse3",#as.character(mypal_level2["Treg_cl8"]),
+                 F152 = "chartreuse4", #as.character(mypal_level2["Treg_cl8"]),
+                 F25 = as.character(mypal_level2["Treg_cl4"]),
+                 F80 = "darkorchid")#as.character(mypal_level2["Treg_cl4"]))
+
+topics_to_plot = c("F12", "F35", "F27","F72","F25","F80","F6") # --> v3 pdf for final figure
+mypal_topics = c(F12 = as.character(mypal_level2["Treg_cl3"]),
+                 F35 = "deepskyblue4", #as.character(mypal_level2["Treg_cl6"])
+                 F27 = as.character(mypal_level2["Treg_cl2"]),
+                 F72 = as.character(mypal_level2["Treg_cl8"]), #cl8
+                 # F152 = "chartreuse4", #cl8
+                 F25 = as.character(mypal_level2["Treg_cl4"]),
+                 F80 = "darkorchid4",
+                 F6 = "darkorange4")
+# mypal_topics = setNames(object = RColorBrewer::brewer.pal(10, name = "Set3"),topics_to_plot) #RColorBrewer::brewer.pal(8,name = "Accent") sample(gtex_colors)
+# mypal_topics = mypal_topics[!is.na(names(mypal_topics))]
+
+idx_mat <- apply(F1[,topics_to_plot], 2, function(col) head(order(col, decreasing = TRUE), 15))
+idx_vec <- as.vector(idx_mat)
+idx_vec <- unique(as.vector(idx_mat))
+top_genes <- rownames(F1)[idx_vec]
+
+diff_genes = lapply(results, function(x) { x[["diff_genes"]] %>% as.data.frame() %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)}) %>% unlist() %>% unique()
+diff_genes
+
+intersect(top_genes, diff_genes) %>% length()
+
+sub_cells = c(so@meta.data %>% filter(annotation_level1 == "Treg" & !(annotation_level2 %in% c("Treg_miniverse", "Treg_prolif"))) %>% group_by(annotation_level2) %>% slice_sample(n = 500, replace = FALSE) %>% ungroup() %>% pull(cellID))
+
+so2 = so[,sub_cells] %>% NormalizeData()
+
+# pdf(file = sprintf("%s/DotPlot_Tregclusters.pdf", out_dir), 20, 5, useDingbats = F)
+# DotPlot(object = so2, top_genes, assay = "RNA", group.by = "annotation_level2")  + scale_colour_gradientn(colours =  rev(magma(10))) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# DotPlot(object = so2, top_genes, assay = "RNA", group.by = "annotation_level2") + scale_colour_gradientn(colours =  colorRampPalette(c('white','red'))(20)) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# DotPlot(object = so2, top_genes, assay = "RNA", group.by = "annotation_level2") + scale_colour_gradientn(colours =  rev(colorRampPalette(brewer.pal(n = 7,name = "RdBu"))(20))) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# dev.off() 
+
+
+#MyDotPlot
+p = list()
+top_genes2 = results[["Treg_cl1"]]$diff_genes %>% arrange(desc(log2FC)) %>% head(10) %>% pull(SYMBOL) 
+p[["Treg_cl1"]] = MyDotPlot(object = so2, features = top_genes2, assay = "RNA", group.by = "annotation_level2", dot.scale = 6, scale = T, scale.by = "radius",point.shape = 21, alpha.range = c(0, 1), show.alpha.legend = F)  +
+    labs(subtitle = "resting", x = NULL) +
+    scale_fill_gradientn(colours =  colorRampPalette(c("grey",'white',"blue"))(10)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + coord_flip()
+
+idx_mat <- apply(F1[,topics_to_plot], 2, function(col) head(order(col, decreasing = TRUE), 15))
+
+
+for (topic in topics_to_plot) {
+    print(topic)
+    idx_vec <- as.vector(idx_mat[,topic])
+    top_genes = rownames(F1)[idx_vec] %>% intersect(diff_genes)
+    # p[[topic]] = DotPlot(object = so, top_genes, assay = "RNA", group.by = "annotation_level2", dot.scale = 6, scale = T, scale.by = "radius")  + 
+    #     labs(y = topic, x = NULL) +
+    #     scale_colour_gradientn(colours =  colorRampPalette(c('white',mypal_topics[topic]))(10)) + 
+    #     theme(axis.text.x = element_text(angle = 45, hjust = 1)) + coord_flip()
+    p[[topic]] = MyDotPlot(object = so2, top_genes, assay = "RNA", group.by = "annotation_level2", dot.scale = 6, scale = T, scale.by = "radius",point.shape = 21, alpha.range = c(0, 1), show.alpha.legend = F)  + 
+    labs(subtitle = topic, x = NULL) +
+    scale_fill_gradientn(colours =  colorRampPalette(c("grey",'white',mypal_topics[topic]))(10)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + coord_flip()
+
+}
+
+stacked = wrap_plots(p, ncol = 1) + plot_layout(axes = "collect_x", guides = "collect")  # collect x-axes & legends
+pdf(file = sprintf("%s/GeneTilePlot_Tregclusters_stacked_v3.pdf", out_dir), 5, 20, useDingbats = F)
+stacked
+dev.off()
+
+#Structure Plot
+# sub_cells = so@meta.data %>% filter(annotation_level1 == "Treg" & condition_broad == "healthy") %>% group_by(annotation_level2) %>% slice_sample(n = 100, replace = FALSE) %>% ungroup() %>% pull(cellID)
+
+# fastTopics::structure_plot(L1[sub_cells,topics_to_plot], topics = topics_to_plot, gap = 25, colors = mypal_topics,loadings_order = sub_cells,grouping = so_orig$annotation_level2[sub_cells]) + ylim(values = c(0,5))
+# fastTopics::structure_plot(L1[sub_cells,topics_to_plot], topics = topics_to_plot, loadings_order = "embed", colors = mypal_topics, gap = 25, grouping = factor(so_orig$annotation_level2[sub_cells], levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))) + ylim(values = c(0,5)) #gap = 25, grouping = factor(so_orig$annotation_level2[sub_cells])
+# fastTopics::structure_plot(L1[sub_cells,topics_to_plot], topics = topics_to_plot, loadings_order = "embed", colors = mypal_topics) + ylim(values = c(0,5)) #gap = 25, grouping = factor(so_orig$annotation_level2[sub_cells])
+
+library(Rtsne)
+tmp = L1[sub_cells,topics_to_plot]
+tsne_1d = Rtsne(
+    tmp,
+    dims = 1,
+    perplexity = 30,
+    theta = 0.5,
+    pca = FALSE,              # we already did PCA
+    check_duplicates = FALSE, # avoid error if rows are duplicated
+    verbose = TRUE
+  )
+ord_cells = order(tsne_1d$Y)
+p_struct = fastTopics::structure_plot(L1[sub_cells,topics_to_plot], topics = topics_to_plot, loadings_order = ord_cells, colors = mypal_topics) + ylim(values = c(0,5)) #gap = 25, grouping = factor(so_orig$annotation_level2[sub_cells])
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)   # to stack with your main plot
+tmp = data.frame(annotatation_level2 = so@meta.data[sub_cells,"annotation_level2"], order = order(tsne_1d$Y))
+# ggplot2(tmp) + geom_bar(aes(order, fill = annotation_level2))
+# ensure rows are in the right left→right order
+ann_df <- tmp %>% arrange(order) %>%
+  mutate(x = order, y = 1)   # constant height row
+p_bar <- ggplot(ann_df, aes(x = x, y = y, fill = annotatation_level2)) +
+    geom_tile(height = 1, width = 1) +  # outline = fill
+    scale_fill_manual(values = mypal_level2) +
+    # facet_wrap(~ annotatation_level2, scales = "free_y") +
+    theme_void() +
+    theme(legend.position = "none",
+          plot.margin = margin(0, 5, 0, 5))
+
+p_bar_list = list()
+for (i in levels(so2$annotation_level2)[1:6]){
+    print(i)
+    p_bar_list[[i]] <- ggplot() +
+        geom_tile(data = ann_df %>% filter(annotatation_level2 == i), aes(x = x, y = y, fill = annotatation_level2), height = 1, width = 1) +
+        # Add more geom_tile() layers for other levels if necessary
+        scale_fill_manual(values = mypal_level2) +
+        theme_void() +
+        theme(legend.position = "none",
+              plot.margin = margin(0, 5, 0, 5))
+}
+
+stacked = wrap_plots(p_bar_list, ncol = 1) + plot_layout(axes = "collect_x", guides = "collect")  # collect x-axes & legends
+
+pdf(file = sprintf("%s/StructurePlot_Tregclusters_stacked_v3.pdf", out_dir), 20, 10, useDingbats = F)
+stacked2 <- p_struct / stacked + plot_layout(heights = c(10, 2.5), guides = "collect")
+stacked2
+dev.off()
+
+
+########
+
+# tmp = data.frame(level2 = so@meta.data[sub_cells,"annotation_level2"], order = order(tsne_1d$Y))
+# ggplot2(tmp) + geom_bar(aes(order, fill = annotation_level2))
+
+ZemmourLib::MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so$annotation_level2[sub_cells], topics = c("F9", "F27","F6", "F25", "F12", "F174", "F25", "F80", "F152", "F72"), colors = mypal_topics, y_limit = c(0, 4), bar_width = 1)
+ZemmourLib::MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F27"), colors = mypal_topics, y_limit = c(0, 4), bar_width = 4)
+
+sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% group_by(annotation_level2) %>% slice_sample(n = 500, replace = FALSE) %>% ungroup() %>% pull(cellID))
+fastTopics::structure_plot(L1[sub_cells,], topics = c(27,68), colors = mypal_topics, gap = 25, loadings_order = sub_cells,grouping = so_orig$annotation_level2[sub_cells]) + ylim(values = c(0,5))
+
+```
+
+**plots for exploration and testing for figure**
 
 Structure plot with 
 cl1: F9
@@ -256,7 +409,6 @@ dev.off()
 ```
 
 
-
 F27+F68
 ```{r}
 pdf(file = sprintf("%s/StructurePlot_F27F68.pdf", fig_dir), 10, 5, useDingbats = F)
@@ -270,145 +422,6 @@ sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% grou
 structure_plot(L1[sub_cells,], topics = c(27,68), colors = mypal_topics, gap = 25, loadings_order = sub_cells,grouping = so_orig$annotation_level2[sub_cells]) + ylim(values = c(0,5))
 dev.off()
 
-#############
-
-#' Creates a structured bar plot for topic expression across cell groups.
-#'
-#' @param loadings_matrix A matrix or data frame where rows are cells and columns are topics. Rownames must be cell IDs.
-#' @param grouping_vector A vector with group assignments for each cell, in the same order as the rows in loadings_matrix.
-#' @param topics A character vector of the topic column names to include in the plot.
-#' @param colors A named vector of colors for the topics.
-#' @param y_limit A numeric vector of length 2 for the y-axis limits, e.g., c(0, 4).
-#' @return A ggplot object.
-MyStructurePlot <- function(loadings_matrix, grouping, topics, colors = mypal_topics, y_limit = c(0, 4), bar_width = 1) {
-    
-    # --- 1. Combine inputs into a single data frame ---
-    plot_data <- as.data.frame(loadings_matrix) %>%
-        rownames_to_column(var = "cellID") %>%
-        mutate(grouping = grouping)
-    
-    # --- 2. Reshape and prepare data for plotting ---
-    # pivot_longer(
-    #   cols = -c(cellID, grouping),
-    #   names_to = "variable",
-    #   values_to = "value"
-    # ) %>%
-    # filter(variable %in% topics) %>%
-    # arrange(grouping, desc(value)) %>%
-    # mutate(cellID = factor(cellID, levels = unique(cellID)))
-    
-    plot_data = melt(plot_data)
-    plot_data = plot_data[plot_data$variable %in% topics,]
-    
-    # --- 3. Create the Plot ---
-    p <- ggplot(plot_data, aes(x = cellID, y = value, fill = variable)) +
-        geom_col(width = bar_width) +
-        facet_grid(. ~ grouping,
-                   scales = "free_x",
-                   space  = "free_x") +
-        scale_fill_manual(values = colors) +
-        coord_cartesian(ylim = y_limit) +
-        theme_minimal() +
-        theme(
-            axis.text.x = element_blank(),
-            axis.ticks.x = element_blank(),
-            strip.placement = "bottom", # This moves the facet labels to the bottom
-            strip.background = element_blank(),
-            strip.text.x = element_text(face = "bold", size = 10),
-            panel.spacing.x = unit(0.5, "cm"),
-            panel.grid.major.x = element_blank(),
-            panel.grid.minor.x = element_blank(),
-            panel.border = element_blank(),
-            plot.title = element_text(hjust = 0.5, face = "bold"),
-            axis.title.x = element_blank(),
-            axis.title.y = element_text(size = 10, face = "bold")
-        ) +
-        NoGrid() +
-        labs(
-            title = "",
-            y = "Topic Expression",
-            fill = "Topic"
-        )
-    
-    return(p)
-}
-
-# MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F68"), colors = mypal_topics, y_limit = c(0, 4))
-# MyStructurePlot(loadings_matrix = L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], topics = c("F27"), colors = mypal_topics, y_limit = c(0, 4))
-
-
-
-# topic_colors = mypal[1:ncol(fit$L_pm)]#c("skyblue","forestgreen","darkmagenta","dodgerblue","gold","darkorange")
-# topic_colors = rep(mypal, length.out = ncol(fit$L_pm))
-
-
-# Define your custom color palette (if desired)
-# custom_colors = c("F27" = "red", "F68" = "blue")
-
-pdf(file = sprintf("%s/StructurePlot_F68.pdf", fig_dir), 10, 5, useDingbats = F)
-sub_cells = c(so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% slice_sample(n = 1500, replace = FALSE) %>% pull(cellID),
-              so_orig@meta.data %>% filter(annotation_level1 != "Treg") %>% group_by(annotation_level1) %>% slice_sample(n = 100, replace = FALSE) %>% ungroup() %>% pull(cellID))
-
-df = data.frame(L1[sub_cells,], grouping = so_orig$annotation_level1[sub_cells], cellID = sub_cells)
-topics = c("F68")
-plot_data = melt(df)
-plot_data = plot_data[plot_data$variable %in% topics,]
-
-
-p = ggplot(plot_data, aes(x = cellID,y = value, fill = variable)) +
-  geom_col(width = 1) + # width = 1 ensures no internal gaps between bars within a group
-  
-  # Facet by cell_group, with free x-scales and space for gaps between groups
-  facet_grid(. ~ grouping,
-             scales = "free_x",
-             space = "free_x") +
-  
-  # Custom colors
-  scale_fill_manual(values = mypal_topics) +
-  
-  # Clean up the theme
-  theme_minimal() +
-    ylim(values = c(0,4))+
-  theme(
-    # Rotate x-axis labels to prevent overlap (if many subtypes)
-    axis.text.x =  element_blank(),
-    
-    # Remove extra space/ticks on the x-axis where facets meet
-    axis.ticks.x = element_blank(),
-    
-    # Remove the background of the facet strips
-    strip.background = element_blank(),
-    
-    # Make facet titles bold
-    strip.text.x = element_text(face = "bold", size = 10),
-    
-    # Control the spacing between facets (creating the visible gap)
-    panel.spacing.x = unit(0.5, "cm"), # Adjust this for desired gap size
-    
-    # Remove grid lines for a cleaner look if desired
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    # panel.grid.major.y = element_blank(),
-    # panel.grid.minor.y = element_blank(),
-    
-    # Optionally remove plot border
-    panel.border = element_blank(),
-    
-    # Adjust overall plot title/labels
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.title.x = element_blank(), # Remove x-axis title as facet labels are clear
-    axis.title.y = element_text(size = 10, face = "bold")
-  ) +
-    NoGrid() +
-  labs(
-    title = "",
-    y = "Topic Expression",
-    fill = "Topic" # Legend title
-  )
-p
-
-
-
 
 ```
 
@@ -421,133 +434,7 @@ ZemmourLib::MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F68"), n_genes_p
 ZemmourLib::MyGeneTilePlot(gene_factor_matrix = F1, topics = c("F68"), n_genes_per_topic = 15,alpha_range = c(0,1), title = "Genes in GP")
 dev.off()
 
-#############
-# Load necessary libraries
-library(tidyverse)
-library(reshape2) # For melt, though pivot_longer is used
 
-#' Create a tile plot of top gene expression for specified topics.
-#'
-#' @param gene_factor_matrix A matrix with genes as rows and topics as columns. Rownames must be gene names.
-#' @param topics A character vector of the topic column names to plot.
-#' @param n_genes_per_topic The number of top genes to select from each topic.
-#' @param title A character vector of the title of the plot
-#' @param alpha_range A numeric vector of the range of values of expression to apply alpha. Default NULL is determined automatically
-#' @return A ggplot object.
-MyGeneTilePlot <- function(gene_factor_matrix = F1,
-                           topics = c("F68", "F27"),
-                           n_genes_per_topic = 15,
-                           alpha_range = NULL,
-                           title = "Dot Plot (Squares) of Gene Expression") {
-    # Dependencies
-    if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Please install.packages('ggplot2')")
-    if (!requireNamespace("reshape2", quietly = TRUE)) stop("Please install.packages('reshape2')")
-    
-    F1 = gene_factor_matrix
-    # Safety checks
-    if (is.null(colnames(F1))) stop("F1 must have column names (topic names).")
-    if (is.null(rownames(F1))) stop("F1 must have rownames (gene names).")
-    missing_topics <- setdiff(topics, colnames(F1))
-    if (length(missing_topics)) stop(sprintf("These topics are not in F1: %s", paste(missing_topics, collapse = ", ")))
-    
-    # Get top genes per topic (indices), then unique gene names
-    idx_mat <- apply(F1[, topics, drop = FALSE], 2, function(col)
-        head(order(col, decreasing = TRUE), n_genes_per_topic)
-    )
-    # idx_mat can be vector if length(topics)==1
-    idx_vec <- unique(as.vector(idx_mat))
-    top_genes <- rownames(F1)[idx_vec]
-    
-    # Build plotting data
-    F_sub <- F1[top_genes, topics, drop = FALSE]
-    plot_data <- reshape2::melt(F_sub, varnames = c("Gene", "Factor"), value.name = "Expression")
-    plot_data$Factor <- factor(plot_data$Factor, levels = topics)
-    
-    # Ensure genes appear ordered by first topic (highest to lowest), like your original reverse scale
-    ordering_topic <- topics[1]
-    gene_order <- names(sort(F1[top_genes, ordering_topic], decreasing = TRUE))
-    plot_data$Gene <- factor(plot_data$Gene, levels = rev(gene_order))
-    
-    # Plot
-    # if (do_alpha) {
-    #     p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression, alpha = Expression))
-    # } else {
-    #     p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression))
-    # }
-    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Factor, y = Gene, fill = Expression, alpha = Expression)) +
-        ggplot2::geom_tile(width = 0.9, height = 0.9) +
-        ggplot2::scale_fill_gradient(low = "white", high = "brown", limits = c(0, NA), na.value = "white")
-    if (!is.null(alpha_range)) {
-        p = p + scale_alpha_continuous(limits = alpha_range)
-    }
-    
-    p = p + 
-        ggplot2::theme_minimal() +
-        ggplot2::theme(
-            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
-            panel.grid = ggplot2::element_blank(),
-            panel.border = ggplot2::element_blank()
-        ) +
-        ggplot2::coord_fixed(ratio = 1) +
-        NoGrid() +
-        ggplot2::labs(title = title, x = "", y = "", fill = "Expression (Color)", alpha = "Expression (alpha)")
-    
-    return(p)
-}
-
-
-top_genes = apply(F1, 2, order, decreasing = TRUE)[1:15, c("F68", "F27")]
-# top_genes = unique(c("Ifng",rownames(fit$F_pm)[top_genes]))
-top_genes
-
-plot_data = melt(F1[top_genes,c("F68","F27")], varnames = c("Gene", "Factor"), value.name = "Expression")
-plot_data$Factor = factor(plot_data$Factor, levels = c("F68","F27"))
-
-# Create the dot plot
-
-pdf(sprintf("%s/GeneTileF27F68.pdf", fig_dir), 3, 7, useDingbats = F)
-p = ggplot(plot_data, aes(x = Factor, y = Gene, fill = Expression, alpha = Expression)) +
-  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
-  scale_fill_gradient(low = "white", high = "brown",limits = c(0, NA), na.value = "white") +# Adjust color gradient
-    # scale_alpha(range = c(0, 1)) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
-    panel.grid = element_blank(),  # Remove gridlines
-    panel.border = element_blank()  # Optional: remove the border around the plot
-  ) +
-    scale_y_discrete(limits = rev(levels(plot_data$Gene))) + 
-  coord_fixed(ratio = 1) +  # Ensure tiles are square
-  labs(title = "Dot Plot (Squares) of Gene Expression", x = "Layer", y = "Gene",
-       fill = "Expression (Color)",
-       alpha = "Expression (alpha)",)
-print(p)
-# dev.off()
-
-
-####Just F68
-top_genes = apply(F1, 2, order, decreasing = TRUE)[1:15, c("F68")]
-top_genes
-
-plot_data = melt(F1[top_genes,c("F68")], varnames = c("Gene", "Factor"), value.name = "Expression")
-plot_data$Factor = "F68"#factor(plot_data$Factor, levels = c("F68"))
-plot_data$Gene = factor(rownames(plot_data), levels = rownames(plot_data))
-
-# pdf(sprintf("%s/GeneTileF27F68.pdf", fig_dir), 3, 7, useDingbats = F)
-p = ggplot(plot_data, aes(x = Factor, y = Gene, fill = Expression)) +
-  geom_tile(width = 0.9, height = 0.9) +  # Adjust the width and height for the gaps
-  scale_fill_gradient(low = "white", high = "brown",limits = c(0, NA), na.value = "white" ) +  # Adjust color gradient
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
-    panel.grid = element_blank(),  # Remove gridlines
-    panel.border = element_blank()  # Optional: remove the border around the plot
-  ) +
-    scale_y_discrete(limits = rev(levels(plot_data$Gene))) + 
-  coord_fixed(ratio = 1) +  # Ensure tiles are square
-  labs(title = "Dot Plot (Squares) of Gene Expression", x = "Layer", y = "Gene")
-print(p)
-dev.off()
 ```
 
 Activated Treg topics
