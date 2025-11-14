@@ -15,21 +15,21 @@ sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle
 sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
 sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
 
-module load python/anaconda-2022.05 
+module load python/anaconda-2022.05 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
-#source activate /project/zemmour/david/envs/scvi_20240315
-source activate /project/zemmour/david/envs/r443
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
 module load openblas/0.3.13
 
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
 R
 ```
 
 
 ```{r}
 # setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96")
-libs = c("Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
+libs = c("ZemmourLib","Seurat","lme4", "emmeans", "lmerTest", "tidyr", "ggplot2", "dplyr", "RColorBrewer", "pals", "scales", "reshape2", "pheatmap", "scattermore", "limma", "ggbeeswarm") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 

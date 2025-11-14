@@ -1,7 +1,7 @@
 ---
-title: "Treg_misc"
+title: "misc"
 output: html_document
-date: "2025-05-28"
+date: "2025-11-13"
 author: "David Zemmour"
 editor_options: 
   chunk_output_type: console
@@ -22,14 +22,14 @@ source activate /project/zemmour/david/envs/scvi_20240315
 #source activate /project/zemmour/david/envs/r443
 module load openblas/0.3.13
 
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
 R
 ```
 
 
 ```{r}
-# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/Treg")
-libs = c("ZemmourLib","gridExtra","stringr", "patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("ZemmourLib","gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 #source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
@@ -71,11 +71,11 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 ```
 
 ```{r}
-fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/Treg/paper_Treg/figures/bits_david"
-fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/paper_Treg/figures/bits_david"
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/Treg/paper_Treg/figures/bits_david"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/paper_Treg/figures/bits_david"
 
-out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/Treg/misc" 
-out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/misc"
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/misc_plots" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/misc_plots"
 
 ```
 
@@ -86,22 +86,18 @@ on Midway
 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
-so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 
-so =  so_orig[,so_orig$annotation_level1 == "Treg"]
-so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
 ```
 
 on Desktop
 ```{r}
-#source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R') -->
-# tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/Treg/DGE_limma/20250109/ttlist_OneVsAll.Rds')
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+so = so_orig
 
-so_orig = readRDS("../igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
-so = so_orig[,so_orig$annotation_level1 == "Treg"]
-so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
-so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster.dpi = c(2048, 2048))
 
+MyDimPlotHighlight(so, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation_level2", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, )
 ```
 
 
@@ -146,6 +142,45 @@ tot= so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% count(name = 
 so_orig@meta.data %>% filter(annotation_level1 == "Treg") %>% distinct(IGTHT) %>% nrow()
 ```
 
+**General MDE with Treg highlighted**
+General MDE with Treg highlighted
+```{r}
+
+pdf(sprintf("%s/MDE_level1_20251030.pdf", out_dir), 5, 5, useDingbats = F)
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024))
+DimPlot(object = so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", cols = mypal_level1, raster = T, raster.dpi = c(1024, 1024)) + ggtitle(label = NULL) + theme_void() + NoLegend()
+# dev.off()
+
+dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 1]
+dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 2]
+tmp = data.frame(so_orig@meta.data, dim1 = dim1, dim2 = dim2)
+
+# pdf(sprintf("%s/_20251907_level1highlighted.pdf", output_dir), width = 5,5,useDingbats = F)
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "Treg"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid()
+
+# ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "Treg"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.3)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "CD4"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.3)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "CD8"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "gdT"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "CD8aa"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "DN"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid() + NoLegend()
+
+ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2, color = annotation_level1, alpha = annotation_level1 == "DP"), pointsize = 1, pixels = c(512, 512)) + scale_color_manual(values = mypal_level1) + scale_alpha_manual(values = c(0.1,0.5)) + theme_minimal() + NoGrid() + NoLegend()
+
+dev.off()
+
+# MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "Treg")), labelclusters = F, highlight_column_name = "annotation_level1", background_color = F, print_plot1 = T, print_plot2 = F, mycols = mypal_level1, pixels = c(512, 512), background_alpha = 0.1)
+# 
+# MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "Treg")), highlight_size = 0.5, highlight_alpha = 0.5,labelclusters = F, highlight_column_name = "annotation_level1", background_color = T, print_plot1 = T, print_plot2 = F, mycols = mypal_level1, pixels = c(512, 512), background_alpha = 0.1)
+# 
+# MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "CD4")), highlight_size = 0.5, highlight_alpha = 0.5,labelclusters = F, highlight_column_name = "annotation_level1", background_color = T, print_plot1 = T, print_plot2 = F, mycols = mypal_level1, pixels = c(512, 512), background_alpha = 0.1)
+
+```
 
 **FCFC plots**
 ```{r}
@@ -203,6 +238,7 @@ for (o in unique(so$organ_simplified)) {
     p = MyDimPlotHighlight(seurat_object = so[,so$condition_broad == "healthy"], umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$organ_simplified %in% o)], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = o, highlight_size = 0.5, highlight_alpha = 0.5, print_plot1 = T, print_plot2 = T, labelclusters = T)
     print(p)
 }
+
 dev.off()
 
 
@@ -214,19 +250,6 @@ p + NoLegend()
 dev.off()
 
 ```
-
-
-```{r}
-
-pdf(sprintf("%s/MDE_Tregs.pdf",fig_dir), 5, 5, useDingbats = F)
-DimPlot(so, reduction = "mde_incremental_level2", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(512,512), pt.size = 1, alpha = 1)
-DimPlot(so, reduction = "mde_incremental_level2", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(512,512), pt.size = 1, alpha = 1) + NoLegend()
-dev.off()
-
-```
-
-
-
 
 **Feature plots**
 ```{r}
@@ -418,59 +441,6 @@ dev.off()
 # MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "Treg")), highlight_size = 0.5, highlight_alpha = 0.5,labelclusters = F, highlight_column_name = "annotation_level1", background_color = T, print_plot1 = T, print_plot2 = F, mycols = mypal_level1, pixels = c(512, 512), background_alpha = 0.1)
 # 
 # MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so_orig$annotation_level1 == "CD4")), highlight_size = 0.5, highlight_alpha = 0.5,labelclusters = F, highlight_column_name = "annotation_level1", background_color = T, print_plot1 = T, print_plot2 = F, mycols = mypal_level1, pixels = c(512, 512), background_alpha = 0.1)
-
-
-
-so = so_orig[,so_orig$annotation_level1 == "Treg" & so_orig$IGT == "IGT67"]
-saveRDS(so, "~/Desktop/IGT67_Treg.Rds")
-
-```
-
-**Figure 7 MHCII KO**
-
-```{r}
-so_orig@meta.data %>% count(IGT, exp_name) %>% as.data.frame() %>% View()
-so_orig = NormalizeData(so_orig)
-so = so_orig[,so_orig$IGT %in% c("IGT91", "IGT92")]
-so = NormalizeData(so)
-
-so@meta.data %>% count(sample_code, genetics, sample_type)
-
-
-pdf(sprintf("%s/MDE_IGT9192_MHC2KO_level1_20251030.pdf", out_dir), 5, 5, useDingbats = F)
-sub = so_orig@meta.data %>% filter(sample_type %in% "spleen_MHCIIKO_CD4p") %>% row.names()
-MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub, highlight_column_name = "annotation_level1", mycols = mypal_level1)
-sub = so_orig@meta.data %>% filter(sample_type %in% "spleen_MHCIIhet_CD4p") %>% row.names()
-MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub, highlight_column_name = "annotation_level1", mycols = mypal_level1)
-dev.off()
-
-MyDimPlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub, highlight_column_name = "annotation_level1", mycols = mypal_level1)
-sub = so_orig@meta.data %>% filter(sample_type %in% "spleen_MHCIIKO_CD4p") %>% row.names()
-
-pdf(sprintf("%s/MyFeaturePlot_IGT9192_MHC2KO.pdf", out_dir), 5, 5, useDingbats = F)
-sub = so_orig@meta.data %>% filter(sample_type %in% "spleen_MHCIIKO_CD4p") %>% row.names()
-MyFeaturePlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub,highlight_size = 1, feature = "Foxp3", title = "MHCIIKO")
-MyFeaturePlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub,highlight_size = 1, feature = "Zbtb16", title = "MHCIIKO")
-sub = so_orig@meta.data %>% filter(sample_type %in% "spleen_MHCIIhet_CD4p") %>% row.names()
-MyFeaturePlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub,highlight_size = 1, feature = "Foxp3", title = "MHCIIhet")
-MyFeaturePlotHighlight(seurat_object = so_orig, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = sub,highlight_size = 1, feature = "Zbtb16", title = "MHCIIhet")
-dev.off()
-
-# 
-# dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 1]
-# dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[, 2]
-# tmp = data.frame(so_orig@meta.data, dim1 = dim1, dim2 = dim2)
-# p1 = ggplot(tmp) + scattermore::geom_scattermore(aes(dim1, dim2),color = "grey", pointsize = 1, pixels = c(512, 512)) 
-# 
-# tmp2 = data.frame(tmp[sub,], feature = so[["RNA"]]$data["Foxp3",sub])
-# p1 + geom_point(data = tmp2, aes(dim1, dim2,color = feature)) + scale_color_gradientn(colours = viridis(10)) + theme_minimal() + NoGrid()
-# 
-# tmp2 = data.frame(tmp[sub,], feature = so[["RNA"]]$data["Zbtb16",sub])
-# p1 + geom_point(data = tmp2, aes(dim1, dim2,color = feature)) + scale_color_gradientn(colours = viridis(10)) + theme_void() + NoGrid()
-# p2 = FeaturePlot(so[,sub],reduction = "mde2_totalvi_20241006", features = c("Foxp3"), cols = viridis(10)) 
-
-
-
 
 ```
 
@@ -841,366 +811,6 @@ dev.off()
 
 ```
 
-**Figure 4: cl8 across tissues**
-Treg_cl8 vs all others clusters
-Treg_cl8 in each tissue vs Treg_cl1 in Spleen: works better to show that the Treg_cl2 signature is present across tissues
-
-```{r}
-mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & condition_detailed_simplified %in% c("baseline") & genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% count(organ_simplified)
-organs_selected = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & condition_detailed_simplified %in% c("baseline") & genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% count(organ_simplified) %>% filter(n > 20) %>% pull(organ_simplified) %>% as.character()
-
-mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% organs_selected) %>% count(organ_simplified)
-
-res_list = list()
-
-group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% organs_selected) %>% pull(cellID) 
-group2 = mdata_orig %>% filter(!annotation_level2 %in% c("Treg_cl8", "Treg_prolif", "Treg_miniverse")  & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% organs_selected) %>% pull(cellID) 
-length(group1)
-length(group2)
-res_list[["Treg_cl8_vs_all"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("%s vs other Tregs","Treg_cl8"))
-# res_list[["Treg_cl8_vs_all"]]$p2
-# res_list[["Treg_cl8_vs_all"]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-
-orgs = list(c("spleen", "LN"),
-            c("colon LP"),
-            c("small intestine LP"),
-            c("lung"),
-            c("bone marrow"),
-            c("skin")
-            )
-group2 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl1") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% c("spleen")) %>% pull(cellID) 
-
-for (i in orgs) {
-    print(sprintf("Treg_cl8 %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & 
-                                        condition_detailed_simplified %in% c("baseline") & 
-                                        genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                                        organ_simplified %in% i) %>% pull(cellID)  
-    res_list[[sprintf("Treg_cl8_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("Treg_cl8 %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    # res_list[[sprintf("Treg_cl8_%s_vs_ColonLP", paste(i, collapse = ""))]]$p2
-    # res_list[[sprintf("Treg_cl8_%s_vs_ColonLP", paste(i, collapse = ""))]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-    
-}
-
-pdf(sprintf("%s/Treg_cl8_Tissue_vsTregcl1Spleen_FlashierDGE.pdf",out_dir), 7, 7, useDingbats = F)
-for (i in 1:length(res_list)) {
-    print(i)
-    print(res_list[[i]]$p1 + NoGrid())
-    print(res_list[[i]]$p2 + NoGrid())
-}
-dev.off()
-
-saveRDS(res_list, sprintf("%s/Treg_cl8_Tissue_vsTregcl1Spleen_FlashierDGE.Rds",out_dir) )
-# for (i in 1:length(res_list)) {
-#     print(i)
-#     write.table(res_list[[i]]$diff_genes, file = sprintf("%s/Treg_cl8_Tissue_vsTregcl1Spleen_FlashierDGE_%s.txt",out_dir, names(res_list)[i]), row.names = F, sep = "\t")
-# }
-
-
-### Heatmap
-genes_to_plot = list()
-for (i in 1:length(res_list)) {
-    print(names(res_list)[i])
-    genes_to_plot[[names(res_list)[i]]] = res_list[[i]]$diff_genes %>% filter(log2FC > 1) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-}
-# res_list[[i]]$diff_genes %>% filter(log2FC > 0.5) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-
-res_merged_log2FC = data.frame(res_list[[1]]$diff_genes$log2FC)
-for (i in 2:length(res_list)) {
-    res_merged_log2FC = data.frame(res_merged_log2FC, res_list[[i]]$diff_genes$log2FC)
-}
-colnames(res_merged_log2FC) = names(res_list)
-rownames(res_merged_log2FC) = res_list[[1]]$diff_genes$SYMBOL
-
-library(pheatmap)
-ColorRamp = rev(colorRampPalette(c('red','white','blue'))(100))
-pdf(sprintf("%s/Treg_cl8_Tissue_vsTregcl1Spleen_FlashierDGE_Heatmap.pdf",out_dir), 10, 20, useDingbats = F)
-pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot[-1]) %>% unique(),-1], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# res_merged_log2FC2 = as.matrix(res_merged_log2FC)
-# res_merged_log2FC2[abs(res_merged_log2FC) < 0.5] = 0
-
-##If wanted to do a DotPlotHeatmap
-library(tidyverse)
-# mat <- as.matrix(res_merged_log2FC2)[unlist(genes_to_plot[-1]) %>% unique(),-1]
-mat <- as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),]
-df <- as.data.frame(mat) %>%
-  rownames_to_column("gene") %>%
-  pivot_longer(-gene, names_to = "contrast", values_to = "log2FC")
-
-# (optional) order rows/cols by hierarchical clustering like a heatmap
-row_ord <- rownames(mat)[hclust(dist(mat))$order]
-col_ord <- colnames(mat)[hclust(dist(t(mat)))$order]
-df <- df %>%
-  mutate(gene     = factor(gene,     levels = rev(row_ord)),   # rev to match heatmap top→bottom
-         contrast = factor(contrast, levels = col_ord))
-
-# color/size mapping (cap color limits if you like)
-lims <- c(-3, 3)  # change as needed
-df <- df %>% mutate(
-  log2FC_cap = pmax(pmin(log2FC, lims[2]), lims[1]),
-  mag        = abs(log2FC_cap)
-)
-
-ggplot(df, aes(x = contrast, y = gene)) +
-  geom_point(aes(colour = log2FC_cap, size = mag)) +
-  scale_colour_gradient2(low = "blue", mid = "white", high = "red",
-                         midpoint = 0, limits = lims, oob = scales::squish,
-                         name = "log2FC") +
-  scale_size_area(max_size = 6, name = "|log2FC|") +  # area ∝ magnitude
-  theme_minimal(base_size = 11) +
-  theme(
-    axis.title = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid = element_blank()
-  )
-dev.off()
-
-
-```
-
-Figure 5
-
-**Figure 5: cl8 in lung across conditions**
-
-```{r}
-mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & organ_simplified == "lung") %>% count(condition_detailed_simplified) %>% filter(n >= 15) %>% pull(condition_detailed_simplified) %>% as.character()
-cond_selected = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & organ_simplified == "lung") %>% count(condition_detailed_simplified) %>% filter(n >= 15) %>% pull(condition_detailed_simplified) %>% as.character()
-
-res_list = list()
-
-group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% pull(cellID) 
-group2 = mdata_orig %>% filter(!annotation_level2 %in% c("Treg_cl8", "Treg_prolif", "Treg_miniverse")  & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% pull(cellID) 
-length(group1)
-length(group2)
-res_list[["Treg_cl8_vs_all"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("%s vs other Tregs","Treg_cl8"))
-# res_list[["Treg_cl8_vs_all"]]$p2
-# res_list[["Treg_cl8_vs_all"]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-
-
-group2 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl1") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% c("spleen")) %>% pull(cellID) 
-
-for (i in cond_selected) {
-    print(sprintf("Treg_cl8 Lung %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl8") & 
-                                        organ_simplified == "lung" &
-                                        condition_detailed_simplified %in% i) %>% pull(cellID)  
-    res_list[[sprintf("Treg_cl8_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("Treg_cl8 Lung %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    # res_list[[sprintf("Treg_cl8_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]]$p2
-    # res_list[[sprintf("Treg_cl8_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-    
-}
-
-pdf(sprintf("%s/Treg_cl8_Lung_Conditions_vsTregcl1Spleen_FlashierDGE.pdf",out_dir), 7, 7, useDingbats = F)
-for (i in 1:length(res_list)) {
-    print(i)
-    print(res_list[[i]]$p1 + NoGrid())
-    print(res_list[[i]]$p2 + NoGrid())
-}
-dev.off()
-
-saveRDS(res_list, sprintf("%s/Treg_cl8_Lung_Conditions_vsTregcl1Spleen_FlashierDGE.Rds",out_dir) )
-# for (i in 1:length(res_list)) {
-#     print(i)
-#     write.table(res_list[[i]]$diff_genes, file = sprintf("%s/Treg_cl8_Lung_Conditions_vsTregcl1Spleen_FlashierDGE_%s.txt",out_dir, names(res_list)[i]), row.names = F, sep = "\t")
-# }
-
-
-### Heatmap
-genes_to_plot = list()
-for (i in 1:length(res_list)) {
-    print(names(res_list)[i])
-    genes_to_plot[[names(res_list)[i]]] = res_list[[i]]$diff_genes %>% filter(log2FC > 1) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-}
-# res_list[[i]]$diff_genes %>% filter(log2FC > 0.5) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-
-res_merged_log2FC = data.frame(res_list[[1]]$diff_genes$log2FC)
-for (i in 2:length(res_list)) {
-    res_merged_log2FC = data.frame(res_merged_log2FC, res_list[[i]]$diff_genes$log2FC)
-}
-colnames(res_merged_log2FC) = names(res_list)
-rownames(res_merged_log2FC) = res_list[[1]]$diff_genes$SYMBOL
-
-library(pheatmap)
-ColorRamp = rev(colorRampPalette(c('red','white','blue'))(100))
-pdf(sprintf("%s/Treg_cl8_Lung_Conditions_vsTregcl1Spleen_FlashierDGE_Heatmap.pdf",out_dir), 10, 20, useDingbats = F)
-pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot[-1]) %>% unique(),-1], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# res_merged_log2FC2 = as.matrix(res_merged_log2FC)
-# res_merged_log2FC2[abs(res_merged_log2FC) < 0.5] = 0
-
-##If wanted to do a DotPlotHeatmap
-library(tidyverse)
-# mat <- as.matrix(res_merged_log2FC2)[unlist(genes_to_plot[-1]) %>% unique(),-1]
-mat <- as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),]
-df <- as.data.frame(mat) %>%
-  rownames_to_column("gene") %>%
-  pivot_longer(-gene, names_to = "contrast", values_to = "log2FC")
-
-# (optional) order rows/cols by hierarchical clustering like a heatmap
-row_ord <- rownames(mat)[hclust(dist(mat))$order]
-col_ord <- colnames(mat)[hclust(dist(t(mat)))$order]
-df <- df %>%
-  mutate(gene     = factor(gene,     levels = rev(row_ord)),   # rev to match heatmap top→bottom
-         contrast = factor(contrast, levels = col_ord))
-
-# color/size mapping (cap color limits if you like)
-lims <- c(-3, 3)  # change as needed
-df <- df %>% mutate(
-  log2FC_cap = pmax(pmin(log2FC, lims[2]), lims[1]),
-  mag        = abs(log2FC_cap)
-)
-
-ggplot(df, aes(x = contrast, y = gene)) +
-  geom_point(aes(colour = log2FC_cap, size = mag)) +
-  scale_colour_gradient2(low = "blue", mid = "white", high = "red",
-                         midpoint = 0, limits = lims, oob = scales::squish,
-                         name = "log2FC") +
-  scale_size_area(max_size = 6, name = "|log2FC|") +  # area ∝ magnitude
-  theme_minimal(base_size = 11) +
-  theme(
-    axis.title = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid = element_blank()
-  )
-dev.off()
-
-
-```
-
-**Figure 5: cl2 in lung across conditions**
-
-```{r}
-mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & organ_simplified == "lung") %>% count(condition_detailed_simplified) %>% filter(n >= 15) %>% pull(condition_detailed_simplified) %>% as.character()
-
-cond_selected = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & organ_simplified == "lung") %>% count(condition_detailed_simplified) %>% filter(n >= 15) %>% pull(condition_detailed_simplified) %>% as.character()
-
-res_list = list()
-
-group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% pull(cellID) 
-group2 = mdata_orig %>% filter(!annotation_level2 %in% c("Treg_cl2", "Treg_prolif", "Treg_miniverse")  & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)")) %>% pull(cellID) 
-length(group1)
-length(group2)
-res_list[["Treg_cl2_vs_all"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("%s vs other Tregs","Treg_cl2"))
-# res_list[["Treg_cl2_vs_all"]]$p2
-# res_list[["Treg_cl2_vs_all"]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-
-
-group2 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl1") & 
-                           condition_detailed_simplified %in% c("baseline") & 
-                           genetics %in% c("wt", "B6-Foxp3-GFP (B6.Cg-Foxp3tm1Kuch/J)") & 
-                           organ_simplified %in% c("spleen")) %>% pull(cellID) 
-
-for (i in cond_selected) {
-    print(sprintf("Treg_cl2 Lung %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    group1 = mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & 
-                                        organ_simplified == "lung" &
-                                        condition_detailed_simplified %in% i) %>% pull(cellID)  
-    res_list[[sprintf("Treg_cl2_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("Treg_cl2 Lung %s vs Treg_cl1 spleen",paste(i, collapse = "")))
-    # res_list[[sprintf("Treg_cl2_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]]$p2
-    # res_list[[sprintf("Treg_cl2_lung_%s_vs_Tregcl1Spleen", paste(i, collapse = ""))]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(50) %>% pull(SYMBOL)
-    
-}
-
-pdf(sprintf("%s/Treg_cl2_Lung_Conditions_vsTregcl1Spleen_FlashierDGE.pdf",out_dir), 7, 7, useDingbats = F)
-for (i in 1:length(res_list)) {
-    print(i)
-    print(res_list[[i]]$p1 + NoGrid())
-    print(res_list[[i]]$p2 + NoGrid())
-}
-dev.off()
-
-saveRDS(res_list, sprintf("%s/Treg_cl2_Lung_Conditions_vsTregcl1Spleen_FlashierDGE.Rds",out_dir) )
-# for (i in 1:length(res_list)) {
-#     print(i)
-#     write.table(res_list[[i]]$diff_genes, file = sprintf("%s/Treg_cl2_Lung_Conditions_vsTregcl1Spleen_FlashierDGE_%s.txt",out_dir, names(res_list)[i]), row.names = F, sep = "\t")
-# }
-
-
-### Heatmap
-genes_to_plot = list()
-for (i in 1:length(res_list)) {
-    print(names(res_list)[i])
-    genes_to_plot[[names(res_list)[i]]] = res_list[[i]]$diff_genes %>% filter(log2FC > 1) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-}
-# res_list[[i]]$diff_genes %>% filter(log2FC > 0.5) %>% arrange(desc(abs(log2FC))) %>% pull(SYMBOL)
-
-res_merged_log2FC = data.frame(res_list[[1]]$diff_genes$log2FC)
-for (i in 2:length(res_list)) {
-    res_merged_log2FC = data.frame(res_merged_log2FC, res_list[[i]]$diff_genes$log2FC)
-}
-colnames(res_merged_log2FC) = names(res_list)
-rownames(res_merged_log2FC) = res_list[[1]]$diff_genes$SYMBOL
-
-library(pheatmap)
-ColorRamp = rev(colorRampPalette(c('red','white','blue'))(100))
-pdf(sprintf("%s/Treg_cl2_Lung_Conditions_vsTregcl1Spleen_FlashierDGE_Heatmap.pdf",out_dir), 10, 20, useDingbats = F)
-pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# pheatmap(mat = as.matrix(res_merged_log2FC)[unlist(genes_to_plot[-1]) %>% unique(),-1], breaks = seq(-5,5,length.out = length(ColorRamp)+1), col = ColorRamp)
-# res_merged_log2FC2 = as.matrix(res_merged_log2FC)
-# res_merged_log2FC2[abs(res_merged_log2FC) < 0.5] = 0
-
-##If wanted to do a DotPlotHeatmap
-library(tidyverse)
-# mat <- as.matrix(res_merged_log2FC2)[unlist(genes_to_plot[-1]) %>% unique(),-1]
-mat <- as.matrix(res_merged_log2FC)[unlist(genes_to_plot) %>% unique(),]
-df <- as.data.frame(mat) %>%
-  rownames_to_column("gene") %>%
-  pivot_longer(-gene, names_to = "contrast", values_to = "log2FC")
-
-# (optional) order rows/cols by hierarchical clustering like a heatmap
-row_ord <- rownames(mat)[hclust(dist(mat))$order]
-col_ord <- colnames(mat)[hclust(dist(t(mat)))$order]
-df <- df %>%
-  mutate(gene     = factor(gene,     levels = rev(row_ord)),   # rev to match heatmap top→bottom
-         contrast = factor(contrast, levels = col_ord))
-
-# color/size mapping (cap color limits if you like)
-lims <- c(-3, 3)  # change as needed
-df <- df %>% mutate(
-  log2FC_cap = pmax(pmin(log2FC, lims[2]), lims[1]),
-  mag        = abs(log2FC_cap)
-)
-
-ggplot(df, aes(x = contrast, y = gene)) +
-  geom_point(aes(colour = log2FC_cap, size = mag)) +
-  scale_colour_gradient2(low = "blue", mid = "white", high = "red",
-                         midpoint = 0, limits = lims, oob = scales::squish,
-                         name = "log2FC") +
-  scale_size_area(max_size = 6, name = "|log2FC|") +  # area ∝ magnitude
-  theme_minimal(base_size = 11) +
-  theme(
-    axis.title = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid = element_blank()
-  )
-dev.off()
-
-
-```
 
 **T-RBI**
 
@@ -1210,15 +820,8 @@ so_orig = readRDS("../igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
 so_orig[["mde_incremental_level2"]] = so_orig[["mde_incremental"]] 
 so_orig[["mde_incremental_allT"]] = so_orig[["mde2_totalvi_20241006"]] 
 
-sub_all <- so_orig@meta.data %>%
-  group_by(annotation_level2) %>%
-  group_modify(~ slice_sample(.x, n = min(500, nrow(.x)))) %>%
-  pull(cellID)
-so = so_orig[,sub_all]
-so$sample = "immgent"
-so$sample_type = "immgent"
-
 so = so_orig[,so_orig$annotation_level1 == "Treg"]
+
 so$sample = "immgent"
 so$sample_type = "immgent"
 
@@ -1629,578 +1232,6 @@ pdf(sprintf("%s/RBI.pdf",query_dir),10, 10, useDingbats = F)
 MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2)
 MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, highlight_size = 2)
 MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "sample", mycols = mypal, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2)
-# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
-for (s in unique(so_query$sample_type)) {
-    print(s)
-    tmp = so2[,so2$sample_type %in% c(s) | so2$sample %in% c("immgent")]
-    print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 2, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
-    print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 2, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
-    # print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 1, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
-    # print(MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 1, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s)))
-    # print(MyDimPlotHighlight(so2[,so2$sample %in% c("immgent", s)], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample: %s", s)))
-}
-
-# p1 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "annotation", cols = mypal_annotation)
-# p2 = DimPlot(so_query[,sub], reduction = "mde_incremental_level2", group.by = "level2_plot", cols = mypal_level2)
-# p1 + p2
-dev.off() 
-
-# pdf(sprintf("%s/RBI_sidebyside.pdf",query_dir),50, 10, useDingbats = F)
-p1_author = list()
-p1_immgent = list()
-stacked_list = list()
-for (s in unique(so_query$sample_type)) {
-    print(s)
-    tmp = so2[,so2$sample_type %in% c(s) | so2$sample %in% c("immgent")]
-    p = MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "level2_final", highlight_size = 1, mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s))
-    p1_immgent[[s]] = p$plot1
-    p = MyDimPlotHighlight(tmp, umap_to_plot = "mde_incremental_level2", cells_to_highlight = intersect(sub, colnames(tmp)), highlight_column_name =  "annotation", highlight_size = 1, mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample %s", s))
-    p1_author[[s]] = p$plot1
-    # print(p1_author[[s]] + NoGrid() + p1_immgent[[s]] + theme_void() + NoLegend() + ggtitle(label = NULL) )
-    stacked_list[[s]] = wrap_plots(list(p1_author[[s]] + theme_void() + NoLegend(), 
-                              p1_immgent[[s]] + theme_void() + NoLegend() + ggtitle(label = NULL) ), ncol = 1) + plot_layout(axes = "collect_x", guides = "collect") 
-    # print(stacked_list[[s]])
-    # print(MyDimPlotHighlight(so2[,so2$sample %in% c("immgent", s)], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = T, title = sprintf("sample: %s", s)))
-}
-pdf(sprintf("%s/RBI_sidebyside.pdf",query_dir),5, 10, useDingbats = F)
-# print(wrap_plots(stacked_list, nrow = 1) + plot_layout(axes = "collect_y", guides = "collect"))
-print(stacked_list)
-dev.off()
-
-
-##UMAP from the query
-so_query <- so_query %>%
-  NormalizeData(normalization.method = "LogNormalize", scale.factor = 1e4, verbose = T) %>%
-  FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = T) %>%
-  ScaleData(features = VariableFeatures(.), verbose = T) %>%     # note the "."
-  RunPCA(features = VariableFeatures(.), npcs = 50, verbose = T) %>%
-  FindNeighbors(dims = 1:30, verbose = T) %>%
-  RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
-
-pdf(sprintf("%s/RBI_UMAP_query.pdf",query_dir),10, 10, useDingbats = F)
-p = DimPlot(so_query, reduction = "umap", group.by = "sample", cols = mypal)
-p
-p + NoLegend()
-p = DimPlot(so_query, reduction = "umap", group.by = "sample_type", cols = mypal)
-p
-p + NoLegend()
-p = DimPlot(so_query, reduction = "umap", group.by = "annotation", cols = mypal_annotation)
-p
-p + NoLegend()
-p = DimPlot(so_query, reduction = "umap", group.by = "level1_final", cols = mypal_level1)
-p
-p + NoLegend()
-p = DimPlot(so_query, reduction = "umap", group.by = "level2_final", cols = mypal_level2)
-p
-p + NoLegend()
-so_query$is_not_classified = so_query$level2_final == "not classified"
-p = DimPlot(so_query, reduction = "umap", group.by = "is_not_classified",cols = c("grey", "red"))
-p
-p + NoLegend()
-
-dev.off()
-
-# FeaturePlot(so_query, features = c("Cd4"))
-# p1 = DimPlot(so_query[,so_query$level1_final == "CD4"], reduction = "umap", group.by = "level1_final", cols = immgent_colors$level1)
-# p2 = FeaturePlot(so_query, features = c("Cd4"))
-# p1+p2
-# 
-# so_query@meta.data %>% count(level2_final)
-# DimPlot(so_query, reduction = "umap", group.by = "level2_final",cols = mypal_level2) # ggplot2::xlim(c(-8,8)) #+ ggplot2::ylim(c(-8,8))
-# so_query$is_not_classified = so_query$level2_final == "not classified"
-# DimPlot(so_query, reduction = "umap", group.by = "is_not_classified",cols = c("grey", "red"))
-# 
-# p1 = DimPlot(so_query[,so_query$level1_final == "Treg"], reduction = "umap", group.by = "level2_final", cols = immgent_colors$level2) + ggplot2::xlim(c(-8,8)) #+ ggplot2::ylim(c(-8,8))
-# p2 = FeaturePlot(so_query, features = c("Foxp3")) #+ ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
-# p1+p2
-# 
-# p1 = DimPlot(so_query[,so_query$level1_final != "not classified"], reduction = "umap", group.by = "level1_final", cols = immgent_colors$level1) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
-# p2 = FeaturePlot(so_query[,so_query$level1_final != "not classified"], features = c("Foxp3")) + ggplot2::xlim(c(-8,8)) + ggplot2::ylim(c(-8,8))
-# p1+p2
-
-```
-
-GSE219259 Ex Tregs
-```{r}
-query_dir = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/Treg/GSE219259_Foxp3_creERT2_TdT/Not_classified_Full_Trial/'
-so_query = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/Treg/GSE219259_Foxp3_creERT2_TdT/Not_classified_Full_Trial/Final_Seurat_object.Rds') 
-so_query_orig = so_query
-
-head(so_query@meta.data)
-so_query@meta.data %>% count(IGTHT) 
-
-#merge replicates
-so_query@meta.data %>% count(IGTHT)
-so_query@meta.data %>% count(Condition)
-so_query$sample_type = so_query$Condition
-# so_query$sample_type = gsub(pattern = "VMNA_Maf_ko_|muscle_colon_Treg_Batch_1_|muscle_colon_Treg_Batch_2_|_1|_2|_3","", so_query$sample_type)
-so_query@meta.data %>% count(IGTHT, sample_type)
-
-#Redefine level1
-so_query@meta.data %>% count(level2_final) %>% as.data.frame()
-so_query@meta.data %>% count(level1_final) %>% as.data.frame()
-so_query@meta.data %>% count(level1_final, level2_final)
-so_query$level1_final_orig = so_query$level1_final
-so_query$level1_final = str_extract(so_query$level2_final, "^[^_]+")
-so_query@meta.data %>% count(level1_final, level1_final_orig)
-so_query@meta.data %>% count(level1_final, level2_final)
-
-# so_query@meta.data %>% count(level2_final, level2_plot)
-
-#filter cells without author's annotation
-so_query$annotation = so_query$celltypes
-so_query@meta.data %>% count(annotation) %>% as.data.frame()
-so_query@meta.data %>% count(annotation, level1_final) %>% as.data.frame()
-so_query@meta.data %>% count(annotation, level2_final) %>% as.data.frame()
-so_query@meta.data %>% filter(!is.na(annotation)) %>% group_by(level2_final) %>% count() %>% as.data.frame()
-
-so_query = so_query[,so_query@meta.data %>% filter(!is.na(annotation)) %>% row.names()]
-so_query@meta.data %>% count(annotation, level2_final) %>% as.data.frame()
-so_query@meta.data %>% count(annotation, level1_final) %>% as.data.frame()
-
-# so_query$annotation[so_query$annotation == "Areg$^{hi}$ ST2$^{+}$"] = "AregHi ST2+"
-# so_query$annotation[so_query$annotation == "Areg$^{lo}$ ST2$^{+}$"] = "AregLo ST2+"
-# so_query$annotation[so_query$annotation == "Il18r1$^{+}$"] = "Il18r1+"
-# so_query$annotation[so_query$annotation == "Tbet$^{+}$"] = "Tbet+"
-# so_query@meta.data %>% count(annotation) %>% as.data.frame()
-
-#filter non T cells
-so_query@meta.data %>% filter(level1_final %in% c("unclear", "nonT", "remove")) %>% group_by(level2_final) %>% count() %>% as.data.frame()
-so_query = so_query[,so_query@meta.data %>% filter(!(level1_final %in% c("unclear", "nonT", "remove"))) %>% row.names()]
-
-mypal_annotation = setNames(mypal, unique(so_query$annotation))
-mypal_annotation["CD8+ memory T"] = "#8029A9"
-mypal_annotation["NKT"] = "#EEC2BE"
-mypal_annotation["CD4+ memory T"] = "#39817F"
-mypal_annotation["NK"] = "#DEC2F5"
-mypal_annotation["CD4+ T"] = "#906634"
-
-so_query@meta.data %>% count(level1_final, level2_final)
-
-#check that non-Tregs aren't expressing Foxp3
-p1 = DimPlot(so_query, reduction = "mde_incremental_allT", group.by = "annotation", cols = mypal_annotation) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-p2 = DimPlot(so_query, reduction = "mde_incremental_allT", group.by = "level1_final", cols = mypal_level1) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-# p3 = FeaturePlot(so_query, reduction = "mde_incremental_allT", features = "Foxp3", order = T) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-p1 + p2
-pdf(sprintf("%s/RBI_genes.pdf",query_dir),10, 15, useDingbats = F)
-FeaturePlot(so_query, reduction = "mde_incremental_allT", features = c("Foxp3", "Cd4", "Cd8b1", "Cd8a","Trdc", "Zbtb16"), order = T) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))#Trgc1, Trgv2
-# FeaturePlot(so_query[,so_query$level1_final != "Treg"], reduction = "mde_incremental_allT", features = "Foxp3", order = T) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-# FeaturePlot(so_query[,so_query$level1_final == "Treg"], reduction = "mde_incremental_allT", features = "Foxp3", order = T) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-# FeaturePlot(so_query[,so_query$level1_final == "CD4"], reduction = "mde_incremental_allT", features = "Foxp3", order = T) + xlim(c(-2.5,2.5)) + ylim(c(-2.5,2.5))
-dev.off()
-
-# so_query$annotation = paste("cl", so_query$annotation, sep = "_")
-so_query$sample = so_query$IGTHT
-
-# sub = so_query@meta.data %>% filter(level1_final == "CD8" & !(level2_plot %in% c("not classified"))) %>% row.names()
-# so2 = merge(so, so_query[,sub], merge.dr = T)
-
-so2 = merge(so, so_query, merge.dr = T)
-# so2$sample[colnames(so_orig)] = "immgent"
-# so2$sample_type[colnames(so_orig)] = "immgent"
-so2@meta.data %>% count(sample_type)
-so2@meta.data %>% count(annotation)
-
-# mypal_annotation = mypal
-mypal_sample = mypal
-
-highlight_size = 1/log10(length(sub)+1)
-pdf(sprintf("%s/RBI2.pdf",query_dir),10, 10, useDingbats = F)
-sub = so2@meta.data %>% filter(sample != "immgent") %>% row.names()
-MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 1)
-MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "level1_final", mycols = mypal_level1, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 1)
-
-FeaturePlot(so_query, features = "WPRE", reduction = "mde_incremental_allT", order = T)
-so2$TdTomatoPos = so2[["RNA"]]$counts["WPRE",] > 3
-MyFeaturePlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, assay = "RNA", feature = "WPRE", colors = viridis(10),background_alpha = 1)
-
-sub = so2@meta.data %>% filter(sample != "immgent" & TdTomatoPos & level1_final != "not classified") %>% row.names()
-MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "TdTomatoPos", mycols = c('FALSE'= "black", 'TRUE' = "red"), print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2)
-MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "level1_final", mycols = mypal_level1, print_plot1 = T, print_plot2 = T,labelclusters = T, highlight_size = 2)
-MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2)
-
-sub = so2@meta.data %>% filter(sample != "immgent" & TdTomatoPos & level1_final == "Treg" & level1_final != "not classified") %>% row.names()
-MyDimPlotHighlight(so2[, so2$level1_final == "Treg" | so2$annotation_level1 == "Treg"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = F, background_alpha = 1,highlight_size = 2, pixels = c(512,512))
-MyFeaturePlotHighlight(so2[, so2$level1_final == "Treg" | so2$annotation_level1 == "Treg"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, assay = "RNA", feature = "WPRE", colors = viridis(10), xlim = c(-3,3), ylim = c(-3,3), background_alpha = 1, highlight_size = 2)
-MyFeaturePlotHighlight(so2[, so2$level1_final == "Treg" | so2$annotation_level1 == "Treg"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, assay = "RNA", feature = "Foxp3", colors = viridis(10), xlim = c(-3,3), ylim = c(-3,3), pixels = c(512,512), background_alpha = 1, highlight_size = 2)
-
-
-sub = so2@meta.data %>% filter(sample != "immgent" & TdTomatoPos & level1_final == "CD4" & level1_final != "not classified") %>% row.names()
-MyDimPlotHighlight(so2[, so2$level1_final == "CD4" | so2$annotation_level1 == "CD4"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2, pixels = c(512,512), xlim = c(-3,3), ylim = c(-3,3))
-MyFeaturePlotHighlight(so2[, so2$level1_final == "CD4" | so2$annotation_level1 == "CD4"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, assay = "RNA", feature = "WPRE", colors = viridis(10), xlim = c(-3,3), ylim = c(-3,3), background_alpha = 1, highlight_size = 2)
-MyFeaturePlotHighlight(so2[, so2$level1_final == "CD4" | so2$annotation_level1 == "CD4"], umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, assay = "RNA", feature = "Foxp3", colors = viridis(10), xlim = c(-3,3), ylim = c(-3,3), pixels = c(512,512), background_alpha = 1, highlight_size = 2)
-dev.off()
-
-pdf(sprintf("%s/Distribution_TdTomatoCells.pdf",query_dir),7, 5, useDingbats = F)
-#Distribution of WPRE+ cells (TdTomato)
-library(forcats)
-library(scales)
-
-# 1) Proportions per sample × level1_final (TdTomato+ only)
-props <- so2@meta.data %>%
-    filter(TdTomatoPos == TRUE) %>%
-    count(sample, level1_final, name = "n") %>%
-    group_by(sample) %>%
-    mutate(prop = n / sum(n)) %>%
-    ungroup() %>%
-    filter(level1_final != "not classified")
-
-# 2) Mean per level1_final (to draw the bars)
-props_mean <- props %>%
-  group_by(level1_final) %>%
-  summarise(mean_prop = mean(prop, na.rm = TRUE), .groups = "drop")
-
-# (optional) reorder x by mean
-props_mean <- props_mean %>%
-  mutate(level1_final = fct_reorder(level1_final, mean_prop, .desc = T))
-
-props <- props %>%
-  mutate(level1_final = factor(level1_final, levels = rev(levels(props_mean$level1_final))))
-
-# 3) Plot: mean bar + per-sample points
-p = ggplot() +
-  geom_col(
-    data = props_mean,
-    aes(x = level1_final, y = mean_prop, fill = level1_final),
-    color = "black",width = 0.7
-  ) +
-  geom_point(
-    data = props,
-    aes(x = level1_final, y = prop ),
-    position = position_jitter(width = 0.15, height = 0), shape = 16, color = "black",
-    size = 4, alpha = 0.85
-  ) +
-    scale_fill_manual(values = mypal_level1) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +  # remove if you prefer raw proportions
-  labs(x = NULL, y = "Proportion (of TdTomato+ cells)", fill = "Sample") +
-  theme_bw(base_size = 12) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-    # panel.grid.major.x = element_blank()
-  ) + NoGrid()
-
-p
-
-props <- so2@meta.data %>%
-    filter(TdTomatoPos == TRUE & level1_final == "Treg") %>%
-    count(sample, level2_final, name = "n") %>%
-    group_by(sample) %>%
-    mutate(prop = n / sum(n)) %>%
-    ungroup() %>%
-    filter(level2_final != "Treg")
-props_mean <- props %>%
-  group_by(level2_final) %>%
-  summarise(mean_prop = mean(prop, na.rm = TRUE), .groups = "drop")
-props_mean <- props_mean %>%
-  mutate(level2_final = fct_reorder(level2_final, mean_prop, .desc = T))
-props <- props %>%
-  mutate(level2_final = factor(level2_final, levels = rev(levels(props_mean$level2_final))))
-p = ggplot() +
-  geom_col(
-    data = props_mean,
-    aes(x = level2_final, y = mean_prop, fill = level2_final),
-    color = "black",width = 0.7
-  ) +
-  geom_point(
-    data = props,
-    aes(x = level2_final, y = prop ),
-    position = position_jitter(width = 0.15, height = 0), shape = 16, color = "black",
-    size = 4, alpha = 0.85
-  ) +
-    scale_fill_manual(values = mypal_level2) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +  # remove if you prefer raw proportions
-  labs(x = NULL, y = "Proportion (of TdTomato+ cells)", fill = "Sample") +
-  theme_bw(base_size = 12) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-    # panel.grid.major.x = element_blank()
-  ) + NoGrid()
-p
-
-props <- so2@meta.data %>%
-    filter(TdTomatoPos == TRUE & level1_final == "CD4") %>%
-    count(sample, level2_final, name = "n") %>%
-    group_by(sample) %>%
-    mutate(prop = n / sum(n)) %>%
-    ungroup() %>%
-    filter(level2_final != "CD4")
-props_mean <- props %>%
-  group_by(level2_final) %>%
-  summarise(mean_prop = mean(prop, na.rm = TRUE), .groups = "drop")
-props_mean <- props_mean %>%
-  mutate(level2_final = fct_reorder(level2_final, mean_prop, .desc = T))
-props <- props %>%
-  mutate(level2_final = factor(level2_final, levels = rev(levels(props_mean$level2_final))))
-p = ggplot() +
-  geom_col(
-    data = props_mean,
-    aes(x = level2_final, y = mean_prop, fill = level2_final),
-    color = "black",width = 0.7
-  ) +
-  geom_point(
-    data = props,
-    aes(x = level2_final, y = prop ),
-    position = position_jitter(width = 0.15, height = 0), shape = 16, color = "black",
-    size = 4, alpha = 0.85
-  ) +
-    scale_fill_manual(values = mypal_level2) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +  # remove if you prefer raw proportions
-  labs(x = NULL, y = "Proportion (of TdTomato+ cells)", fill = "Sample") +
-  theme_bw(base_size = 12) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-    # panel.grid.major.x = element_blank()
-  ) + NoGrid()
-p
-
-
-dev.off()
-
-
-so2 = NormalizeData(so2)
-so2$TdTomatoNeg = so2[["RNA"]]@counts["WPRE",] == 0
-
-    pdf(sprintf("%s/VolcanoPlot_TdTomatoPos_vs_Neg.pdf",query_dir),7, 7, useDingbats = F)
-    group1 = so2@meta.data %>% filter(TdTomatoPos & level2_final %in% c("CD4_cl13", "CD4_cl14", "CD4_cl9")) %>% row.names()
-    group2 = so2@meta.data %>% filter(TdTomatoNeg & level2_final %in% c("CD4_cl13")) %>% row.names()
-    title = "TdTomatoPos vs TdTomatoNeg in CD4_cl9, CD4_cl13, CD4_cl14"
-    so2$groups = NA
-    so2$groups[colnames(so2) %in% group1] = "gp1"
-    so2$groups[colnames(so2) %in% group2] = "gp2"
-    so2$groups = factor(so2$groups)
-    Idents(so2) = "groups"
-    DefaultAssay(so2) <- "RNA"
-    results = Seurat::FindMarkers(so2, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
-    results$SYMBOL = rownames(results)
-    res = results %>% filter(pct.1 > 0.05 | pct.2 > 0.05, SYMBOL != "WPRE") 
-    EnhancedVolcano(
-      res,
-      lab = rownames(res),
-      x = 'avg_log2FC',
-      y = 'p_val_adj',
-      title = title,
-      subtitle = NULL,
-      caption = NULL,
-      pCutoff = 0.05, 
-      FCcutoff = abs(1),
-      col = c(
-        'grey50',   # non-sig
-        'grey50',      # sig up
-        'grey50',      # sig down
-        'red'    ),   # both sig up & down
-      colAlpha = 1,                              # solid
-      drawConnectors = T,
-      cutoffLineType = 'blank',                  # hide dashed lines (alternative to removing)
-      cutoffLineWidth = 0,                       # ensure no line
-      # --- no legends or guides ---
-      legendPosition = 'None',
-      # --- styling ---
-      pointSize = 2,
-      labSize = 3,
-      gridlines.major = FALSE,
-      gridlines.minor = FALSE,
-      axisLabSize = 12,
-      titleLabSize = 14
-    )
-    
-    
-    group1 = so2@meta.data %>% filter(TdTomatoPos & level2_final %in% c("CD4_cl13")) %>% row.names()
-    group2 = so2@meta.data %>% filter(TdTomatoNeg & level2_final %in% c("CD4_cl13")) %>% row.names()
-    title = "TdTomatoPos vs TdTomatoNeg in CD4_cl13"
-    so2$groups = NA
-    so2$groups[colnames(so2) %in% group1] = "gp1"
-    so2$groups[colnames(so2) %in% group2] = "gp2"
-    so2$groups = factor(so2$groups)
-    Idents(so2) = "groups"
-    DefaultAssay(so2) <- "RNA"
-    results = Seurat::FindMarkers(so2, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
-    results$SYMBOL = rownames(results)
-    res = results %>% filter(pct.1 > 0.05 | pct.2 > 0.05, SYMBOL != "WPRE") 
-    EnhancedVolcano(
-      res,
-      lab = rownames(res),
-      x = 'avg_log2FC',
-      y = 'p_val_adj',
-      title = title,
-      subtitle = NULL,
-      caption = NULL,
-      pCutoff = 0.05, 
-      FCcutoff = abs(1),
-      col = c(
-        'grey50',   # non-sig
-        'grey50',      # sig up
-        'grey50',      # sig down
-        'red'    ),   # both sig up & down
-      colAlpha = 1,                              # solid
-      drawConnectors = T,
-      cutoffLineType = 'blank',                  # hide dashed lines (alternative to removing)
-      cutoffLineWidth = 0,                       # ensure no line
-      # --- no legends or guides ---
-      legendPosition = 'None',
-      # --- styling ---
-      pointSize = 2,
-      labSize = 3,
-      gridlines.major = FALSE,
-      gridlines.minor = FALSE,
-      axisLabSize = 12,
-      titleLabSize = 14
-    )
-    
-    
-    group1 = so2@meta.data %>% filter(TdTomatoPos & level2_final %in% c("CD4_cl14")) %>% row.names()
-    group2 = so2@meta.data %>% filter(TdTomatoNeg & level2_final %in% c("CD4_cl14")) %>% row.names()
-    title = "TdTomatoPos vs TdTomatoNeg in CD4_cl14"
-    so2$groups = NA
-    so2$groups[colnames(so2) %in% group1] = "gp1"
-    so2$groups[colnames(so2) %in% group2] = "gp2"
-    so2$groups = factor(so2$groups)
-    Idents(so2) = "groups"
-    DefaultAssay(so2) <- "RNA"
-    results = Seurat::FindMarkers(so2, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
-    results$SYMBOL = rownames(results)
-    res = results %>% filter(pct.1 > 0.05 | pct.2 > 0.05, SYMBOL != "WPRE") 
-    EnhancedVolcano(
-      res,
-      lab = rownames(res),
-      x = 'avg_log2FC',
-      y = 'p_val_adj',
-      title = title,
-      subtitle = NULL,
-      caption = NULL,
-      pCutoff = 0.05, 
-      FCcutoff = abs(1),
-      col = c(
-        'grey50',   # non-sig
-        'grey50',      # sig up
-        'red',      # sig down
-        'red'    ),   # both sig up & down
-      colAlpha = 1,                              # solid
-      drawConnectors = T,
-      cutoffLineType = 'blank',                  # hide dashed lines (alternative to removing)
-      cutoffLineWidth = 0,                       # ensure no line
-      # --- no legends or guides ---
-      legendPosition = 'None',
-      # --- styling ---
-      pointSize = 2,
-      labSize = 3,
-      gridlines.major = FALSE,
-      gridlines.minor = FALSE,
-      axisLabSize = 12,
-      titleLabSize = 14
-    )
-    
-    group1 = so2@meta.data %>% filter(TdTomatoPos & level2_final %in% c("CD4_cl9")) %>% row.names()
-    group2 = so2@meta.data %>% filter(TdTomatoNeg & level2_final %in% c("CD4_cl9")) %>% row.names()
-    title = "TdTomatoPos vs TdTomatoNeg in CD4_cl9"
-    so2$groups = NA
-    so2$groups[colnames(so2) %in% group1] = "gp1"
-    so2$groups[colnames(so2) %in% group2] = "gp2"
-    so2$groups = factor(so2$groups)
-    Idents(so2) = "groups"
-    DefaultAssay(so2) <- "RNA"
-    results = Seurat::FindMarkers(so2, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
-    results$SYMBOL = rownames(results)
-    res = results %>% filter(pct.1 > 0.05 | pct.2 > 0.05, SYMBOL != "WPRE") 
-    EnhancedVolcano(
-      res,
-      lab = rownames(res),
-      x = 'avg_log2FC',
-      y = 'p_val_adj',
-      title = title,
-      subtitle = NULL,
-      caption = NULL,
-      pCutoff = 0.05, 
-      FCcutoff = abs(1),
-      col = c(
-        'grey50',   # non-sig
-        'grey50',      # sig up
-        'red',      # sig down
-        'red'    ),   # both sig up & down
-      colAlpha = 1,                              # solid
-      drawConnectors = T,
-      cutoffLineType = 'blank',                  # hide dashed lines (alternative to removing)
-      cutoffLineWidth = 0,                       # ensure no line
-      # --- no legends or guides ---
-      legendPosition = 'None',
-      # --- styling ---
-      pointSize = 2,
-      labSize = 3,
-      gridlines.major = FALSE,
-      gridlines.minor = FALSE,
-      axisLabSize = 12,
-      titleLabSize = 14
-    )
-    
-    group1 = so2@meta.data %>% filter(TdTomatoPos & level1_final %in% c("CD4")) %>% row.names()
-    group2 = so2@meta.data %>% filter(TdTomatoNeg & level1_final %in% c("CD4")) %>% row.names()
-    title = "TdTomatoPos vs TdTomatoNeg in CD4"
-    so2$groups = NA
-    so2$groups[colnames(so2) %in% group1] = "gp1"
-    so2$groups[colnames(so2) %in% group2] = "gp2"
-    so2$groups = factor(so2$groups)
-    Idents(so2) = "groups"
-    DefaultAssay(so2) <- "RNA"
-    results = Seurat::FindMarkers(so2, slot = "data", ident.1 = "gp1", ident.2 = "gp2", logfc.threshold = 0, min.pct = 0, base = 2, verbose = T)
-    results$SYMBOL = rownames(results)
-    res = results %>% filter(pct.1 > 0.05 | pct.2 > 0.05, SYMBOL != "WPRE") 
-    EnhancedVolcano(
-      res,
-      lab = rownames(res),
-      x = 'avg_log2FC',
-      y = 'p_val_adj',
-      title = title,
-      subtitle = NULL,
-      caption = NULL,
-      pCutoff = 0.05, 
-      FCcutoff = abs(1),
-      col = c(
-        'grey50',   # non-sig
-        'grey50',      # sig up
-        'red',      # sig down
-        'red'    ),   # both sig up & down
-      colAlpha = 1,                              # solid
-      drawConnectors = T,
-      cutoffLineType = 'blank',                  # hide dashed lines (alternative to removing)
-      cutoffLineWidth = 0,                       # ensure no line
-      # --- no legends or guides ---
-      legendPosition = 'None',
-      # --- styling ---
-      pointSize = 2,
-      labSize = 3,
-      gridlines.major = FALSE,
-      gridlines.minor = FALSE,
-      axisLabSize = 12,
-      titleLabSize = 14
-    )
-    
-    
-    
-    dev.off()
-    
-    
-
-
-######
-
-
-
-so_query$TdTomatoPos = so_query[["RNA"]]$counts["WPRE",] > 0
-so_query$Foxp3Pos = so_query[["RNA"]]$counts["Foxp3",] > 0
-MyDimPlotHighlight(so_query, umap_to_plot = "mde_incremental_allT", cells_to_highlight = sub, highlight_column_name =  "TdTomatoPos", mycols = c('FALSE'= "black", 'TRUE' = "red"), print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 1)
-FeaturePlot(so_query, features = "WPRE", reduction = "mde_incremental_allT", order = T)
-FeaturePlot(so_query, features = "Foxp3", reduction = "mde_incremental_allT", order = T)
-
-
-
-so_query@meta.data %>% count(level1_final, TdTomatoPos)
-so_query@meta.data %>% count(level1_final, Foxp3Pos)
-so_query@meta.data %>% count(TdTomatoPos, Foxp3Pos)
-
-mean(so_query[["RNA"]]$counts["Foxp3",which(so_query[["RNA"]]$counts["Foxp3",so_query$level1_final == "Treg"] >0)])
-
-
-# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "level2_final", mycols = mypal_level2, print_plot1 = T, print_plot2 = T,labelclusters = T, highlight_size = 2)
-# MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "sample", mycols = mypal, print_plot1 = T, print_plot2 = T,labelclusters = F, highlight_size = 2)
 # MyDimPlotHighlight(so2, umap_to_plot = "mde_incremental_level2", cells_to_highlight = sub, highlight_column_name =  "annotation", mycols = mypal_annotation, print_plot1 = T, print_plot2 = T,labelclusters = F)
 for (s in unique(so_query$sample_type)) {
     print(s)

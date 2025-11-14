@@ -1,0 +1,281 @@
+---
+title: "New area discovery?"
+output: html_document
+date: "2025-11-11"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+# install.packages(c("sf", "concaveman", "dplyr"))
+library(sf)
+library(concaveman)
+library(dplyr)
+
+# Assume data frames with columns x, y:
+# old_df: 100000 rows; new_df: 1000 rows
+# example: old_df <- data.frame(x = runif(1e5), y = runif(1e5))
+#          new_df <- data.frame(x = runif(1000), y = runif(1000))
+
+to_sf_points <- function(df, crs = 4326) {
+  st_as_sf(df, coords = c("x", "y"), crs = crs)
+}
+
+concave_boundary <- function(pts_sf, concavity = 2, length_threshold = 0) {
+  hull <- concaveman::concaveman(pts_sf, concavity = concavity, length_threshold = length_threshold)
+  # Ensure polygon validity (occasionally helpful)
+  st_make_valid(hull)
+}
+
+discovery_metrics_concave <- function(old_df, new_df, concavity = 2, length_threshold = 0, crs = 4326) {
+  old_sf <- to_sf_points(old_df, crs)
+  new_sf <- to_sf_points(new_df, crs)
+
+  # Build "known area" polygon from old points
+  poly_old <- concave_boundary(old_sf, concavity, length_threshold)
+
+  # Count new points outside
+  inside <- st_within(new_sf, poly_old, sparse = FALSE)[,1]
+  n_out <- sum(!inside)
+  discovery_rate <- n_out / nrow(new_df)
+
+  # Area gain (rebuild boundary after adding new points)
+  all_sf <- rbind(old_sf, new_sf)
+  poly_all <- concave_boundary(all_sf, concavity, length_threshold)
+
+  # Use a planar CRS for area (pick something appropriate for your map units)
+  # If your coordinates are already planar (e.g., UMAP/t-SNE), skip transform.
+  poly_old_planar <- poly_old
+  poly_all_planar <- poly_all
+
+  area_gain <- as.numeric(st_area(poly_all_planar) - st_area(poly_old_planar)) /
+               as.numeric(st_area(poly_old_planar))
+
+  tibble(
+    discovery_rate = discovery_rate,
+    n_outside = n_out,
+    area_gain = area_gain
+  )
+}
+
+# Example:
+# discovery_metrics_concave(old_df, new_df, concavity = 2)
+
+```
+
+```{r}
+# install.packages(c("MASS", "sf", "isoband", "dplyr"))
+library(MASS)
+library(sf)
+library(isoband)
+library(dplyr)
+
+# Build a highest-density region (HDR) polygon enclosing, say, 95% mass
+kde_contour_polygon <- function(old_df, prob = 0.95, nx = 400, ny = 400) {
+  kd <- MASS::kde2d(old_df$x, old_df$y, n = c(nx, ny))
+  dx <- diff(kd$x[1:2]); dy <- diff(kd$y[1:2])
+
+  # Find density threshold giving 'prob' mass
+  z_sorted <- sort(as.vector(kd$z), decreasing = TRUE)
+  csum <- cumsum(z_sorted) * dx * dy
+  z_thresh <- z_sorted[which(csum >= prob)[1]]
+
+  # Extract isoband at that level to make a polygon
+  bands <- isobands(kd$x, kd$y, kd$z, level_low = z_thresh, level_high = max(kd$z) + 1)
+  # Convert to sf polygon(s)
+  polys <- lapply(seq_along(bands), function(i) {
+    st_polygon(list(cbind(bands[[i]]$x, bands[[i]]$y)))
+  })
+  st_sfc(polys, crs = 4326) |> st_union() |> st_make_valid()
+}
+
+discovery_metrics_kde <- function(old_df, new_df, prob = 0.95) {
+  poly_old <- kde_contour_polygon(old_df, prob = prob)
+  new_sf <- st_as_sf(new_df, coords = c("x", "y"), crs = 4326)
+
+  inside <- st_within(new_sf, poly_old, sparse = FALSE)[,1]
+  n_out <- sum(!inside)
+  discovery_rate <- n_out / nrow(new_df)
+
+  tibble(
+    hdr_prob = prob,
+    discovery_rate = discovery_rate,
+    n_outside = n_out
+  )
+}
+
+# Example:
+# discovery_metrics_kde(old_df, new_df, prob = 0.95)
+
+```
+
+```{r}
+# install.packages(c("RANN","dplyr"))
+library(RANN)
+library(dplyr)
+
+# old_mat: numeric matrix/data.frame with columns x,y (100000 x 2)
+# new_mat: numeric matrix/data.frame with columns x,y (1000 x 2)
+# k: number of neighbors for the metric, e.g., 10
+knn_novelty_scores <- function(old_mat, new_mat, k = 10) {
+  old_mat <- as.matrix(old_mat)
+  new_mat <- as.matrix(new_mat)
+  stopifnot(ncol(old_mat) == 2, ncol(new_mat) == 2)
+  if (nrow(new_mat) <= k) stop("Need k < number of new points.")
+
+  # Mean distance to k nearest REFERENCE neighbors
+  ref_knn <- nn2(data = old_mat, query = new_mat, k = k)
+  mean_d_ref <- rowMeans(ref_knn$nn.dists)
+
+  # Mean distance to k nearest QUERY neighbors (leave-one-out: drop the self at distance 0)
+  qry_knn <- nn2(data = new_mat, query = new_mat, k = k + 1)
+  # First column is self (distance 0). Remove it; take the next k neighbors.
+  mean_d_qry <- rowMeans(qry_knn$nn.dists[, -1, drop = FALSE])
+
+  # Scores
+  ratio <- mean_d_ref / mean_d_qry
+  score_log <- log(ratio)
+  score_sym <- (mean_d_ref - mean_d_qry) / (mean_d_ref + mean_d_qry)  # in [-1, 1]
+
+  tibble::tibble(
+    idx = seq_len(nrow(new_mat)),
+    mean_d_ref = mean_d_ref,
+    mean_d_qry = mean_d_qry,
+    ratio = ratio,
+    score_log = score_log,
+    score_sym = score_sym
+  )
+}
+
+# Example summary into a single metric:
+summarize_discovery <- function(scores_tbl, ratio_threshold = 1.2) {
+  # "Discovery rate": fraction of new points at least 20% farther from ref than from query neighbors
+  discovery_rate <- mean(scores_tbl$ratio > ratio_threshold)
+  tibble::tibble(
+    k = NA_integer_,
+    ratio_threshold = ratio_threshold,
+    discovery_rate = discovery_rate,
+    median_ratio = median(scores_tbl$ratio),
+    q90_ratio = quantile(scores_tbl$ratio, 0.9),
+    mean_log_score = mean(scores_tbl$score_log)
+  )
+}
+
+# --- usage ---
+# old_mat <- as.matrix(old_df[, c("x","y")])
+# new_mat <- as.matrix(new_df[, c("x","y")])
+# s <- knn_novelty_scores(old_mat, new_mat, k = 10)
+# summarize_discovery(s, ratio_threshold = 1.2)
+
+```
+
+% kNN novelty score (as you wrote it: query vs. reference)
+\[
+\mathrm{score}(q_i)
+= \log \frac{d^{(k)}\!\bigl(q_i,\ \text{query}\setminus\{q_i\}\bigr)}
+               {d^{(k)}\!\bigl(q_i,\ \text{ref}\bigr)} \, .
+\]
+
+% Define the kNN distance functional (mean of k nearest distances)
+\[
+d^{(k)}(x, S) \;=\; \frac{1}{k} \sum_{j=1}^{k} 
+\bigl\| x - \mathrm{NN}_j(x; S) \bigr\|_2 ,
+\]
+where $\mathrm{NN}_j(x; S)$ is the $j$-th nearest neighbor of $x$ in set $S$.
+
+score(qi​)\=logd(k)(qi​,query∖{qi​})d(k)(qi​,ref)​
+
+Positive: qi sits farther from the reference than from its fellow new points: “new area”.
+Near 0: similar spacing to both ⇒ likely within known area.
+Negative:tucked into the reference cloud.
+
+```{r}
+# install.packages(c("RANN","dplyr","ggplot2"))
+library(RANN)
+library(dplyr)
+library(ggplot2)
+
+set.seed(42)
+
+# Helper: make one rectangular "island" using runif
+make_island <- function(cx, cy, w, h, n) {
+  data.frame(
+    x = runif(n, cx - w/2, cx + w/2),
+    y = runif(n, cy - h/2, cy + h/2)
+  )
+}
+
+# ----- OLD DATA (reference) : several runif "islands" -----
+# Tune counts to reach ~100k total
+old_list <- list(
+  make_island(cx =  0, cy =  0, w = 1.5, h = 1.2, n = 25000),
+  make_island(cx =  3, cy =  1, w = 1.0, h = 1.0, n = 20000),
+  make_island(cx = -2, cy =  3, w = 1.2, h = 0.8, n = 15000),
+  make_island(cx =  4, cy = -3, w = 1.8, h = 1.5, n = 25000),
+  make_island(cx = -4, cy = -2, w = 1.0, h = 1.4, n = 15000)
+)
+old_df <- do.call(rbind, old_list)
+old_mat <- as.matrix(old_df[, c("x","y")])  # (≈100,000 x 2)
+plot(old_mat)
+
+# ----- NEW DATA (query) : mix of "known" + one brand-new island -----
+new_known <- rbind(
+  make_island(0, 0, 1.5, 1.2, n = 700),     # inside old island 1
+  make_island(3, 1, 1.0, 1.0, n = 150)      # inside old island 2
+)
+new_novel <- make_island(cx = 7, cy = 6, w = 1.2, h = 1.0, n = 150)  # brand-new island
+new_df <- rbind(new_known, new_novel)
+new_mat <- as.matrix(new_df[, c("x","y")])  # (1000 x 2)
+plot(new_mat)
+
+# ----- kNN novelty score function (kNN distance ratio) -----
+knn_novelty_scores <- function(old_mat, new_mat, k = 10) {
+  old_mat <- as.matrix(old_mat); new_mat <- as.matrix(new_mat)
+  if (nrow(new_mat) <= k) stop("Need k < number of new points.")
+
+  # k-NN to REFERENCE (old)
+  ref_knn <- nn2(data = old_mat, query = new_mat, k = k)
+  mean_d_ref <- rowMeans(ref_knn$nn.dists)
+
+  # k-NN to QUERY (new, leave-one-out by skipping the self at column 1)
+  qry_knn <- nn2(data = new_mat, query = new_mat, k = k + 1)
+  mean_d_qry <- rowMeans(qry_knn$nn.dists[, -1, drop = FALSE])
+
+  tibble::tibble(
+    mean_d_ref = mean_d_ref,
+    mean_d_qry = mean_d_qry,
+    ratio = mean_d_ref / mean_d_qry,
+    score_log = log(mean_d_ref / mean_d_qry),
+    score_sym = (mean_d_ref - mean_d_qry) / (mean_d_ref + mean_d_qry)
+  )
+}
+
+scores <- knn_novelty_scores(old_mat, new_mat, k = 10)
+
+# ----- One-number summary (discovery rate) -----
+ratio_threshold <- 1.3  # “30% farther from ref than from new neighbors”
+discovery_rate <- mean(scores$ratio > ratio_threshold)
+summary_tbl <- tibble::tibble(
+  k = 10,
+  ratio_threshold = ratio_threshold,
+  discovery_rate = discovery_rate,
+  median_ratio = median(scores$ratio),
+  q90_ratio = quantile(scores$ratio, 0.9),
+  mean_log_score = mean(scores$score_log)
+)
+print(summary_tbl)
+
+# ----- Quick visual: color new points by novelty score -----
+plot_df <- cbind(new_df, score = scores$score_log)
+ggplot() +
+  geom_point(data = old_df, aes(x, y), alpha = 0.05, size = 0.5) +
+  geom_point(data = plot_df, aes(x, y, color = score), size = 1.2) +
+  scale_color_viridis_c(option = "C") +
+  coord_equal() +
+  labs(title = "New points colored by kNN novelty score (log distance ratio)",
+       color = "novelty\n(score_log)") +
+  theme_minimal()
+
+```
+
+

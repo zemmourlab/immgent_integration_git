@@ -1,0 +1,139 @@
+---
+title: "DN_misc"
+output: html_document
+date: "2025-11-12"
+---
+
+```{r}
+all_cells_data = so_orig # use igt1_96_withtotalvi20250710_clean.Rds https://drive.google.com/open?id=1XioPgYNVdyjaUl9aqhAuOx8SpW-BpjLr&usp=drive_fs
+Idents(all_cells_data) <- "annotation_level1"
+# all_cells_data <- subset(all_cells_data, idents = c("nonT", "remove", "thymocyte", "unclear"), invert = T)
+# Replace 'nonconv' with 'PLZF+' in the metadata column
+all_cells_data@meta.data$annotation_level1 <- ifelse(
+  all_cells_data@meta.data$annotation_level1 == "nonconv",
+  "PLZF+",
+  all_cells_data@meta.data$annotation_level1
+)
+# Update the Idents with the modified annotation_level1
+Idents(all_cells_data) <- all_cells_data@meta.data$annotation_level1
+all_cells_data@meta.data <- all_cells_data@meta.data %>%
+  filter(grepl("allT|CD45p", target_cells_simplified),
+    organ_simplified != "thymus", condition_broad != "healthy"
+  )
+table(all_cells_data@meta.data$condition_detailed_simplified)
+# Create new column combining organ and condition
+# all_cells_data@meta.data <- all_cells_data@meta.data %>%
+#   mutate(
+#     organ_condition = paste(organ_simplified, condition_broad, sep = "_")
+#   )
+# table(all_cells_data@meta.data$organ_condition)
+all_cells_data$condition_detailed_organ
+# ---- 1. Filter for T cells only ----
+tcell_data <- all_cells_data@meta.data %>%
+  filter(annotation_level1 %in% c("CD4", "CD8", "CD8aa", "DN", 'PLZF+', "DP", 'gdT', "Treg")) %>%
+  as_tibble()
+# ---- 3. Calculate total T cells per condition_detailed_organ ----
+tcell_totals <- tcell_data %>%
+  dplyr::count(condition_detailed_organ, name = "total_cells")
+# ---- 4. Compute DN proportion per condition_detailed_organ ----
+dn_summary <- tcell_data %>%
+  filter(annotation_level1 == "DN") %>%
+  dplyr::count(condition_detailed_organ, name = "dn_cells") %>%
+  left_join(tcell_totals, by = "condition_detailed_organ") %>%
+  mutate(perc_dn = 100 * dn_cells / total_cells)
+# ---- 5. Select top 20 condition_detailed_organ by total T cells ----
+top_conditions <- tcell_totals %>%
+  arrange(desc(total_cells)) %>%
+  slice_head(n = 20) %>%
+  pull(condition_detailed_organ)
+# ---- 6. Compute DN subtype composition ----
+dn_breakdown <- tcell_data %>%
+  filter(annotation_level1 == "DN", condition_detailed_organ %in% top_conditions) %>%
+  group_by(condition_detailed_organ, annotation_level2) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(condition_detailed_organ) %>%
+  mutate(perc_within_dn = 100 * n / sum(n))
+# ---- 7. Merge with overall DN proportions ----
+dn_breakdown <- dn_breakdown %>%
+  left_join(dn_summary, by = "condition_detailed_organ") %>%
+  mutate(perc_within_allT = perc_dn * (perc_within_dn / 100)) %>%
+  ungroup()
+# ---- 8. Order condition_detailed_organ by DN % ----
+dn_breakdown <- dn_breakdown %>%
+  mutate(condition_detailed_organ = fct_reorder(condition_detailed_organ, perc_dn, .desc = TRUE))
+# ---- 9. Plot ----
+colors_clusters = mypal_level2
+
+ggplot(dn_breakdown, aes(x = condition_detailed_organ, y = perc_within_allT, fill = annotation_level2)) +
+  geom_bar(stat = "identity", color = "black", width = 0.8) +
+  theme_bw() +
+  labs(
+    x = NULL,
+    y = "Percentage of DN T cells (of all T cells)",
+    fill = "DN subtype (annotation_level2)",
+    title = "Distribution of DN T cells across top 20 organ-condition contexts"
+  ) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 18)) +  # start y-axis at 0
+  scale_fill_manual(values = colors_clusters) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text.x = element_text(angle = 60, hjust = 1, size = 12, color = "black"),
+    axis.text.y = element_text(size = 12, color = "black"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 10)
+  ) + NoLegend()
+# DN_data <- readRDS("/Users/laurentgapin/Documents/Immgen/DN/igt1_96_DN_20250109.Rds")
+DN_data = all_cells_data[,all_cells_data$annotation_level1 == "DN"]
+# 1. Define the target condition
+target_condition <- "colonLP_DSS"
+# 2. Make sure your metadata has the condition_detailed_organ column
+# DN_data@meta.data <- DN_data@meta.data %>%
+#   mutate(condition_detailed_organ = paste(organ_simplified, condition_broad, sep = "_"))
+# table(DN_data@meta.data$condition_detailed_organ)
+# 3. Identify highlighted cells
+highlight_cells <- DN_data@meta.data %>%
+  filter(condition_detailed_organ == target_condition) %>%
+  rownames()
+# 4. Extract embeddings + cluster info
+df_plot <- FetchData(DN_data, vars = c("mdeincremental_1", "mdeincremental_2", "annotation_level2")) %>%
+  tibble::rownames_to_column("cell_id")
+# 5. Separate data for grey background vs highlighted
+df_grey <- df_plot %>% filter(!cell_id %in% highlight_cells)
+df_highlight <- df_plot %>% filter(cell_id %in% highlight_cells)
+colors_clusters <- immgent_colors$level2[str_starts(names(immgent_colors$level2), "DN_")]
+# 6. Plot — grey background first, then colored highlighted cells
+ggplot() +
+  # grey background (all DN cells)
+  geom_point(
+    data = df_grey,
+    aes(x = mdeincremental_1, y = mdeincremental_2),
+    color = "grey95",
+    size = 1,
+    alpha = 0.7
+  ) +
+  # highlighted cells (in their cluster color)
+  geom_point(
+    data = df_highlight,
+    aes(x = mdeincremental_1, y = mdeincremental_2, color = annotation_level2),
+    size = 1,
+    alpha = 0.95
+  ) +
+  scale_color_manual(values = colors_clusters) +
+  theme_void() +
+  labs(
+    title = paste("Highlighted:", target_condition),
+    color = "Cluster"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    legend.position = "right"
+  ) +
+  coord_equal()
+
+
+```
+
