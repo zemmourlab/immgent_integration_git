@@ -58,7 +58,8 @@ Prefix
 ```{r}
 # prefix = "SampleComp/20250109"
 # prefix = "SampleComp/20250224"
-prefix = "SampleComp/20250226"
+# prefix = "SampleComp/20250226"
+prefix = "SampleComp/20250226_2"
 
 # reduc = "totalvi_20241006"
 # clusters = "annotation_level1"
@@ -77,12 +78,18 @@ if (!dir.exists(prefix)) {
 # so = readRDS("igt1_96_withtotalvi20241021.Rds")
 # so = readRDS("igt1_96_withtotalvi20250109.Rds")
 # so = readRDS("igt1_96_withtotalvi20250212.Rds")
-so = readRDS("igt1_96_withtotalvi20250226.Rds")
-so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
+# so = readRDS("igt1_96_withtotalvi20250226.Rds")
+# so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
+
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
 
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+
 ```
 
 **Count number of cells for each cluster level 2 in each sample**
@@ -326,7 +333,8 @@ m = so@meta.data
 # sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
 # sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
 
-m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+
+m2 = m # m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
 
 ncells = m2 %>% group_by(organ_simplified) %>% summarize(n_cells = n()) %>% as.data.frame()
 
@@ -337,7 +345,7 @@ stat_df_ncells[is.na(stat_df_ncells)] = 0
 stat_df_prop = dcast(stat, organ_simplified ~ annotation_level2, value.var = "prop")
 stat_df_prop[is.na(stat_df_prop)] = 0
 
-all(ncells$organ_simplified == stat_df_ncells$organ_simplified)
+all(ncells$organ_simplified %in% stat_df_ncells$organ_simplified)
 
 m3 = merge(ncells, stat_df_ncells, by.x = "organ_simplified", by.y = "organ_simplified")
 m4 = merge(m3, stat_df_prop, by.x = "organ_simplified", by.y = "organ_simplified", suffixes = c(".ncells", ".prop"))
@@ -407,7 +415,7 @@ m = so@meta.data
 # sample_metadata$organ_simplified[sample_metadata$organ %in% c("lamina propria", "gut")] = "small intestine"
 # sample_metadata$organ_simplified[grep(pattern = "salivary|submandibular", sample_metadata$organ)] = "submandibular salivary gland"
 
-m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
+m2 = m #m2 = merge(m, sample_metadata, by.x = "IGTHT", by.y = "IGTHT",all.x = T, all.y = F, suffixes = c(".x", ""))
 
 ncells = m2 %>% group_by(organ_simplified) %>% summarize(n_cells = n()) %>% as.data.frame()
 
