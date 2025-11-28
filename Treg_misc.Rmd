@@ -435,6 +435,7 @@ so = so_orig[,so_orig$IGT %in% c("IGT91", "IGT92")]
 so = NormalizeData(so)
 
 so@meta.data %>% count(sample_code, genetics, sample_type)
+so@meta.data %>% count(sample_code, condition_detailed)
 
 
 pdf(sprintf("%s/MDE_IGT9192_MHC2KO_level1_20251030.pdf", out_dir), 5, 5, useDingbats = F)
@@ -469,6 +470,28 @@ dev.off()
 # p1 + geom_point(data = tmp2, aes(dim1, dim2,color = feature)) + scale_color_gradientn(colours = viridis(10)) + theme_void() + NoGrid()
 # p2 = FeaturePlot(so[,sub],reduction = "mde2_totalvi_20241006", features = c("Foxp3"), cols = viridis(10)) 
 
+tmp = so_orig@meta.data %>%
+  filter(IGT %in% c("IGT91", "IGT92") & condition_detailed_simplified %in% c("MHCIIKO", "MHCIIhet")) %>%
+  count(sample_code, annotation_level1, name = "n_cells") %>%      # number of cells per IGTHT × level1
+  group_by(sample_code) %>%
+  mutate(
+    total_cells_per_sample = sum(n_cells),                        # total cells per IGTHT
+    prop = n_cells / total_cells_per_sample              # proportion per annotation_level1
+  ) %>%
+  ungroup() %>% as.data.frame()
+
+so_orig@meta.data %>%
+    filter(grepl(pattern = "allT|CD45p", x = target_cells_simplified))  %>%
+    count(sample_code, annotation_level1, name = "n_cells") %>%      # number of cells per IGTHT × level1
+    group_by(sample_code) %>%
+    mutate(
+        total_cells_per_sample = sum(n_cells),                        # total cells per IGTHT
+        prop = n_cells / total_cells_per_sample              # proportion per annotation_level1
+    ) %>%
+    ungroup() %>%
+    group_by(annotation_level1) %>% summarize(mean(prop)) %>% as.data.frame()
+
+# write.table(x = tmp, file = sprintf("%s/MHCKO_table.txt", out_dir), quote = F, row.names = F, sep = "\t")
 
 
 

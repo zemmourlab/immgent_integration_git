@@ -43,11 +43,12 @@ ColorRamp = brewer.pal(9, "Blues")
 
 mypal_level2 = immgent_colors$level2
 mypal_level2["not classified"] = "black"
-mypal_level2 = immgent_colors$level2_option2
-mypal_level2["not classified"] = "black"
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
 mypal_level1 = immgent_colors$level1
 mypal_level1["not classified"] = "black"
 mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
 
 #Large Color palette
 library("pals")
@@ -83,7 +84,6 @@ out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/misc
 **Most up-to-date data**
 on Midway
 ```{r}
-
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
 so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
@@ -103,8 +103,8 @@ so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
-so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
-
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
 
 ```
 
@@ -153,7 +153,7 @@ df2 <- df %>%
   filter(!is.na(organ_simplified2)) %>%
   count(organ_simplified2, name = "n") %>%
   mutate(organ_simplified2 = fct_reorder(organ_simplified2, n)) %>% arrange(n)
-df2$organ_simplified2 = factor(df2$organ_simplified2, levels = c("spleen LN blood", "CNS", "submandibular gland", "lung", "gut", "skin", "other"))
+df2$organ_simplified2 = factor(df2$organ_simplified2, levels = c("spleen LN blood", "gut", "lung", "skin", "submandibular gland", "CNS", "other"))
 
 # barplot with labels on bars
 p1 = ggplot(df2, aes(x = organ_simplified2, y = n, fill = organ_simplified2)) +
@@ -168,7 +168,7 @@ p1 = ggplot(df2, aes(x = organ_simplified2, y = n, fill = organ_simplified2)) +
     legend.position = "none"
   ) + scale_fill_brewer(palette = "Set3") + NoGrid()
 
-pdf(sprintf("%s/barplot_cellcount_organ.pdf", out_dir), 10,5, useDingbats = F)
+pdf(sprintf("%s/barplot_cellcount_organ.pdf", out_dir), 10,7, useDingbats = F)
 p1
 dev.off()
 
@@ -194,11 +194,11 @@ df2 <- df %>%
 
 df2 = df2 %>%
   mutate(condition_broad = fct_reorder(condition_broad, n)) %>% arrange(n)
-df2$condition_broad = factor(df2$condition_broad, levels = c("healthy", "allergy", "autoimmune", "bacteria", "virus", "parasite", "fungus", "cancer", "immunization", "allotransplant" ))
+df2$condition_broad = factor(df2$condition_broad, levels = rev(c("healthy", "allergy", "autoimmune", "bacteria", "virus", "parasite", "fungus", "cancer", "immunization", "allotransplant" )))
 any(is.na(df2$condition_broad ))
 
 # barplot with labels on bars
-p = ggplot(df2, aes(x = rev(condition_broad), y = -n, fill = condition_broad)) +
+p = ggplot(df2, aes(x = condition_broad, y = -n, fill = condition_broad)) +
     geom_col(width = 0.75) +
     geom_text(aes(label = comma(n)), hjust = 0, size = 3) +
     # geom_text(aes(y = 0, label = comma(n)), hjust = -0.25, size = 3) +
@@ -256,7 +256,7 @@ pdf(sprintf("%s/MDE_level1_separated2.pdf", out_dir), 5,5, useDingbats = F)
 o = unique(so$annotation_level1)
 for (o in unique(so$annotation_level1)) {
     print(o)
-    p = DimPlot(object = so, reduction = "mde2_totalvi_20241006", raster = T, raster.dpi = c(1024,1024), cells.highlight = names(which(so$annotation_level1 == o)), cols.highlight = mypal_level1[o]) + NoLegend()
+    p = DimPlot(object = so, reduction = "mde2_totalvi_20241006", raster = T, raster.dpi = c(1024,1024), cells.highlight = colnames(so)[so$annotation_level1 == o], cols.highlight = mypal_level1[o]) + NoLegend()
     print(p)
     
 }
@@ -434,7 +434,7 @@ dev.off()
 Cluster structure conservation with silhoette analysis
 ```{r}
 library(cluster)
-so_list = Seurat::SplitObject(so_orig[,so_orig$IGT %in% c("IGT1", "IGT5")], split.by = "IGT")
+# so_list = Seurat::SplitObject(so_orig[,so_orig$IGT %in% c("IGT1", "IGT5")], split.by = "IGT")
 
 BioConservationSilhouette = function(so, reduc_integrated = "totalvi_20241008_rmIGTsample") {
     message("Clustering in the batch...")
@@ -584,12 +584,12 @@ cor(sil_summary_merged$median_sil_width.pre, sil_summary_merged$median_sil_width
 
 
 **Figure 3 - Level2 and clustering cluster distribution across organs and conditions**
-3A
+*3A*
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
-so@meta.data %>% count(organ_simplified)
-so@meta.data %>% count(IGT)
-so@meta.data %>% filter(IGT == "IGT70") %>% select(exp_name) %>% unique()
+# so@meta.data %>% count(organ_simplified)
+# so@meta.data %>% count(IGT)
+# so@meta.data %>% filter(IGT == "IGT70") %>% select(exp_name) %>% unique()
 
 pdf(sprintf("%s/MDE_level2.pdf", out_dir), 5,5, useDingbats = F)
 p = DimPlot(object = so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024)) + scale_color_manual(values = mypal_level2) + NoGrid()
@@ -622,10 +622,54 @@ dev.off()
 
 ```
 
-S3A
+*3E: level2 in level1 MDE*
+```{r}
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so_list = SplitObject(so, split.by = "annotation_level1")
+
+pdf(sprintf("%s/MDE_level2_subsetMDEs.pdf", out_dir), 5,5, useDingbats = F)
+p = DimPlot(so_list[["CD8"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["CD4"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["Treg"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["gdT"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["CD8aa"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["nonconv"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["DN"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1)
+p
+p + NoLegend()
+p = DimPlot(so_list[["DP"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1)
+p
+p + NoLegend()
+dev.off()
+
+
+for (o in unique(so$annotation_level1)) {
+    print(o)
+    p = DimPlot(object = so_list[[o]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512)) + scale_color_manual(values = mypal_level2) + NoGrid()
+    print(p)
+    print(p+ NoLegend())
+}
+dev.off()
+
+
+```
+
+
+*S3A*
 Clusters by IGT
 ```{r}
-
 library(dplyr)
 library(rlang)
 
@@ -689,8 +733,7 @@ p + NoLegend()
 dev.off()
 ```
 
-Proportion of level2 (denominator is level1) in each organ
-allT only
+*3B/C* Proportion of level2 (denominator is level1) in each organ
 annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds in composition_anbalysis_igt1_96.Rmd
 --> Barplot_Level2ByIGT_healthy.pdf and Barplot_Level2ByIGT.pdf
 ```{r}
@@ -824,7 +867,7 @@ p <- res$plot + scale_fill_gradientn(colours = colorRampPalette(c("white", "blac
 p
 dev.off()
 
-pdf(sprintf("%s/DotPlot_Level2ByOrgan_healthy.pdf", out_dir), 25,6, useDingbats = F)
+pdf(sprintf("%s/DotPlot_Level2ByOrgan_healthy.pdf", out_dir), 25,5, useDingbats = F)
 m4 = m3 %>% filter(organ_simplified != "thymus", target_cells_simplified %in% c("CD45p", "allT"), condition_broad == "healthy") %>% select(-contains("thymocyte"))
 res <- make_comp_dotdata_and_plot(
   data = m4,
@@ -875,4 +918,1244 @@ dev.off()
 
 
 ```
+
+*3D/E CD62L CD44 plots*
+
+MDE incremental plots level2
+```{r}
+# so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# pdf(sprintf("%s/MDEincremental_level2.pdf", out_dir), 30,5, useDingbats = F)
+p = DimPlot(object = so, reduction = "mde_incremental", group.by = "annotation_level2", raster = T, raster.dpi = c(512,512), split.by = "annotation_level1", cols = mypal_level2) + NoGrid()
+p + NoLegend()
+# dev.off()
+```
+
+
+```{r}
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+pdf(sprintf("%s/FeaturePlot_CD62L_CD44.pdf", out_dir), 5,5, useDingbats = F)
+# FeaturePlot(so, reduction = "mde2_totalvi_20241006", features = c("CD62L", "CD44"), order = T, cols = c("lightgrey", "blue"), raster = T,max.cutoff = "q99") + ggplot2::xlim(-2.5,2.5) + ggplot2::ylim(-2.5,2.5)#Trgc1, Trgv2
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", features = c("CD62L"), order = T, cols = c("lightgrey", "blue"), raster = T,min.cutoff = "q20",max.cutoff = "q70") + ggplot2::xlim(-2.5,2.5) + ggplot2::ylim(-2.5,2.5)#Trgc1, Trgv2
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", features = c("CD44"), order = T, cols = c("lightgrey", "brown"), raster = T,min.cutoff = "q20",max.cutoff = "q70") + ggplot2::xlim(-2.5,2.5) + ggplot2::ylim(-2.5,2.5)#Trgc1, Trgv2
+
+so$sub = F
+so$sub[sample(x = colnames(so), size = 50000, replace = F)] = T
+MyFeatureScatter(so = so[,so$sub], assay = "ADT", slot = "data", feature1 = "CD62L", feature2 = "CD44", group.by = "sub", raster = T,highlight_size = 1) + geom_vline(aes(xintercept = 4.5), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = 5), linetype="dashed", color = "brown") + NoLegend()
+
+so$is_CD62L_pos = so[["ADT"]]@data["CD62L",] > 4.5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD62L_pos", raster = T,cols = plasma(10), highlight_size = 0.1, highlight_pixels = c(512,512))
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_CD62L_pos", raster = T, order = T) + scale_color_manual(values = c("grey", "blue")) + NoLegend()
+# so$is_CD44_pos = so[["ADT"]]@data["CD44",] > 5 & so[["ADT"]]@data["CD62L",] < 4
+
+so$is_CD44_pos = so[["ADT"]]@data["CD44",] > 5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD44_pos", raster = T, cols = plasma(10), highlight_size = 0.1)
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_CD44_pos", raster = T, order = T) + scale_color_manual(values = c("grey", "red")) + NoLegend()
+
+so$is_CD62L_sp = so[["ADT"]]@data["CD62L",] > 4.5 & so[["ADT"]]@data["CD44",] < 5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD62L_sp", raster = T,cols = plasma(10), highlight_size = 0.1, highlight_pixels = c(512,512)) + ggtitle(label = "CD44- CD62L+")
+# DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_CD62L_sp", raster = T, order = T) + scale_color_manual(values = c("grey", "blue")) + NoLegend()
+# so$is_CD44_pos = so[["ADT"]]@data["CD44",] > 5 & so[["ADT"]]@data["CD62L",] < 4
+
+so$is_CD44_sp = so[["ADT"]]@data["CD62L",] < 4.5 & so[["ADT"]]@data["CD44",] > 5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD44_sp", raster = T,cols = plasma(10), highlight_size = 0.1, highlight_pixels = c(512,512)) + ggtitle(label = "CD44+ CD62L-")
+
+so$is_CD44_CD62L_dp = so[["ADT"]]@data["CD62L",] > 4.5 & so[["ADT"]]@data["CD44",] > 5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD44_CD62L_dp", raster = T,cols = plasma(10), highlight_size = 0.1, highlight_pixels = c(512,512)) + ggtitle(label = "CD44+ CD62L+")
+
+so$is_CD44_CD62L_dn = so[["ADT"]]@data["CD62L",] < 4.5 & so[["ADT"]]@data["CD44",] < 5
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", group.by = "is_CD44_CD62L_dn", raster = T,cols = plasma(10), highlight_size = 0.1, highlight_pixels = c(512,512)) + ggtitle(label = "CD44- CD62L-")
+
+p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group") + scale_color_manual(values = mypal_level2group) + NoGrid()
+p + NoLegend()
+
+dev.off()
+
+pdf(sprintf("%s/FeaturePlots_CD62L_CD44_Bylevel1.pdf", out_dir), 7,7, useDingbats = F)
+so$sub = F
+so$sub[sample(x = colnames(so), size = 50000, replace = F)] = T
+MyFeatureScatter(so = so[,so$sub], assay = "ADT", slot = "data", feature1 = "CD62L", feature2 = "CD44", group.by = "sub", raster = T,highlight_size = 1) + geom_vline(aes(xintercept = 4.5), linetype="dashed", color = "brown") + geom_hline(aes(yintercept = 5), linetype="dashed", color = "brown") + NoLegend()
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD62L_pos", , split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD62L+")
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD44_pos", split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD44+")
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD62L_sp", , split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD44- CD62L+")
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD44_sp", split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD44+ CD62L-")
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD44_CD62L_dp", split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD44+ CD62L+")
+
+MyDimPlotHighlightDensity(seurat_object = so, umap_to_plot = "mde_incremental", group.by = "is_CD44_CD62L_dn", split.by = "annotation_level1", raster = T,cols = plasma(10), highlight_size = 0.5, highlight_pixels = c(512,512)) + ggtitle(label = "CD44- CD62L-")
+dev.off()
+
+```
+
+*S3B: Conservation of level2 in each dataset - RNA space*
+classic silhouette, filter cells in each IGT with at least 10 cell per level2. 
+```{r}
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "RNA"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i) 
+    tmp = so[,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "LogNormalize", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 30, verbose = F) #%>% FindNeighbors(dims = 1:30, verbose = F) %>% RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        sil_post = silhouette(cl, dist = reduc.dist)
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+saveRDS(sil_summary_list, file = "RobustnessLevel2RNASpace_Silhouette_IGT.Rds")
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p_list = list()
+for(j in c("mean_sil_width", "median_sil_width", "percentage_positive")) {
+    p_list[[j]] = ggplot(sil_summary_merged) + #%>% filter(total > 10
+    aes(x = annotation_level2, y = !!sym(j)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(j) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+}
+
+pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+print(p_list[[1]])
+print(p_list[[1]] + NoLegend())
+print(p_list[[2]] + NoLegend())
+print(p_list[[3]] + NoLegend())
+dev.off()
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+
+*S3C: Conservation of level2 in each dataset - Protein/ADT space*
+classic silhouette, filter cells in each IGT with at least 10 cell per level2. 
+```{r}
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "ADT"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+#Select only good ADT markers
+markers = so[["ADT"]]@meta.features %>% filter(IGT1only == F & classification %in% c("good", "intermediate")) %>% row.names()
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i)
+    tmp = so[markers,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "CLR", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 50, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 10, verbose = F) #%>% FindNeighbors(dims = 1:10, verbose = F) %>% RunUMAP(dims = 1:10, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        sil_post = silhouette(cl, dist = reduc.dist)
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p_list = list()
+for(j in c("mean_sil_width", "median_sil_width", "percentage_positive")) {
+    p_list[[j]] = ggplot(sil_summary_merged) + #%>% filter(total > 10
+    aes(x = annotation_level2, y = !!sym(j)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(j) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+}
+
+pdf(sprintf("%s/Boxplot_Level2ProteinSpace.pdf", out_dir), 25,6, useDingbats = F)
+print(p_list[[1]])
+print(p_list[[1]] + NoLegend())
+print(p_list[[2]])
+print(p_list[[3]])
+dev.off()
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+colon IGT20, IGT24 and IGT27
+```{r}
+igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220812_exp_id_13_ColonSI/IGT20/dataset_clean.Rds')
+tmp = so_orig
+tmp$RNA_clusters = NA
+tmp$RNA_clusters = as.character(igt$RNA_clusters[match(colnames(tmp), colnames(igt))])
+pdf(sprintf("%s/IGT20_MDE_immgenTclusters.pdf", out_dir), 5,5, useDingbats = F)
+mypal_batch = setNames(mypal, unique(igt$RNA_clusters))
+mypal_batch = mypal_batch[!is.na(names(mypal_batch))]
+igt@meta.data$annotation_level2 = so_orig$annotation_level2[match(colnames(igt), colnames(so_orig))]
+igt@meta.data$annotation_level1 = so_orig$annotation_level1[match(colnames(igt), colnames(so_orig))]
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("Colon", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 50))
+p = DimPlot(igt_colon, reduction = "umap_rna", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("Colon", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 50))
+p = DimPlot(igt_colon, reduction = "umap_adt", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+# tmp2 = data.frame(dim1 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 1], dim2 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 2])
+# bkrg = ggplot(tmp2) + scattermore::geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = c(512,512))
+p = DimPlot(tmp[,colnames(igt_colon)], reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+MyDimPlotHighlight(tmp, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(igt)[grepl("Colon", igt$sample_name)], highlight_column_name = "annotation_level2",mycols = mypal_level2, print_plot1 = F, print_plot2 = T, labelclusters = T )
+dev.off()
+
+igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221019_exp_id_21_Iliev/IGT27/dataset_clean.Rds')
+tmp = so_orig
+tmp$RNA_clusters = NA
+tmp$RNA_clusters = as.character(igt$RNA_clusters[match(colnames(tmp), colnames(igt))])
+pdf(sprintf("%s/IGT27_MDE_immgenTclusters.pdf", out_dir), 5,5, useDingbats = F)
+mypal_batch = setNames(mypal, unique(igt$RNA_clusters))
+mypal_batch = mypal_batch[!is.na(names(mypal_batch))]
+igt@meta.data$annotation_level2 = so_orig$annotation_level2[match(colnames(igt), colnames(so_orig))]
+igt@meta.data$annotation_level1 = so_orig$annotation_level1[match(colnames(igt), colnames(so_orig))]
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("No_colon_M", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 10))
+p = DimPlot(igt_colon, reduction = "umap_rna", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("No_colon_M", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 10))
+p = DimPlot(igt_colon, reduction = "umap_adt", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+# tmp2 = data.frame(dim1 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 1], dim2 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 2])
+# bkrg = ggplot(tmp2) + scattermore::geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = c(512,512))
+p = DimPlot(tmp[,colnames(igt_colon)], reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+MyDimPlotHighlight(tmp, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(igt)[grepl("No_colon_M", igt$sample_name)], highlight_column_name = "annotation_level2",mycols = mypal_level2, print_plot1 = F, print_plot2 = T, labelclusters = T )
+dev.off()
+
+```
+
+**Figure 4A: cumulative number of clusters**
+
+```{r}
+library(dplyr)
+
+## 1. Count cells per IGT × annotation_level2
+df_counts <- so@meta.data %>%
+  as.data.frame() %>%
+  count(IGT, annotation_level2, name = "n_cells") %>%
+  mutate(
+    IGT_num = as.numeric(gsub("[^0-9]", "", IGT))   # extract numeric part to sort IGT1..IGT96
+  )
+
+## 2. Cumulative # cells per cluster across IGTs
+df_cum <- df_counts %>%
+  arrange(annotation_level2, IGT_num) %>%          # for each cluster, go in IGT order
+  group_by(annotation_level2) %>%
+  mutate(
+    cum_n_cells = cumsum(n_cells)                  # cumulative # cells in this cluster up to this IGT
+  ) %>%
+  ungroup()
+
+## 3. For each IGT, how many clusters have cum_n_cells > 20 so far?
+# igt_cum_clusters <- df_cum %>%
+#   group_by(IGT, IGT_num) %>%
+#   summarise(
+#     n_clusters_gt20 = sum(cum_n_cells > 20),
+#     .groups = "drop"
+#   ) %>%
+#   arrange(IGT_num)
+
+discovery_tbl <- df_cum %>%
+  filter(cum_n_cells > 50) %>%                   # only steps where it’s above threshold
+  group_by(annotation_level2) %>%
+  summarise(
+    first_IGT_num = min(IGT_num),                # first time this cluster crosses 20 cells
+    .groups = "drop"
+  )
+
+## 4. Walk through IGTs in order and compute cumulative discovery
+igt_steps <- df_cum %>%
+  distinct(IGT, IGT_num) %>%
+  arrange(IGT_num)
+
+igt_steps$n_new <- 0L
+
+for (i in seq_len(nrow(igt_steps))) {
+  current_num <- igt_steps$IGT_num[i]
+  # how many clusters cross the threshold for the FIRST time at this IGT?
+  igt_steps$n_new[i] <- sum(discovery_tbl$first_IGT_num == current_num)
+}
+
+igt_steps$cum_clusters <- cumsum(igt_steps$n_new)
+
+igt_steps
+igt_steps = igt_steps %>% arrange(IGT_num)
+igt_steps$IGT = factor(igt_steps$IGT, levels = igt_steps$IGT)
+
+# pdf(sprintf("%s/CumulativeNumberClusters_immgenT.pdf", out_dir,i), 10,5, useDingbats = F)
+p = ggplot(igt_steps, aes(x = IGT, y = cum_clusters, group = 1)) +
+  geom_line() +
+  geom_point(size = 1.5) +
+    geom_hline(yintercept = 112, colour = "brown", linetype = "dashed", size = 0.5) +
+  # scale_x_continuous(breaks = igt_steps$IGT_num,labels = igt_steps$IGT) +
+  labs(
+    x = "IGT",
+    y = "Cumulative # clusters (cum_n_cells > 50)",
+    title = "Cumulative discovery of clusters across IGTs",
+    subtitle = "number of clusters detected=cumsum reaching least 50 cells"
+  ) +
+    ylim(0,115) +
+  theme_bw(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+p + NoGrid()
+# dev.off()
+
+
+```
+
+
+**Figure 4 T-RBI**
+see here for https://docs.google.com/spreadsheets/d/10icsN1kaUNOgMYi-oVTFx8AH9CI_52SlQb3p798MfQY/edit?usp=sharing
+GSE186164_IEL_CD8aa - ctrl IEL only
+GSE141895_Baranek_iNKT_Fhl2 - WT only
+GSE189485_Thymus_Lung_Liver_Spleen - remove thymus?
+GSE239558_mLN_Ileum_Colon maybe
+```{r}
+paths = c(GSE244487 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE244487_conceicao-neto_exhaustion/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE160055 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD4/GSE160055_mouse_colon_LP_CD4_conditions/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE253394 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD4/GSE253394_chlamydia/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE122712 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE122712/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE131535 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE131535/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE164978 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE164978_CD8_atlas/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE182275 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE182275/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE202543 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE202543_Giovanni_CAR_T/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE199563 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8/GSE199563_Giles_Wherry_Exhausted/Trial_Final/Final_Seurat_object.Rds",
+GSE186164 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/CD8aa/GSE186164_IEL_CD8aa/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE129030 = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/DN/GSE129030_DN_Naive_Activated/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds',
+GSE141895 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/iNKT/GSE141895_Baranek_iNKT_Fhl2/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE189485 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/MAIT/GSE189485_Thymus_Lung_Liver_Spleen/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE239558 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/MAIT/GSE239558_mLN_Ileum_Colon/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+TabulaMuris = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/Treg/Tabula_muris_Senis/T_cells/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE196338 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/Treg/GSE196338_Gut_RORg+_Tregs/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds",
+GSE234317 = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/odhran/Treg/GSE234317_Treg_Meninges/Not_classified_Full_Trial/Not_classified_loop_fixed/Final_Seurat_object.Rds")
+
+so_list = list()
+for (i in names(paths)) {
+    print(i)
+   so_list[[i]] = readRDS(paths[i])
+}
+
+saveRDS(so_list, file = "trbi_17studies.Rds")
+
+```
+
+Merge on Midway3
+```{r}
+library(Seurat)
+library(purrr)
+
+so_list = readRDS("trbi_17studies.Rds")
+
+so_list_slim = list()
+
+for (i in 1:length(so_list)) {
+    print(i)
+    obj = so_list[[i]]
+    dim_keep <- intersect(c("mde_incremental_allT", "mde_incremental_level2"), names(obj@reductions))
+    features_keep = intersect(c("Cd4", "Cd8b1", "Cd8a", "Trdc", "Foxp3", "Zbtb16"), rownames(obj[["RNA"]]@counts))
+    
+    message("DietSeurat...")
+    obj_slim = DietSeurat(
+    obj,
+    assays = "RNA",
+    layers = "counts",
+    features = features_keep,
+    dimreducs  = dim_keep,
+    misc       = FALSE
+  )
+    
+    obj_slim$dataset = names(so_list)[i]
+    
+    message("Rename cells...")
+    obj_slim = RenameCells(obj_slim, new.names = paste0(names(so_list)[i], "_", colnames(obj_slim)))
+    
+    so_list_slim[[names(so_list)[i]]] = obj_slim
+                          
+}
+
+# Merge all slimmed objects
+so_merged = merge(so_list_slim[[1]],so_list_slim[2:length(so_list_slim)],  collapse = T, merge.data = T, merge.dr = T)
+# so_merged = Reduce(function(x, y) merge(x, y), so_list_slim)
+so_merged
+so_merged_orig$level1_final[so_merged_orig$dataset == "GSE199563"] = "CD8"
+saveRDS(so_merged, file = "trbi_17studies_diet_merged.Rds")
+
+```
+
+Table with datasets and cell counts: 335042
+```{r}
+so_merged_orig = readRDS("trbi_17studies_diet_merged.Rds")
+# so_merged_orig@meta.data %>% count(dataset,sample_name, name = "n_cells") %>% write.table(file = "trbi_17studies_table.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+
+so_merged = so_merged_orig[,!so_merged_orig$level1_final %in% c("nonT", "unclear")]
+
+```
+
+```{r}
+so_merged_orig = readRDS("trbi_17studies_diet_merged.Rds")
+
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+
+pdf(sprintf("%s/TRBI_MDEmain_dataset.pdf", out_dir), 5,5, useDingbats = F)
+p = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = dataset), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = mypal) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid()
+p
+p + NoLegend()
+dev.off()
+
+pdf(sprintf("%s/TRBI_MDEmain_level1_perdataset.pdf", out_dir), 5,5, useDingbats = F)
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = level1_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = mypal_level1) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+for (i in unique(dat_frg$dataset)) {
+    print(i)
+   p = bkrg + geom_scattermore(data = dat_frg %>% filter(dataset == i), aes(dim1, dim2, color = level1_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = mypal_level1) + ggtitle(label = i) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+   print(p)
+}
+dev.off()
+# DimPlot(so_merged, reduction = "mde_incremental_allT",group.by = "level1_final", raster.dpi = c(1024, 1024)) + scale_color_manual(values = mypal_level1) + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+# DimPlot(so_merged, reduction = "mde_incremental_allT",group.by = "is_nont", raster.dpi = c(1024, 1024)) + scale_color_manual(values = c("grey", "red")) + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+
+
+pdf(sprintf("%s/TRBI_MDEmain_level2_perdataset.pdf", out_dir), 5,5, useDingbats = F)
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = level2_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = c(mypal_level1, mypal_level2)) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+for (i in unique(dat_frg$dataset)) {
+    print(i)
+   p = bkrg + geom_scattermore(data = dat_frg %>% filter(dataset == i), aes(dim1, dim2, color = level2_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = c(mypal_level1, mypal_level2)) + ggtitle(label = i) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+   print(p)
+}
+dev.off()
+
+```
+
+
+FeaturePlots
+```{r}
+pdf(sprintf("%s/TRBI_FeaturePlots.pdf", out_dir), 5,5, useDingbats = F)
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Cd4"), order = T,reduction = "mde_incremental_allT", max.cutoff = "q90") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Cd8b1"), order = T,reduction = "mde_incremental_allT") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Cd8a"), order = T,reduction = "mde_incremental_allT") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Trdc"), order = T,reduction = "mde_incremental_allT", max.cutoff = "q90") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Foxp3"), order = T,reduction = "mde_incremental_allT",max.cutoff = "q90") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+FeaturePlot(so_merged_orig, raster.dpi = c(1024, 1024), features = c("Zbtb16"), order = T,reduction = "mde_incremental_allT",max.cutoff = "q90") + xlim(-2.5,2.5) + ylim(-2.5,2.5) + theme_void()
+dev.off()
+```
+
+showing nonT outside the MDE
+```{r}
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+so_merged_orig$is_nont = so_merged_orig$level1_final == "nonT"
+dat_frg = data.frame(so_merged_orig@meta.data[rownames(so_merged_orig[["mde_incremental_allT"]]),], dim1 = so_merged_orig[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged_orig[["mde_incremental_allT"]]@cell.embeddings[,2])
+
+pdf(sprintf("%s/TRBI_MDEmain_nonT.pdf", out_dir), 5,5, useDingbats = F)
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = is_nont), size =3, pixels = c(c(1024, 1024))) + ggtitle(label = "nonT in red, others in black, immgenT in grey") + scale_color_manual(values = c("grey0", "red")) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), color = "black", size =3, pixels = c(c(1024, 1024))) +
+    geom_point(data = dat_frg[dat_frg$is_nont,], aes(dim1, dim2), color = "red",size = 1, alpha = 0.1) + ggtitle(label = "nonT in red, others in black, immgenT in grey") + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+dev.off()
+
+```
+
+MDE per dataset with immgent in background
+```{r}
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+
+pdf(sprintf("%s/TRBI_MDEmain_level1_perdataset.pdf", out_dir), 5,5, useDingbats = F)
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = level1_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = mypal_level1) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+for (i in unique(dat_frg$dataset)) {
+    print(i)
+   p = bkrg + geom_scattermore(data = dat_frg %>% filter(dataset == i), aes(dim1, dim2, color = level1_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = mypal_level1) + ggtitle(label = i) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+   print(p)
+}
+dev.off()
+# DimPlot(so_merged, reduction = "mde_incremental_allT",group.by = "level1_final", raster.dpi = c(1024, 1024)) + scale_color_manual(values = mypal_level1) + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+# DimPlot(so_merged, reduction = "mde_incremental_allT",group.by = "is_nont", raster.dpi = c(1024, 1024)) + scale_color_manual(values = c("grey", "red")) + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+
+
+pdf(sprintf("%s/TRBI_MDEmain_level2_perdataset.pdf", out_dir), 5,5, useDingbats = F)
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2, color = level2_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = c(mypal_level1, mypal_level2)) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+for (i in unique(dat_frg$dataset)) {
+    print(i)
+   p = bkrg + geom_scattermore(data = dat_frg %>% filter(dataset == i), aes(dim1, dim2, color = level2_final), size =2, pixels = c(c(1024, 1024))) + scale_color_manual(values = c(mypal_level1, mypal_level2)) + ggtitle(label = i) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+   print(p)
+}
+dev.off()
+
+
+DimPlot(so_merged2[,so_merged2$level1_final == "CD8"], reduction = "mde_incremental_level2",group.by = "level2_final", raster.dpi = c(1024, 1024), split.by = "dataset", ncol = 5) + scale_color_manual(values = c(mypal_level2,mypal_level1) ) + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+
+FeaturePlot(so_merged2[,so_merged2$level1_final == "CD8"], features = c("Cd8a"), order = T,reduction = "mde_incremental_level2") + xlim(-2.5,2.5) + ylim(-2.5,2.5) 
+```
+
+Barplot with % annotated
+326 not classified out of 299764 cells in level1
+```{r}
+prop_level1_per_dataset = so_merged@meta.data %>%
+  as.data.frame() %>%
+  count(dataset, level1_final, name = "n_cells") %>%  
+  group_by(dataset) %>%
+  mutate(
+    total_cells = sum(n_cells),
+    prop = n_cells / total_cells                   
+  ) %>%
+  ungroup()
+
+prop_level2_per_dataset = so_merged@meta.data %>%
+  as.data.frame() %>%
+  count(dataset, level2_final, name = "n_cells") %>%    
+  group_by(dataset) %>%
+  mutate(
+    total_cells = sum(n_cells),
+    prop = n_cells / total_cells                     
+  ) %>%
+    filter(level2_final %in% c("not classified","CD4", "CD8", "Treg", "gdT", "nonconv", "CD8aa", "DN", "DP", "thymocyte")) %>%                          # keep only selected categories
+  group_by(dataset) %>%
+  summarise(prop_notclass = sum(prop), .groups = "drop") 
+
+
+pdf(sprintf("%s/TRBI_barplot_notclassified_perdataset.pdf", out_dir), 5,5, useDingbats = F)
+ggplot(data = prop_level1_per_dataset %>% filter(level1_final == "not classified"), aes(x = dataset, y = (1-prop)*100)) +
+  geom_col(fill = "black") +
+  labs(
+    x = "Dataset",
+    y = "% not annotated",
+    title = "Fraction of 'not classified' cells per dataset at level1"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  NoGrid()
+
+ggplot(data = prop_level2_per_dataset, aes(x = dataset, y = (1-prop_notclass)*100)) +
+  geom_col(fill = "black") +
+  labs(
+    x = "Dataset",
+    y = "% not annotated",
+    title = "Fraction of 'not classified' cells per dataset at level2"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  NoGrid()
+dev.off()
+
+
+```
+
+326 not classified out of 299764 cells in level1
+11256 not classified in level2
+```{r}
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+pdf(sprintf("%s/TRBI_MDEmain_notclassified.pdf", out_dir), 5,5, useDingbats = F)
+so_merged$is_noclassl1 = so_merged$level1_final == "not classified"
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+    geom_point(data = dat_frg[dat_frg$is_noclassl1,], aes(dim1, dim2), color = "red", size =0.25) + 
+    ggtitle(label = "not classified level1 in red") + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+
+so_merged$is_noclassl2 = so_merged$level2_final %in% c("not classified", "CD4", "CD8", "Treg", "gdT", "nonconv", "CD8aa", "DN", "DP", "thymocyte")
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+    geom_scattermore(data = dat_frg[dat_frg$is_noclassl2,], aes(dim1, dim2), color = "red", pixels = c(512, 512)) + 
+    ggtitle(label = "not classified level2 in red") + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+
+dev.off()
+
+```
+
+Discovery score functions
+```{r}
+library(RANN)
+library(dplyr)
+
+# old_mat: numeric matrix/data.frame with columns x,y (100000 x 2)
+# new_mat: numeric matrix/data.frame with columns x,y (1000 x 2)
+# k: number of neighbors for the metric, e.g., 10
+# --- usage ---
+# old_mat <- as.matrix(old_df[, c("x","y")])
+# new_mat <- as.matrix(new_df[, c("x","y")])
+# s <- knn_novelty_scores(old_mat, new_mat, k = 10)
+# summarize_discovery(s, ratio_threshold = 1.2)
+
+knn_novelty_scores <- function(old_mat, new_mat, k = 10) {
+  old_mat <- as.matrix(old_mat)
+  new_mat <- as.matrix(new_mat)
+  stopifnot(ncol(old_mat) >= 2, ncol(new_mat) >= 2, ncol(old_mat) == ncol(new_mat))
+  if (nrow(new_mat) <= k) stop("Need k < number of new points.")
+
+  # Mean distance to k nearest REFERENCE neighbors
+  ref_knn <- nn2(data = old_mat, query = new_mat, k = k)
+  mean_d_ref <- rowMeans(ref_knn$nn.dists)
+
+  # Mean distance to k nearest QUERY neighbors (leave-one-out: drop the self at distance 0)
+  qry_knn <- nn2(data = new_mat, query = new_mat, k = k + 1)
+  # First column is self (distance 0). Remove it; take the next k neighbors.
+  mean_d_qry <- rowMeans(qry_knn$nn.dists[, -1, drop = FALSE])
+
+  # Scores
+  ratio <- mean_d_ref / mean_d_qry
+  score_log <- log(ratio)
+  score_sym <- (mean_d_ref - mean_d_qry) / (mean_d_ref + mean_d_qry)  # in [-1, 1]
+
+  tibble::tibble(
+    idx = seq_len(nrow(new_mat)),
+    mean_d_ref = mean_d_ref,
+    mean_d_qry = mean_d_qry,
+    ratio = ratio,
+    score_log = score_log,
+    score_sym = score_sym
+  )
+}
+
+summarize_discovery <- function(scores_tbl, ratio_threshold = 2) {
+  # "Discovery rate": fraction of new points at least 20% farther from ref than from query neighbors
+  discovery_ncells <- sum(na.omit(scores_tbl$ratio > ratio_threshold)) #mean(scores_tbl$ratio > ratio_threshold)
+  tibble::tibble(
+    k = NA_integer_,
+    ratio_threshold = ratio_threshold,
+    discovery_ncells = discovery_ncells,
+    median_ratio = median(na.omit(scores_tbl$ratio)),
+    q90_ratio = quantile(na.omit(scores_tbl$ratio), 0.9),
+    mean_log_score = mean(na.omit(scores_tbl$score_log))
+  )
+}
+
+```
+
+Discovery score of not classified cells within each dataset RNA PCA/UMAP
+```{r}
+summaries_list2 = list()
+scores_tbl_list2 = list()
+
+for (i in unique(so_merged$dataset)) {
+    print(i)
+    tmp = readRDS(paths[i])
+    tmp = tmp[,tmp@meta.data %>% filter(!level2_final %in% c("nonT", "unclear")) %>% row.names()]
+    # tmp = tmp %>%
+    #     NormalizeData(normalization.method = "LogNormalize", verbose = F) %>%
+    #     FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = F) %>%
+    #     ScaleData(features = VariableFeatures(.), verbose = F) %>%
+    #     RunPCA(features = VariableFeatures(.), npcs = 30, verbose = F) %>%
+    #     FindNeighbors(dims = 1:30, verbose = F) %>%
+    #     RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
+    if (!"mde_incremental_allT" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no mde_incremental_allT")
+        next
+    }
+    if (!"umap_rna" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no umap_rna")
+        next
+    }
+    if (!"pca_rna" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no pca_rna")
+        next
+    }
+    
+    tmp$is_noclassl2 = F
+    tmp$is_noclassl2[tmp$level2_final %in% c("not classified", "CD8", "Treg", "CD4", "nonconv",  "gdT", "CD8aa","DN", "DP")] = T
+    old_mat = tmp[["pca_rna"]]@cell.embeddings[tmp$is_noclassl2 == F,]
+    new_mat = tmp[["pca_rna"]]@cell.embeddings[tmp$is_noclassl2 == T,]
+    scores_tbl = knn_novelty_scores(old_mat, new_mat, k = 10) %>% as.data.frame()
+    rownames(scores_tbl) = rownames(new_mat)
+    scores_tbl$dataset = i
+    scores_tbl$mde_incremental_allT_dim1 = tmp[["mde_incremental_allT"]]@cell.embeddings[rownames(scores_tbl),1]
+    scores_tbl$mde_incremental_allT_dim2 = tmp[["mde_incremental_allT"]]@cell.embeddings[rownames(scores_tbl),2]
+    scores_tbl_list2[[i]] = scores_tbl
+    
+    tmp$score_log = NA
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$discovery = tmp$score_log > log(2)
+    
+    pdf(sprintf("%s/TRBI_%s_discovery_DatasetPCA.pdf", out_dir,i), 5,5, useDingbats = F)
+    p1 = FeaturePlot(tmp, reduction = "umap_rna",features = "score_log")
+    p2 = DimPlot(tmp, reduction = "umap_rna",group.by = "discovery", order = T) + scale_color_manual(values = c("black", "red"))
+    igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+    bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+    dat_frg = data.frame(tmp@meta.data[rownames(tmp[["mde_incremental_allT"]]),], dim1 = tmp[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = tmp[["mde_incremental_allT"]]@cell.embeddings[,2])
+    p3 = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+        geom_point(data = dat_frg[dat_frg$discovery,], aes(dim1, dim2), color = "red", size =1) + 
+        ggtitle(label = sprintf("%s: black the dataset cells,\nred not classified with potential new state", i)) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+    print(p1)
+    print(p2)
+    print(p3)
+    dev.off()
+    # FeaturePlot(tmp, slot = "counts", reduction = "mde_incremental_allT",features = c("Cd4", "Cd8b1", "Cd8a", "Foxp3", "Zbtb16","Trdc"), order = T)
+    
+    discovery_report = data.frame(dataset = i, summarize_discovery(scores_tbl, ratio_threshold = 2) %>% as.data.frame())
+    discovery_report %>% write.table(sprintf("%s/TRBI_%s_discovery_DatasetPCA.txt", out_dir,i), quote = F, row.names = F, col.names = T, sep = "\t")
+    summaries_list2[[i]] = discovery_report
+    
+}
+
+summaries_merged2 = Reduce(rbind, summaries_list2)
+# write.table(summaries_merged2, file = sprintf("%s/TRBI_discovery_summary_dataset_DatasetPCA.txt", out_dir), row.names = F, col.names = T,quote = F )
+scores_tbl_merged2 = Reduce(rbind, scores_tbl_list2)
+# saveRDS(scores_tbl_merged2, file = sprintf("%s/TRBI_discovery_scores_tbl_merged_DatasetPCA.Rds", out_dir))
+
+pdf(sprintf("%s/TRBI_discovery_scores_tbl_merged_DatasetPCA.pdf", out_dir,i), 5,5, useDingbats = F)
+ggplot(scores_tbl_merged2, aes(x = dataset, y = score_log)) +
+    # boxplot first (no outlier points, so we see our own points instead)
+    geom_boxplot(outlier.shape = NA, fill = NA, colour = "black") +
+    # scatter on top (jittered)
+    geom_jitter(width = 0.2, alpha = 0.3, size = 0.1) +
+    geom_hline(yintercept = log(2), colour = "brown", linetype = "dashed", size = 0.5) +
+    labs(
+        x = "Dataset",
+        y = "score_log",
+        title = "score_log distribution per dataset"
+    ) +
+    # ylim(-1.1,1.1)+
+    theme_bw(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    ) + NoGrid()
+dev.off()
+
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+pdf(sprintf("%s/TRBI_MDEmain_discoveryscore.pdf", out_dir), 5,5, useDingbats = F)
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+p = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+    geom_point(data = scores_tbl_merged2[!is.na(scores_tbl_merged2$score_log),], aes(mde_incremental_allT_dim1, mde_incremental_allT_dim2, colour = score_log), size =0.25) + scale_color_gradientn(colours = ColorRamp, limits  = c(-1, 1), oob = scales::squish) + ggtitle(label = "discovery score") + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() 
+p
+p + NoLegend()
+dev.off()
+
+
+
+```
+
+Discovery score of not classified cells within each dataset RNA PCA/UMAP keeping nonT and unclear
+```{r}
+summaries_list2 = list()
+scores_tbl_list2 = list()
+
+for (i in unique(so_merged$dataset)) {
+    print(i)
+    tmp = readRDS(paths[i])
+    # tmp = tmp[,tmp@meta.data %>% filter(!level2_final %in% c("nonT", "unclear")) %>% row.names()]
+    # tmp = tmp %>%
+    #     NormalizeData(normalization.method = "LogNormalize", verbose = F) %>%
+    #     FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = F) %>%
+    #     ScaleData(features = VariableFeatures(.), verbose = F) %>%
+    #     RunPCA(features = VariableFeatures(.), npcs = 30, verbose = F) %>%
+    #     FindNeighbors(dims = 1:30, verbose = F) %>%
+    #     RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
+    if (!"mde_incremental_allT" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no mde_incremental_allT")
+        next
+    }
+    if (!"umap_rna" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no umap_rna")
+        next
+    }
+    if (!"pca_rna" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no pca_rna")
+        next
+    }
+    
+    tmp$is_noclassl2 = F
+    tmp$is_noclassl2[tmp$level2_final %in% c("not classified", "CD8", "Treg", "CD4", "nonconv",  "gdT", "CD8aa","DN", "DP", "nonT", "unclear")] = T
+    old_mat = tmp[["pca_rna"]]@cell.embeddings[tmp$is_noclassl2 == F,]
+    new_mat = tmp[["pca_rna"]]@cell.embeddings[tmp$is_noclassl2 == T,]
+    scores_tbl = knn_novelty_scores(old_mat, new_mat, k = 10) %>% as.data.frame()
+    rownames(scores_tbl) = rownames(new_mat)
+    scores_tbl$dataset = i
+    scores_tbl$mde_incremental_allT_dim1 = tmp[["mde_incremental_allT"]]@cell.embeddings[rownames(scores_tbl),1]
+    scores_tbl$mde_incremental_allT_dim2 = tmp[["mde_incremental_allT"]]@cell.embeddings[rownames(scores_tbl),2]
+    scores_tbl_list2[[i]] = scores_tbl
+    
+    tmp$score_log = NA
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$discovery = tmp$score_log > log(2)
+    
+    pdf(sprintf("%s/TRBI_%s_discovery_DatasetPCA_withnonT.pdf", out_dir,i), 5,5, useDingbats = F)
+    p1 = FeaturePlot(tmp, reduction = "umap_rna",features = "score_log")
+    p2 = DimPlot(tmp, reduction = "umap_rna",group.by = "discovery", order = T) + scale_color_manual(values = c("black", "red"))
+    igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+    bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+    dat_frg = data.frame(tmp@meta.data[rownames(tmp[["mde_incremental_allT"]]),], dim1 = tmp[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = tmp[["mde_incremental_allT"]]@cell.embeddings[,2])
+    p3 = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+        geom_point(data = dat_frg[dat_frg$discovery,], aes(dim1, dim2), color = "red", size =1) + 
+        ggtitle(label = sprintf("%s: black the dataset cells,\nred not classified with potential new state", i)) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+    print(p1)
+    print(p2)
+    print(p3)
+    dev.off()
+    # FeaturePlot(tmp, slot = "counts", reduction = "mde_incremental_allT",features = c("Cd4", "Cd8b1", "Cd8a", "Foxp3", "Zbtb16","Trdc"), order = T)
+    
+    discovery_report = data.frame(dataset = i, summarize_discovery(scores_tbl, ratio_threshold = 2) %>% as.data.frame())
+    discovery_report %>% write.table(sprintf("%s/TRBI_%s_discovery_DatasetPCA_withnonT.txt", out_dir,i), quote = F, row.names = F, col.names = T, sep = "\t")
+    summaries_list2[[i]] = discovery_report
+    
+}
+
+summaries_merged2 = Reduce(rbind, summaries_list2)
+# write.table(summaries_merged2, file = sprintf("%s/TRBI_discovery_summary_dataset_DatasetPCA_withnonT.txt", out_dir), row.names = F, col.names = T,quote = F )
+scores_tbl_merged2 = Reduce(rbind, scores_tbl_list2)
+# saveRDS(scores_tbl_merged2, file = sprintf("%s/TRBI_discovery_scores_tbl_merged_DatasetPCA_withnonT.Rds", out_dir))
+
+pdf(sprintf("%s/TRBI_discovery_scores_tbl_merged_DatasetPCA_withnonT.pdf", out_dir,i), 5,5, useDingbats = F)
+ggplot(scores_tbl_merged2, aes(x = dataset, y = score_log)) +
+    # boxplot first (no outlier points, so we see our own points instead)
+    geom_boxplot(outlier.shape = NA, fill = NA, colour = "black") +
+    # scatter on top (jittered)
+    geom_jitter(width = 0.2, alpha = 0.3, size = 0.1) +
+    geom_hline(yintercept = log(2), colour = "brown", linetype = "dashed", size = 0.5) +
+    labs(
+        x = "Dataset",
+        y = "score_log",
+        title = "score_log distribution per dataset"
+    ) +
+    # ylim(-1.1,1.1)+
+    theme_bw(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    ) + NoGrid()
+dev.off()
+
+igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+
+pdf(sprintf("%s/TRBI_MDEmain_discoveryscore_DatasetPCA_withnonT.pdf", out_dir), 5,5, useDingbats = F)
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+dat_frg = data.frame(so_merged@meta.data[rownames(so_merged[["mde_incremental_allT"]]),], dim1 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = so_merged[["mde_incremental_allT"]]@cell.embeddings[,2])
+p = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+    geom_point(data = scores_tbl_merged2[!is.na(scores_tbl_merged2$score_log),], aes(mde_incremental_allT_dim1, mde_incremental_allT_dim2, colour = score_log), size =0.25) + scale_color_gradientn(colours = ColorRamp, limits  = c(-1, 1), oob = scales::squish) + ggtitle(label = "discovery score") + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() 
+p
+p + NoLegend()
+dev.off()
+
+
+
+```
+
+
+same Discovery score of not classified cells but within immgenT space
+```{r}
+
+summaries_list = list()
+scores_tbl_list = list()
+
+for (i in unique(so_merged$dataset)) {
+    print(i)
+    tmp = so_merged[,so_merged$dataset == i]
+    tmp = tmp[,tmp@meta.data %>% filter(!level2_final %in% c("nonT", "unclear")) %>% row.names()]
+    if (!"mde_incremental_allT" %in% names(tmp@reductions)) {
+        message("Skipping ", i, ": no mde_incremental_allT")
+        next
+    }
+    
+    tmp$is_noclassl2 = F
+    tmp$is_noclassl2[tmp$level2_final %in% c("not classified", "CD8", "Treg", "CD4", "nonconv",  "gdT", "CD8aa","DN", "DP")] = T
+    old_mat = tmp[["mde_incremental_allT"]]@cell.embeddings[tmp$is_noclassl2 == F,]
+    new_mat = tmp[["mde_incremental_allT"]]@cell.embeddings[tmp$is_noclassl2 == T,]
+    scores_tbl = knn_novelty_scores(old_mat, new_mat, k = 10) %>% as.data.frame()
+    rownames(scores_tbl) = rownames(new_mat)
+    scores_tbl$dataset = i
+    scores_tbl_list[[i]] = scores_tbl
+    
+    tmp$score_log = NA
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$score_log = scores_tbl$score_log[match(colnames(tmp), rownames(scores_tbl))]
+    tmp$discovery = tmp$score_log > log(2)
+    
+    pdf(sprintf("%s/TRBI_%s_discovery_immgentMDE.pdf", out_dir,i), 5,5, useDingbats = F)
+    p1 = FeaturePlot(tmp, reduction = "mde_incremental_allT",features = "score_log")  + xlim(-2.5,2.5) + ylim(-2.5,2.5) 
+    p2 = DimPlot(tmp, reduction = "mde_incremental_allT",group.by = "discovery", order = T) + scale_color_manual(values = c("black", "red"))
+    igt_bkrg = data.frame(dim1 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,1], dim2 = so_orig[["mde2_totalvi_20241006"]]@cell.embeddings[,2])
+    bkrg = ggplot(igt_bkrg) + geom_scattermore(aes(dim1, dim2), colour = "grey", alpha = 0.5, pixels = c(1024, 1024))
+    dat_frg = data.frame(tmp@meta.data[rownames(tmp[["mde_incremental_allT"]]),], dim1 = tmp[["mde_incremental_allT"]]@cell.embeddings[,1], dim2 = tmp[["mde_incremental_allT"]]@cell.embeddings[,2])
+    p3 = bkrg + geom_scattermore(data = dat_frg, aes(dim1, dim2), col = "grey0", size =3, pixels = c(c(1024, 1024))) + 
+        geom_point(data = dat_frg[dat_frg$discovery,], aes(dim1, dim2), color = "red", size =1) + 
+        ggtitle(label = sprintf("%s: black the dataset cells,\nred not classified with potential new state", i)) + theme_void() + xlim(-2.5,2.5) + ylim(-2.5,2.5) + NoGrid() + NoLegend()
+    print(p1)
+    print(p2)
+    print(p3)
+    dev.off()
+    # FeaturePlot(tmp, slot = "counts", reduction = "mde_incremental_allT",features = c("Cd4", "Cd8b1", "Cd8a", "Foxp3", "Zbtb16","Trdc"), order = T)
+    
+    discovery_report = data.frame(dataset = i, summarize_discovery(scores_tbl, ratio_threshold = 2) %>% as.data.frame())
+    discovery_report %>% write.table(sprintf("%s/TRBI_%s_discovery_immgentMDE.txt", out_dir,i), quote = F, row.names = F, col.names = T, sep = "\t")
+    summaries_list[[i]] = discovery_report
+    
+}
+
+summaries_merged = Reduce(rbind, summaries_list)
+# write.table(summaries_merged, file = sprintf("%s/TRBI_discovery_summary_dataset_immgentMDE.txt", out_dir), row.names = F, col.names = T,quote = F )
+scores_tbl_merged = Reduce(rbind, scores_tbl_list)
+# saveRDS(scores_tbl_merged, file = sprintf("%s/TRBI_discovery_scores_tbl_merged_immgentMDE.Rds", out_dir))
+
+# # optional: make dataset a factor and order by median score_log
+# scores_tbl <- scores_tbl %>%
+#   mutate(
+#     dataset = factor(
+#       dataset,
+#       levels = names(sort(tapply(score_log, dataset, median, na.rm = TRUE)))
+#     )
+#   )
+
+pdf(sprintf("%s/TRBI_discovery_scores_tbl_merged_immgentMDE.pdf", out_dir,i), 5,5, useDingbats = F)
+ggplot(scores_tbl_merged, aes(x = dataset, y = score_log)) +
+    # boxplot first (no outlier points, so we see our own points instead)
+    geom_boxplot(outlier.shape = NA, fill = NA, colour = "black") +
+    # scatter on top (jittered)
+    geom_jitter(width = 0.2, alpha = 0.3, size = 0.1) +
+    geom_hline(yintercept = log(2), colour = "brown", linetype = "dashed", size = 0.5) +
+    labs(
+        x = "Dataset",
+        y = "score_log",
+        title = "score_log distribution per dataset"
+    ) +
+    # ylim(-1.1,1.1)+
+    theme_bw(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    ) + NoGrid()
+dev.off()
+
+
+```
+
+###############
+(silhouette_width where the distance of each cell to its cluster medoid is compared to the closest medioid of cluysters it doesn't belong to. Pretty much the same as normal silhouette, because similar definition... SO STICK TO THE SILHOUETTE!)
+only focused on cells in an IGT with at least 10 cells in a level2 cluster
+```{r}
+silhouette_medoid_from_dist <- function(d, clusters) {
+  # d: distance matrix (n x n) or 'dist' object
+  # clusters: factor/character vector of cluster labels (length n)
+  
+  if (inherits(d, "dist")) {
+    d <- as.matrix(d)
+  } else {
+    d <- as.matrix(d)
+  }
+  n <- nrow(d)
+  if (n != ncol(d)) stop("d must be a square distance matrix")
+  
+  if (length(clusters) != n) stop("length(clusters) must match nrow(d)")
+  clusters <- as.factor(clusters)
+  k_levels <- levels(clusters)
+  
+  # 1. Find medoid index for each cluster
+  medoids <- setNames(integer(length(k_levels)), k_levels)
+  for (cl in k_levels) {
+    idx <- which(clusters == cl)
+    if (length(idx) == 1L) {
+      medoids[cl] <- idx
+    } else {
+      # medoid = argmin_j sum_k d[j,k] within cluster
+      subD <- d[idx, idx, drop = FALSE]
+      tot <- rowSums(subD)
+      medoids[cl] <- idx[which.min(tot)]
+    }
+  }
+  
+  a <- numeric(n)
+  b <- numeric(n)
+  s <- numeric(n)
+  
+  for (i in seq_len(n)) {
+    ci <- clusters[i]
+    # a(i): distance to own cluster medoid
+    a[i] <- d[i, medoids[as.character(ci)]]
+    
+    # b(i): min distance to medoids of other clusters
+    other_cls <- k_levels[k_levels != ci]
+    if (length(other_cls) == 0L) {
+      b[i] <- NA
+      s[i] <- 0
+      next
+    }
+    b[i] <- min(d[i, medoids[other_cls]])
+    
+    denom <- max(a[i], b[i])
+    if (is.na(denom) || denom == 0) {
+      s[i] <- 0
+    } else {
+      s[i] <- (b[i] - a[i]) / denom
+    }
+  }
+  
+  out <- data.frame(
+    cluster = clusters,
+    a = a,
+    b = b,
+    s = s,
+    stringsAsFactors = FALSE
+  )
+  rownames(out) <- rownames(d)
+  out
+}
+
+
+# set.seed(1)
+# X <- rbind(
+#   matrix(rnorm(50, mean = 0),  ncol = 2),
+#   matrix(rnorm(50, mean = 3),  ncol = 2),
+#   matrix(rnorm(50, mean = -3), ncol = 2)
+# )
+# colnames(X) <- c("x1", "x2")
+# cl <- factor(rep(c("A", "B", "C"), each = 25))
+# text(X[,1], X[,2], labels =  cl)
+# sc <- silhouette_centroid(X, cl)
+# head(sc)
+# sc %>% group_by(cluster) %>% summarize(mean(s))
+
+
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "ADT"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+#Select only good ADT markers
+markers = so[["ADT"]]@meta.features %>% filter(IGT1only == F & classification %in% c("good", "intermediate")) %>% row.names()
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i)
+    tmp = so[markers,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "CLR", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 50, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 10, verbose = F) #%>% FindNeighbors(dims = 1:10, verbose = F) %>% RunUMAP(dims = 1:10, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        # sil_post = silhouette(cl, dist = reduc.dist)
+        sil_post = silhouette_medoid_from_dist(d = reduc.dist, clusters = cl)
+        sil_post$sil_width = sil_post$s
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p = ggplot(sil_summary_merged %>% filter(total > 10),
+       aes(x = annotation_level2, y = median_sil_width)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+p
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+
+
 
