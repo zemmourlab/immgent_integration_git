@@ -216,7 +216,7 @@ print("Labeled level2 cells:", n_labeled)
 if n_labeled < 2:
     print("Skipping level2 SCANVI: <2 labeled cells after filtering")
 else:
-    level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "not classified", labels_key="level2")
+    level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model, "Unknown", labels_key="level2")
     level2_model.train(50, train_size=1.0, batch_size=32, validation_size=0)
     #level2_model = scvi.model.SCANVI.from_scvi_model(scvi_model,"Unknown", labels_key="level2")
     #level2_model.train(50)
@@ -265,5 +265,6 @@ output_file.to_csv(prefix+"/predictions_output_file.csv", index=True)
 user_output_file = output_file.loc[query_mask, :]
 ##user_output_file.index = query_mdata.obs.index
 user_output_file.to_csv(prefix+"/user_predictions_output_file.csv", index=True)
+
 
 
