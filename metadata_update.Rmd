@@ -520,6 +520,46 @@ so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
 
 ```
 
+update annotation for Treg and nonconv
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so = so_orig
+so$annotation_level2 = as.character(so$annotation_level2)
+so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl55")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl55")] = "DP_cl55"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl17")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl17")] = "DP_cl17"
+so@meta.data %>% count(annotation_level1, annotation_level2)
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+
+annotation_level2_order = so@meta.data %>%
+    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
+    ) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
+    pull(annotation_level2) %>%
+    unique() %>%
+    as.character()
+
+test = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(test))
+
+so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(so$annotation_level2))
+
+so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+
+so@meta.data %>% count(annotation_level1, annotation_level2_group, annotation_level2)
+
+# saveRDS(so, "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")
+
+```
+
+
 
 **3. Add proliferation scores**
 
@@ -849,7 +889,8 @@ so[['ADT']]$data = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128.Rds") ##  Treg_cl7--> Treg_cl1, nonconv_cl17-->DP_cl17, nonconv_cl55-->DP_cl55 
 
 ```
 
@@ -865,6 +906,7 @@ so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEa
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250317_clean.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds")
 saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
 ```
 
 **12.Save version with CITEseq only**
@@ -873,7 +915,8 @@ DefaultAssay(so) = "ADT"
 so[['RNA']] = NULL
 
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
 ```
 
 **12. Split by lineage**

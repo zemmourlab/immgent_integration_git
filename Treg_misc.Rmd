@@ -85,8 +85,11 @@ on Midway
 ```{r}
 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
-so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")
+
 
 so =  so_orig[,so_orig$annotation_level1 == "Treg"]
 so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
@@ -97,10 +100,10 @@ on Desktop
 #source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R') -->
 # tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/Treg/DGE_limma/20250109/ttlist_OneVsAll.Rds')
 
-so_orig = readRDS("../igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+so_orig = readRDS("../igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
 so = so_orig[,so_orig$annotation_level1 == "Treg"]
-so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
-so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
 
 ```
 

@@ -1,0 +1,562 @@
+---
+title: "QC_IGT"
+output: html_document
+date: "2025-05-05"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+**Initialize: load libraries and custom functions**
+
+```{r}
+setwd("~/google_drive/ImmgenT/analysis/QC/")
+
+libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+#libs = c("matrixStats", "gplots","ggplot2", "reshape2", "scales", "gridExtra", "dplyr", "RColorBrewer", "grid", "Rtsne", "limma",   "RColorBrewer", "pheatmap", "Seurat",  "ggrastr", "ggbeeswarm") #pwr, preprocessCore, "readxl", vegan", "genefilter" "scde" "cellrangerRkit", "Rsamtools", "GenomicRanges", "GenomicAlignments", "VGAM", "WGCNA",rafalib, ‘UsingR’,MAST "ggrastr",
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+
+options(Seurat.object.assay.version = 'v5')
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+
+library("pals")
+parade = function(n) { return(Seurat::DiscretePalette(n, palette = "parade", shuffle = F)) }
+
+length(glasbey())
+length(polychrome())
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(glasbey(), polychrome(), parade(), main="Colormap suggestions")
+
+#pdf("mypal.pdf", 10, 10)
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))) )
+#pie(rep(1,n), col=unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))), labels =  unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))))
+#dev.off()
+
+ReorderIGT = function(igt = sample_qc$IGT) {
+    extract_numeric = function(x) { as.numeric(gsub("\\D", "", x)) }
+    ordered_vector = unique(igt)[order(extract_numeric(unique(igt)))] %>% as.character()
+    igt = factor(igt, levels = ordered_vector)
+    return(igt)
+}
+
+MyPlots = function (seurat_object = so, dim1 = so[["umap_unintegrated"]]@cell.embeddings[,1], dim2 = so[["umap_unintegrated"]]@cell.embeddings[,2], color_by = "spleen_standard", split_by1 = "IGT", split_by2 =  NULL, genes = c("Foxp3", "Il2ra"), cluster_key = "ClusterSCVI_Res", mypal = glasbey()) {
+
+    so = seurat_object
+    #so@meta.data[,"split_by"] = so@meta.data[,split_by]
+    so@meta.data[,"color_by"] = factor(so@meta.data[,color_by])
+    so@meta.data[,"split_by1"] = so@meta.data[,split_by1]
+    so@meta.data[,"split_by2"] = so@meta.data[,split_by2]
+    
+    alpha = 0.5
+    #sample_name_colors = color_palette[1:length(unique(so@meta.data[,color_by]))]
+    #names(sample_name_colors) = levels(so$sample_name)
+    #sample_name_colors2 = sample_name_colors
+    #sample_name_colors2[grepl("WT", names(sample_name_colors))] = "grey"
+    
+    message("Plot 1: UMAP")
+    plot1 = ggplot(data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)) + 
+        geom_point_rast(aes(dim1, dim2, color = color_by), alpha = I(alpha), raster.dpi = 100) +
+        theme_bw() + scale_color_manual(values = mypal)
+    print(plot1)
+    
+    message("Plot 2: UMAP split")
+    tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2)
+    bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+    
+    p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, alpha = 0.2, raster.dpi = 50)
+    p2 = geom_point_rast(data = tmp, aes(dim1, dim2, color = color_by), size = 1,  alpha = alpha) 
+    
+    if (is.null(split_by2)) {
+        plot2 = p + p2 + scale_color_manual(values = mypal) + theme_bw() + facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + ggtitle(label = sprintf("color: %s, grid: %s", color_by, split_by1))
+    } else {
+        plot2 = p + p2 + scale_color_manual(values = mypal)  + theme_bw() + facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) + ggtitle(label = sprintf("color: %s, grid: %s x %s", color_by, split_by1, split_by2))
+        }
+    print(plot2)
+    
+    message("Plot 3: UMAP genes")
+    
+    for (g in genes) {
+        print(g)
+        tmp = data.frame(so@meta.data, dim1 = dim1, dim2 = dim2, size = so@assays$RNA$counts[rownames(so@assays$RNA$counts) %in% g,])
+        bkgrd = data.frame(dim1 = dim1, dim2 = dim2)
+        
+        p = ggplot(bkgrd) + geom_point_rast(aes(dim1, dim2), color = "grey", size = 0.1, raster.dpi = 50)
+        p2 = geom_point(data = tmp, aes(dim1, dim2, color = size > 0, size = size,  alpha = size > 0)) 
+        #p2 =  geom_point(data = tmp2, aes(dim1, dim2, color = size > 0, size = size), alpha = I(alpha))  + scale_color_manual
+    
+        
+        if (is.null(split_by2)) {
+        plot3 = p + p2  + 
+            scale_color_manual(values = c("black", "red")) + 
+            scale_alpha_manual(values = c(0.5,1))  + 
+            theme_bw()  + 
+            facet_wrap(facets = vars(so@meta.data[,"split_by1"])) + 
+            ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+    } else {
+         plot3 = p + p2  + 
+             scale_color_manual(values = c("black", "red")) + 
+             scale_alpha_manual(values = c(0.5,1))  + 
+             theme_bw() + 
+             facet_grid(rows = vars(so@meta.data[,"split_by1"]), cols = vars(so@meta.data[,"split_by2"])) +
+             ggtitle(label = sprintf("gene: %s, color: %s, grid: %s", g, color_by, split_by1))
+        }
+        print(plot3)
+        
+    }
+
+}
+
+ConvertS5toS3 = function(so, assay1 = "RNA", assay2 = "ADT") {
+    so.v3 = CreateAssayObject(counts = so[[assay1]]$counts)
+    so.v3 = CreateSeuratObject(so.v3)
+    so.v3[[assay2]] = CreateAssayObject(counts = so[[assay2]]$counts) #samples@assays$ADT$counts
+    #print(all(colnames(so.v3@assays$RNA$counts) == colnames(so.v3@assays$ADT$counts)))
+    #all(colnames(so.v3) == colnames(so))
+    so.v3@meta.data = so@meta.data
+    return(so.v3)
+}
+
+Vplot = function(vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300,1)) {
+  p = ggplot(data = vplot) + geom_point_rast(aes(x = fc, y = pval), colour = "grey", alpha = I(1), size = I(1), raster.dpi = 100) +
+  scale_x_continuous(trans = log_trans(10), limits = xlimits) + #breaks = c(1/50,1/40, 1/30, 1/20, 1/10, 1/5,1/2,1,2,5,10, 20, 30, 40, 50),labels =c("1/50","1/40", "1/30", "1/20", "1/10", "1/5","1/2","1","2","5","10", "20", "30", "40", "50")
+  scale_y_continuous(trans = log_trans(10), breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x)), limits = ylimits) + #limits = c(10^-5.5, 1)
+  #geom_hline(aes(yintercept = 0.05), linetype="dashed", color = "brown") +
+  annotation_logticks(sides = "b") +
+  xlab(xlab) +
+  theme_bw() +
+  ylab("p value") +
+  theme(axis.text.x  = element_text(size=20,angle = 0, hjust = 0.5), axis.text.y  = element_text(size=20), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+FCFCplot = function(vplot, xlab = "fc1", ylab = "fc2", main = "", printgeomtext = T, xlimits = c(0.1, 10),  ylimits = c(0.1, 10)) {
+  p = ggplot(data = vplot) + geom_point(aes(x = fc1, y = fc2), colour = "black", alpha = I(1), size = I(0.5)) +
+    scale_x_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = xlimits) +
+    scale_y_continuous(trans = log_trans(10), breaks = c(0.125,0.5, 1, 2,5, 10),  labels = c(0.125,0.5, 1, 2,5, 10), limits = ylimits) +
+    geom_hline(aes(yintercept = 1), linetype="dashed", color = "brown") +
+    geom_vline(aes(xintercept = 1), linetype="dashed", color = "brown") +
+  #geom_abline(intercept = 0, slope = 1, linetype="dashed", color = "brown") +
+    annotation_logticks(sides = "bl") +
+    xlab(xlab) +
+    ylab(ylab) +
+    ggtitle(main) +
+    theme_bw() +
+    theme(axis.text.x  = element_text(size=15,angle = 0, hjust = 1), axis.text.y  = element_text(size=15), legend.text=element_text(size=20), axis.title.x = element_text(size=20) , axis.title.y = element_text(size=20))
+  return(p)
+}
+
+SplitColors = function(pal = mypal[1:length(levels(cds$clustersCCA9))], splitvector = sapply(levels(cds$clustersCCA9), function(x) { length(which(grepl(x, levels(cds$clustersCCA9Split))))}) ) {
+  newpal = c()
+  for (c in 1:length(splitvector)){
+    #print(c)
+    n = splitvector[c]
+    newcol = matrix(rep(col2rgb(pal[c], alpha = T), n), ncol = n)
+    newcol[4,] = seq(50, 255, length.out = n)
+    newpal = c(newpal, rgb(red = newcol[1,]/255, blue = newcol[2,]/255, green = newcol[3,]/255, alpha = newcol[4,]/255))
+  }
+  return(newpal)
+}
+sp = SplitColors
+#pie(1:length(levels(cds$clustersCCA9Split)), col = sp)
+
+library(org.Hs.eg.db)
+hs = org.Hs.eg.db
+go2eg = as.list(org.Hs.egGO2ALLEGS)
+symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+```
+
+**TCR**
+per IGT or per sample
+n sequences
+% cells with a, b, ab, 2a, 2b, 2ab
+
+```{r}
+exp_igt_table = read.table("~/google_drive/ImmgenT/exp_id/igt_exp.txt", header = T, sep = ",")
+#exp_lists = list.files(path = "~/google_drive/ImmgenT/exp_id/")
+#id = "16"
+#folder = exps[grepl(pattern = sprintf("exp_id_%s", id), x = exp_lists)]
+#IGT = "IGT24"
+
+for (i in 1:nrow(exp_igt_table)) {
+    print(i)
+    #i = 24 
+    folder = exp_igt_table[i,"exp_id"]
+    IGT = exp_igt_table[i,"IGT"]
+
+    so = readRDS(sprintf("~/google_drive/ImmgenT/exp_id/%s/%s/dataset_clean.Rds", folder, IGT))
+
+    #Number of cells post-QC
+    exp_igt_table[i,"n_cells_scs"] = ncol(so)
+    #n_cells_scs = ncol(so)
+    exp_igt_table[i,"n_cells_scs"] = ncol(so)
+
+    #tcr = read.table(file = sprintf("~/google_drive/ImmgenT/exp_id/%s/%s/%s_tcr_table.csv", folder, IGT, IGT), header = T, sep = ",")
+    tcr = tryCatch(read.table(file = sprintf("~/google_drive/ImmgenT/exp_id/%s/%s/%s_tcr_table.csv", folder, IGT, IGT), header = T, sep = ","), error = function(e) {message("no TCR data")})
+
+    if (!is.null(tcr)) {
+        #Number of cells post-QC in TCR
+        exp_igt_table[i,"n_cells_tcr"] = nrow(tcr)
+        #n_cells_tcr = nrow(tcr)
+        
+        #Number of cells with at least 1 TCR sequence
+        exp_igt_table[i,"n_cells_tcr_and_scs"] = length(unique(intersect(colnames(so), tcr$IGT.cellID)))
+        #n_cells_tcr = length(unique(intersect(colnames(so), tcr$IGT.cellID)))
+        
+        #Number of TCR cells without SCS
+        exp_igt_table[i,"n_cells_tcr_without_scs"] = exp_igt_table[i,"n_cells_tcr"] - exp_igt_table[i,"n_cells_tcr_and_scs"] 
+        
+        #Number of SCS cells without TCR
+        exp_igt_table[i,"n_cells_scs_without_tcr"] = exp_igt_table[i,"n_cells_scs"] - exp_igt_table[i,"n_cells_tcr_and_scs"] 
+        
+        tcr_filt = tcr[tcr$IGT.cellID %in% unique(intersect(colnames(so), tcr$IGT.cellID)),]
+        #dim(tcr_filt)
+        tcr_filt2 = tcr_filt %>% select(alpha.vgene, beta.vgene, alpha2.vgene, beta2.vgene)
+        tcr_filt2 = ifelse(is.na(tcr_filt2), yes = 0, no = 1)
+        table(rowSums(tcr_filt2))
+        
+        # paired 1ab
+        exp_igt_table[i,"n_cells_1a1b"] = sum(rowSums(tcr_filt2[,1:2]) == 2 & rowSums(tcr_filt2[,3:4]) == 0)
+        #table(rowSums(tcr_filt2[,1:2]))
+        
+        #2 alpha and beta
+        exp_igt_table[i,"n_cells_2a2b"] = sum(rowSums(tcr_filt2[,1:2]) == 2 & rowSums(tcr_filt2[,3:4]) == 2)
+        
+        #2 alpha - 1 beta
+        exp_igt_table[i,"n_cells_2a1b"] = sum(rowSums(tcr_filt2[,1:2]) == 2 & tcr_filt2[,3] == 1 & tcr_filt2[,4] == 0)
+        
+        #2 beta - 1 beta
+        exp_igt_table[i,"n_cells_1a2b"] = sum(rowSums(tcr_filt2[,1:2]) == 2 & tcr_filt2[,3] == 0 & tcr_filt2[,4] == 1)
+        rm(tcr_filt2)
+        rm(tcr_filt)
+    }
+}
+
+exp_igt_table[is.na(exp_igt_table)] = 0
+unique(exp_igt_table$IGT)
+extract_numeric = function(x) {
+  as.numeric(gsub("\\D", "", x))
+}
+ordered_vector = unique(exp_igt_table$IGT)[order(extract_numeric(unique(exp_igt_table$IGT)))] %>% as.character()
+exp_igt_table$IGT = factor(exp_igt_table$IGT, levels = ordered_vector)
+
+```
+
+Plots
+```{r}
+
+exp_igt_table = exp_igt_table %>% group_by(IGT) %>% mutate(percent_tcr = n_cells_tcr_and_scs /n_cells_scs*100,
+                                                           percent_tcr_without_scs = n_cells_tcr_and_scs /n_cells_tcr*100,
+                                                           percent_1a1b = n_cells_1a1b /n_cells_tcr_and_scs*100,
+                                                           percent_2a2b = n_cells_2a2b /n_cells_tcr_and_scs*100,
+                                                           percent_2a1b = n_cells_2a1b /n_cells_tcr_and_scs*100,
+                                                           percent_1a2b = n_cells_1a2b /n_cells_tcr_and_scs*100
+) %>% as.data.frame()
+exp_igt_table[is.na(exp_igt_table)] = 0
+
+sum(exp_igt_table$n_cells_tcr_and_scs)
+
+
+#exp_igt_table_melt = melt(exp_igt_table)
+
+pdf("QC_tcr_1.pdf", 10,10, useDingbats = F)
+#exp_igt_table$n_cells_scs_no_tcr = exp_igt_table$n_cells_scs - exp_igt_table$n_cells_tcr_and_scs
+p = ggplot(exp_igt_table[,c("IGT","n_cells_tcr_and_scs", "n_cells_scs_without_tcr", "n_cells_tcr_without_scs")] %>% melt()) +
+geom_bar(aes(IGT, value, fill = variable), stat = "identity") +
+    scale_fill_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw()+ ggtitle(label = "Number of cells with and without TCR or without SCS") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))
+print(p)
+dev.off()
+
+pdf("QC_tcr_2.pdf", 10,8, useDingbats = F)
+p = ggplot(exp_igt_table_melt %>% filter(variable %in% c("percent_tcr", "percent_1a1b","percent_2a2b", "percent_2a1b", "percent_1a2b")), aes(x = variable, y = value)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = variable, y = value, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank())+ ggtitle(label = "Percent of cells with abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
+print(p)
+dev.off()
+
+
+p2 = ggplot(exp_igt_table, aes(x = "", y = percent_tcr)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = "",  y = percent_tcr, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank())+ ggtitle(label = "Percent of cells with paired abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
+
+p3 = ggplot(exp_igt_table, aes(x = "", y = percent_1a1b)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = "",  y = percent_1a1b, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank()) + ggtitle(label = "Percent of cells with paired abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))+ NoLegend()
+
+p4 = ggplot(exp_igt_table, aes(x = "", y = percent_2a2b)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = "",  y = percent_2a2b, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank()) + ggtitle(label = "Percent of cells with paired abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10))+ NoLegend()
+
+p5 = ggplot(exp_igt_table, aes(x = "", y = percent_2a1b)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = "",  y = percent_2a1b, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank()) + ggtitle(label = "Percent of cells with paired abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
+
+p6 = ggplot(exp_igt_table, aes(x = "", y = percent_1a2b)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = "",  y = percent_1a2b, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 20)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank())+ ggtitle(label = "Percent of cells with paired abTCR") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
+
+print(p2)
+print(p3)
+print(p4)
+print(p5)
+print(p6)
+
+dev.off()
+
+#Write the tables
+write.table(exp_igt_table, file = "QC_tcr_IGT1_56_tcr_table.csv",quote = F, sep = ",",row.names = F)
+            
+
+
+
+```
+
+**QC RNA and ADT per IGT or per sample**
+per IGT or per sample
+ncount_RNA
+nfeature_RNA
+ncount_ADT
+
+```{r}
+sample_qc = read.table("~/google_drive/ImmgenT/analysis/QC/Sample_metadata_withQC.csv", header = T, sep = ",")
+sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id
+sample_qc$IGT = ReorderIGT(sample_qc$IGT)
+
+colnames(sample_qc)
+
+igt_qc = sample_qc %>% 
+    group_by(IGT) %>% 
+    summarize(ncells_preqc = sum(ncells_preqc), 
+              ncells_outliers_nGenes = sum(ncells_outliers_nGenes),
+              ncells_outliers_deadcells = sum(ncells_outliers_deadcells),
+              ncells_outliers_lowCountADT = sum(ncells_outliers_lowCountADT),
+              ncells_outliers_autofluorescence = sum(ncells_outliers_autofluorescence),
+              ncells_nonTcells = sum(ncells_nonTcells),
+              ncells_postqc = sum(ncells_postqc)) %>% 
+        mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
+               percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
+               percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
+               percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
+               percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
+               percent_nonTcells = ncells_nonTcells / ncells_preqc*100
+               )
+
+
+igt_qc_melt = melt(igt_qc, id.vars = "IGT")
+
+pdf("QC_RNA_ADT_IGT.pdf", 10,8, useDingbats = F)
+p = ggplot(igt_qc_melt %>% filter(variable %in% c("percent_postqc", "percent_RNA_nGenes","percent_RNA_deadcells", "percent_Protein_lowCount", "percent_Protein_nonspecific_signal", "percent_nonTcells")), aes(x = variable, y = value)) + geom_boxplot() + 
+    geom_jitter(width = 0, aes(color = IGT), size = 2) +
+    geom_text_repel(aes(x = variable, y = value, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 30)) +
+    scale_color_manual(values = mypal) +
+    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
+    theme_bw() + theme(axis.title.x = element_blank())+ ggtitle(label = "QC RNA and Protein by IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
+print(p)
+dev.off()
+
+sample_qc = sample_qc %>% mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
+                     percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
+                     percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
+                     percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
+                     percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
+                     percent_nonTcells = ncells_nonTcells / ncells_preqc*100
+                     )
+
+sample_qc_melt = melt(sample_qc, id.vars = c("IGT", "hashtag_number"))
+
+
+#pdf("QC_RNA_ADT_perIGT.pdf", 10,8, useDingbats = F)
+
+
+for (i in levels(sample_qc_melt$IGT)) {
+    pdf(sprintf("QC_RNA_ADT_%s.pdf", i), 10,8, useDingbats = F)
+    print(i)
+    sample_qc_melt_sub = sample_qc_melt %>% 
+        filter(IGT == i & variable %in% c("percent_postqc", "percent_RNA_nGenes", 
+                                         "percent_RNA_deadcells", "percent_Protein_lowCount", 
+                                         "percent_Protein_nonspecific_signal", "percent_nonTcells"))
+    p = ggplot(data = sample_qc_melt %>% 
+               filter(variable %in% c("percent_postqc", "percent_RNA_nGenes", 
+                                      "percent_RNA_deadcells", "percent_Protein_lowCount", 
+                                      "percent_Protein_nonspecific_signal", "percent_nonTcells")), 
+           aes(x = variable, y = as.numeric(value))) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), color = hashtag_number), width = 0, size = 2) +
+        geom_text_repel(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), label = hashtag_number), max.overlaps = getOption("ggrepel.max.overlaps", default = 10)) +
+        scale_color_manual(values = mypal) +
+        ylab("Percent") +
+        theme_bw() + theme(axis.title.x = element_blank()) + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + ggtitle(i) #+ NoLegend()
+        ggtitle(i) 
+    print(p)
+    dev.off()
+}
+#dev.off()
+
+
+pdf("QC_ncells_perIGTandsample.pdf", 12,8, useDingbats = F)
+p <- ggplot(sample_qc_melt %>% filter(variable %in% c("ncells_postqc")), aes(y = as.numeric(value))) +
+  geom_boxplot(aes(x = "All"),outlier.shape = NA, fill = "grey", alpha = 0.5) +  # A single boxplot for all data
+  geom_jitter(aes(x = IGT, color = hashtag_number), width = 0, size = 2) +  # Jitter plot for each IGT
+  scale_color_manual(values = mypal) +
+  theme_bw() + 
+  theme(axis.title.x = element_blank()) + 
+scale_x_discrete(limits = c("All", as.character(levels(sample_qc_melt$IGT)))) +
+  ggtitle(label = "QC ncells by IGT and sample") + 
+  theme(axis.text.x  = element_text(angle = 75, vjust = 0.5, size = 10))
+print(p)
+dev.off()
+
+#Write the tables
+#write.table(igt_qc, file = "QC_RNA_ADT_IGT_summary_table.csv",quote = F, sep = ",",row.names = F)
+#write.table(sample_qc, file = "QC_RNA_ADT_sample_summary_table.csv",quote = F, sep = ",",row.names = F)
+
+
+```
+
+Transfer summary QC plot in each IGT
+```{bash}
+cd ~/google_drive/ImmgenT/analysis/QC/  
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#ls ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/; \
+#ls QC_RNA_ADT_IGT${i}.pdf; \
+cp QC_RNA_ADT_IGT${i}.pdf ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/
+done 
+
+```
+
+```{r}
+sample_qc = read.table("~/google_drive/ImmgenT/analysis/QC/Sample_metadata_withQC.csv", header = T, sep = ",")
+sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id
+sample_qc$IGT = ReorderIGT(sample_qc$IGT)
+
+#sex
+pdf("QC_ncells_perSex.pdf", 4,4, useDingbats = F)
+colnames(sample_qc)
+sex = sample_qc %>% group_by(sex) %>% summarize(sum = sum(ncells_postqc)) %>% as.data.frame()
+p = ggplot(sex, aes(x = sex, y = sum, fill = sex)) + 
+    geom_bar(stat = "identity") +scale_color_manual(values = mypal) + 
+    geom_text(aes(label = sum), vjust = -0.5, size = 2) + 
+    theme_bw() + theme(axis.title.x = element_blank()) + 
+    ggtitle(label = "# cells by sex") + 
+    theme(axis.text.x  = element_text(angle = 75, vjust = 0.5, size = 10),
+          axis.text.y  = element_text(size = 10))
+print(p)
+dev.off()
+
+#organ
+colnames(sample_qc)
+sample_qc$organ2 = sample_qc$organ
+sample_qc$organ2[grepl("spleen|lymph", sample_qc$organ)] = "SLO"
+sample_qc$organ2[grepl("colon|duodenum|gut|ileum|jejunum|intestine|propria|SI", sample_qc$organ)] = "gut"
+sample_qc$organ2[grepl("skin", sample_qc$organ)] = "skin"
+sample_qc$organ2[grepl("submandibular", sample_qc$organ)] = "submandibular gland"
+sample_qc$organ2 = tolower(sample_qc$organ2)
+organ = sample_qc %>% group_by(organ2) %>% summarize(sum = sum(ncells_postqc)) %>% as.data.frame()
+
+pdf("QC_ncells_perOrgan.pdf", 8,4, useDingbats = F)
+p = ggplot(organ, aes(x = organ2, y = sum, fill = organ2)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = sum), vjust = -0.5, size = 3) +  # Add text on top of bars
+    scale_fill_manual(values = mypal) + 
+    theme_bw() +
+    ylim(0, max(organ$sum)*1.1) +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_text(angle = 75, vjust = 0.5, size = 10),
+          axis.text.y = element_text(size = 10)) +
+    ggtitle(label = "# cells by organ") +
+    guides(fill = "none")  # Remove legend
+print(p)
+dev.off()
+
+#Conditions
+colnames(sample_qc)
+condition = sample_qc %>% group_by(condition) %>% summarize(sum = sum(ncells_postqc)) %>% as.data.frame()
+
+pdf("QC_ncells_perCondition.pdf", 6,4, useDingbats = F)
+p = ggplot(condition, aes(x = condition, y = sum, fill = condition)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = sum), vjust = -0.5, size = 3) +  # Add text on top of bars
+    scale_fill_manual(values = mypal) + 
+    theme_bw() +
+    ylim(0, max(condition$sum)*1.1) +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_text(angle = 75, vjust = 0.5, size = 10),
+          axis.text.y = element_text(size = 10)) +
+    ggtitle(label = "# cells by condition") +
+    guides(fill = "none")  # Remove legend
+print(p)
+dev.off()
+
+#Condition and organ
+tmp = sample_qc %>% group_by(condition, organ2) %>% summarize(sum = sum(ncells_postqc)) %>% as.data.frame()
+tmp = dcast(tmp, condition ~ organ2)
+rownames = tmp[,1]
+tmp = tmp[,-1]
+tmp[is.na(tmp)] = 0
+tmp = apply(tmp, 2, function(x) {as.numeric(x)})
+rownames(tmp) = rownames
+
+pdf("QC_Heatmap_OrganperCondition.pdf", 9,6, useDingbats = F)
+ColorRamp = rev(viridis(100))
+tmp[tmp==0] = NA
+labels_matrix = ifelse(is.na(tmp), yes = "", no = as.character(signif(tmp,2)))
+#labels_matrix = matrix(labels_matrix, nrow(data_matrix), ncol(data_matrix))
+pheatmap(mat = signif(tmp,2), cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,10000,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Number of cells per organ and condition", na_col = "#FDE725")
+dev.off()
+
+
+```
+
+
