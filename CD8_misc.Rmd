@@ -97,7 +97,7 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 ```{r}
 # so_orig = readRDS("igt1_96_withtotalvi20250317_clean.Rds")
 # so_orig = readRDS("igt1_96_withtotalvi20250513_clean.Rds")
-so_orig = readRDS("igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+so_orig = readRDS("../igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 
 
@@ -1203,6 +1203,798 @@ p1+p2
 
 
 ```
+
+**Figure 1 - alluvial**
+Alluvial organ - level2 only (change df0!)
+```{r}
+df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(organ_simplified0) %>%
+  slice_sample(n = 100) 
+
+## 1. Hierarchical clustering for cluster (annotation_level2) order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_clust <- df1 %>%
+  select(annotation_level2, organ_simplified0, count) %>%
+  pivot_wider(
+    names_from  = organ_simplified0,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 2. Hierarchical clustering for organ order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_org <- df1 %>%
+  select(organ_simplified0, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_org) <- mat_org$organ_simplified0
+mat_org$organ_simplified0 <- NULL
+
+organ_order <- rownames(mat_org)[hclust(dist(mat_org))$order]
+
+df1 <- df1 %>%
+  mutate(
+    organ_simplified0  = factor(organ_simplified0,  levels = organ_order),
+    annotation_level2 = factor(annotation_level2, levels = cluster_order)
+  )
+
+p1 = ggplot(df1,
+       aes(y = count, axis1 = organ_simplified0, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified0", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_level2) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p1)
+
+p2 = ggplot(df1,
+       aes(y = count, axis1 = organ_simplified0, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = organ_simplified0), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified0", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_organ) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p2)
+```
+
+Alluvial condition level2 only
+```{r}
+df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(condition_detailed_simplified) %>%
+  slice_sample(n = 100) 
+
+## 1. Hierarchical clustering for cluster (annotation_level2) order
+df2 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, condition_detailed_simplified) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_clust <- df2 %>%
+  select(annotation_level2, condition_detailed_simplified, count) %>%
+  pivot_wider(
+    names_from  = condition_detailed_simplified,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 3. Hierarchical clustering for condition_detailed order
+mat_cond <- df2 %>%
+  select(condition_detailed_simplified, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_cond) <- mat_cond$condition_detailed_simplified
+mat_cond$condition_detailed_simplified <- NULL
+
+cond_order <- rownames(mat_cond)[hclust(dist(mat_cond))$order]
+
+df2 <- df2 %>%
+  mutate(
+    condition_detailed_simplified  = factor(condition_detailed_simplified,  levels = cond_order),
+    annotation_level2 = factor(annotation_level2, levels = cluster_order)
+  )
+
+p3 = ggplot(df2,
+       aes(y = count, axis1 = condition_detailed_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("condition_detailed_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal) + # Or scale_fill_brewer
+    ggtitle("Level2 across Conditions") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p3)
+
+p = ggplot(df2,
+       aes(y = count, axis1 = condition_detailed_simplified, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = condition_detailed_simplified), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("condition_detailed_simplified", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal) + # Or scale_fill_brewer
+    ggtitle("Level2 across Conditions") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p3)
+
+
+
+
+
+```
+
+Alluvial all - 3 way
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggalluvial)
+
+so_orig@meta.data %>% count(organ_simplified0)
+
+df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(annotation_level2, organ_simplified0, condition_detailed_simplified) %>%
+  slice_sample(n = 100) 
+
+## 1. Hierarchical clustering for cluster (annotation_level2) order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_clust <- df1 %>%
+  select(annotation_level2, organ_simplified0, count) %>%
+  pivot_wider(
+    names_from  = organ_simplified0,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 2. Hierarchical clustering for organ order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_org <- df1 %>%
+  select(organ_simplified0, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_org) <- mat_org$organ_simplified0
+mat_org$organ_simplified0 <- NULL
+
+organ_order <- rownames(mat_org)[hclust(dist(mat_org))$order]
+
+## 3. Hierarchical clustering for condition_detailed order
+df2 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, condition_detailed_simplified) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+mat_cond <- df2 %>%
+  select(condition_detailed_simplified, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_cond) <- mat_cond$condition_detailed_simplified
+mat_cond$condition_detailed_simplified <- NULL
+
+cond_order <- rownames(mat_cond)[hclust(dist(mat_cond))$order]
+
+#4. Alluvial 3-way
+# Example: organ - cluster - condition_broad
+df3 <- df0 %>%
+  group_by(organ_simplified0, annotation_level2, condition_detailed_simplified) %>%
+  summarise(count = n(), .groups = "drop")
+
+df3 <- df3 %>%
+    mutate(
+        annotation_level2 = factor(annotation_level2, levels = cluster_order),
+        condition_detailed_simplified  = factor(condition_detailed_simplified,  levels = cond_order),
+        organ_simplified0  = factor(organ_simplified0,  levels = organ_order)
+    )
+
+# 3-way alluvial: organ → cluster → condition
+p3 <- ggplot(
+  df3,
+  aes(
+    y     = count,
+    axis1 = organ_simplified0,
+    axis2 = annotation_level2,
+    axis3 = condition_detailed_simplified
+  )
+) +
+  geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+  geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+  geom_text(
+    stat  = "stratum",
+    aes(label = after_stat(stratum)),
+    size  = 3,
+    angle = 90
+  ) +
+  scale_x_discrete(
+    limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2"),
+    expand = c(.05, .05)
+  ) +
+    coord_flip() +
+  scale_fill_manual(values = mypal_level2) +
+  ggtitle("CD8: organ → cluster → condition") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank()
+  )
+
+p3
+
+p3 <- ggplot(
+  df3,
+  aes(
+    y     = count,
+    axis2 = organ_simplified0,
+    axis1 = annotation_level2,
+    axis3 = condition_detailed_simplified
+  )
+) +
+  geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+  geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+  geom_text(
+    stat  = "stratum",
+    aes(label = after_stat(stratum)),
+    size  = 3,
+    angle = 90
+  ) +
+  scale_x_discrete(
+    limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2"),
+    expand = c(.05, .05)
+  ) +
+    coord_flip() +
+  scale_fill_manual(values = mypal_level2) +
+  ggtitle("CD8: organ → cluster → condition") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank()
+  )
+
+p3
+
+p3 <- ggplot(
+  df3,
+  aes(
+    y     = count,
+    axis2 = organ_simplified0,
+    axis1 = annotation_level2,
+    axis3 = condition_detailed_simplified
+  )
+) +
+  geom_alluvium(aes(fill = condition_detailed_simplified), width = 1/5) +
+  geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+  geom_text(
+    stat  = "stratum",
+    aes(label = after_stat(stratum)),
+    size  = 3,
+    angle = 90
+  ) +
+  scale_x_discrete(
+    limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2"),
+    expand = c(.05, .05)
+  ) +
+    coord_flip() +
+  scale_fill_manual(values = mypal) +
+  ggtitle("CD8: organ → cluster → condition") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank()
+  )
+
+p3
+
+p3 <- ggplot(
+  df3,
+  aes(
+    y     = count,
+    axis2 = organ_simplified0,
+    axis1 = annotation_level2,
+    axis3 = condition_detailed_simplified
+  )
+) +
+  geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+  geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+  geom_text(
+    stat  = "stratum",
+    aes(label = after_stat(stratum)),
+    size  = 3,
+    angle = 90
+  ) +
+  scale_x_discrete(
+    limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2"),
+    expand = c(.05, .05)
+  ) +
+    coord_flip() +
+  scale_fill_manual(values = mypal_level2) +
+  ggtitle("CD8: organ → cluster → condition") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank()
+  )
+
+p3
+
+```
+
+
+PlotAlluvialHighlight specific clusters, conditions etc.
+```{r}
+library(ggplot2)
+library(ggalluvial)
+
+PlotAlluvialHighlight <- function(
+  df3_plot = df3_plot,
+  mypal_alluv = mypal_alluv,
+  title = "CD8: organ → cluster → condition",
+  alpha_range = c(0.2, 1),
+  x_limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2")
+) {
+  ggplot(
+    df3_plot,
+    aes(
+      y     = count,
+      axis2 = organ_simplified0,
+      axis1 = annotation_level2,
+      axis3 = condition_detailed_simplified
+    )
+  ) +
+    geom_alluvium(
+      aes(fill = fill_key, alpha = alpha_val),
+      width  = 1/5,
+      colour = NA
+    ) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+    geom_text(
+      stat  = "stratum",
+      aes(label = after_stat(stratum)),
+      size  = 3,
+      angle = 90
+    ) +
+    scale_x_discrete(
+      limits = x_limits,
+      expand = c(.05, .05)
+    ) +
+    coord_flip() +
+    scale_fill_manual(values = mypal_alluv) +
+    scale_alpha(range = alpha_range, guide = "none") +
+    ggtitle(title) +
+    theme_minimal() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.title       = element_blank(),
+      axis.text        = element_blank(),
+      axis.ticks       = element_blank()
+    )
+}
+
+
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = T,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(condition_detailed_simplified), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+# pal_alluv <- c(other = "grey80", mypal)  
+pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
+df3_plot %>% count(is_highlight)
+df3_plot %>% count(fill_key)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+
+highlight <- "LCMVarm"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+df3_plot %>% count(is_highlight)
+pal_alluv <- c(other = "grey80", mypal_level2)  # mypal_level2 is named by annotation_level2
+
+highlight <- "CD8_cl10"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+highlight <- "CD8_cl11"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+highlight <- levels(df3$annotation_level2)
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+pal_alluv <- c(other = "grey80", mypal_level2)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+# highlight <- levels(df3$annotation_level2)
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = T,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+pal_alluv <- c(other = "grey80", mypal_level2)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+# highlight <- levels(df3$annotation_level2)
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% c("LCMVarm"),
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(condition_detailed_simplified), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+df3_plot %>% count(fill_key)
+pal_alluv <- c(other = "grey80", LCMVarm = "red")  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% c("LCMVarm"),
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(organ_simplified0), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+df3_plot %>% count(fill_key)
+pal_alluv <- c(other = "grey80", mypal_organ)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% c("LCMVarm"),
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+pal_alluv <- c(other = "grey80", mypal_level2)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% c("baseline"),
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+pal_alluv <- c(other = "grey80", mypal_level2)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = condition_detailed_simplified %in% c("baseline"),
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(organ_simplified0), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.1)
+  )
+pal_alluv <- c(other = "grey80", mypal_organ)  
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+
+    # build a palette: one grey for "other" + your level2 palette
+
+
+
+
+
+#######
+p3 <- ggplot(
+  df3_plot,
+  aes(
+    y     = count,
+    axis2 = organ_simplified0,
+    axis1 = annotation_level2,
+    axis3 = condition_detailed_simplified
+  )
+) +
+  geom_alluvium(
+    aes(fill = fill_key, alpha = alpha_val),
+    width  = 1/5,
+    colour = NA
+  ) +
+  geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+  geom_text(
+    stat  = "stratum",
+    aes(label = after_stat(stratum)),
+    size  = 3,
+    angle = 90
+  ) +
+  scale_x_discrete(
+    limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2"),
+    expand = c(.05, .05)
+  ) +
+  coord_flip() +
+  scale_fill_manual(values = pal_alluv) +
+  scale_alpha(range = c(0.2, 1), guide = "none") +
+  ggtitle("CD8: organ → cluster → condition (LCMVarm highlighted)") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank()
+  )
+
+p3
+
+```
+
+```{r}
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+
+# df = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse"))) %>% group_by(organ_simplified) %>%
+#   slice_sample(n = 100) %>%  # Keep no more than 5000 cells per organ_simplified
+#   ungroup() %>%
+#   group_by(annotation_level2, organ_simplified) %>%
+#   summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+#   as.data.frame()
+
+so_orig@meta.data %>% count(organ_simplified0)
+
+df = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(organ_simplified0) %>%
+  slice_sample(n = 100) %>%  # Keep no more than 5000 cells per organ_simplified0
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+## 2. Hierarchical clustering for organ order
+mat_org <- df %>%
+  select(organ_simplified0, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_org) <- mat_org$organ_simplified0
+mat_org$organ_simplified0 <- NULL
+
+organ_order <- rownames(mat_org)[hclust(dist(mat_org))$order]
+
+## 3. Hierarchical clustering for cluster (annotation_level2) order
+mat_clust <- df %>%
+  select(annotation_level2, organ_simplified0, count) %>%
+  pivot_wider(
+    names_from  = organ_simplified0,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 4. Apply orders as factor levels
+df <- df %>%
+  mutate(
+    organ_simplified0  = factor(organ_simplified0,  levels = organ_order),
+    annotation_level2 = factor(annotation_level2, levels = cluster_order)
+  )
+
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified0, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = annotation_level2), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified0", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_level2) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+
+p = ggplot(df,
+       aes(y = count, axis1 = organ_simplified0, axis2 = annotation_level2)) +
+    coord_flip() +
+    geom_alluvium(aes(fill = organ_simplified0), width = 1/5) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey") +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3, angle = 90) +
+    # geom_text_repel(stat = "stratum", aes(label = after_stat(stratum)),
+    #                 size = 5,
+    #                 min.segment.length = 0, # Ensures a line is drawn even if the label is close
+    #                 box.padding = 0.5,      # Adjusts space around text before line is drawn
+    #                 point.padding = 0.5,    # Adjusts space around the point (stratum)
+    #                 max.overlaps = Inf) +   # Allows all labels to be drawn, even if they overlap initially
+    scale_x_discrete(limits = c("organ_simplified0", "annotation_level2"), expand = c(.05, .05)) +
+    scale_fill_manual(values = mypal_organ) + # Or scale_fill_brewer
+    ggtitle("Level2 across Tissues at baseline") +
+    theme_minimal() +
+    theme(
+        panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        axis.title = element_blank(),       # Removes axis titles (e.g., "count")
+        axis.text = element_blank(),        # Removes axis labels/text (e.g., numbers on the axis)
+        axis.ticks = element_blank()        # Removes axis tick marks
+    )
+print(p)
+
+
+```
+
 
 
 
