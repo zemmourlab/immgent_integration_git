@@ -2087,6 +2087,98 @@ write.table(x = annot_summary, file = "/project/zemmour/david/ImmgenT/analysis/d
 
 ```
 
+**annotation_table_20251218.csv**
+
+
+update annotation:
+merge Treg_cl7 with Treg_cl1
+nonconv_cl55 --> DP_cl55 
+nonconv_cl17 --> DP_cl17 
+DP_cl14 --> unclear (only 8 cells, should just remove)
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so = so_orig
+so$annotation_level2 = as.character(so$annotation_level2)
+so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl55")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl55")] = "DP_cl55"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl17")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl17")] = "DP_cl17"
+so$annotation_level1[so$annotation_level2 %in% c("DP_cl14")] = "unclear"
+so$annotation_level2[so$annotation_level2 %in% c("DP_cl14")] = "unclear_cl14"
+so$annotation_level2_group[so$annotation_level2 %in% c("DP_cl14")] = "other"
+so@meta.data %>% count(annotation_level1, annotation_level2)
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+
+annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2")])
+colnames(annot) = c("cell_id", "level1", "level2.group", "level2")
+table(annot$level2.group, annot$level1)
+sum(rowSums(apply(annot,2,is.na)))
+write.table(x = annot, file = "annotation_table_20251218.csv", row.names = F, quote = F, sep = ",")
+
+annot_summary  = annot %>%
+  group_by(level2, level1, level2.group) %>%
+  summarize(counts = n(), .groups = "drop") %>%
+  mutate(
+    cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", level2), sub("^.*_cl", "", level2), NA))  # Extract cluster number and convert to numeric
+  ) %>%
+  arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
+ 
+write.table(x = annot_summary, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_history_20251218.csv", row.names = F, quote = F, sep = ",")
+
+```
+
+update annotation DP_cl14 (remove)
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128.Rds")
+so = so_orig
+so$annotation_level2 = as.character(so$annotation_level2)
+so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl55")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl55")] = "DP_cl55"
+so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl17")] = "DP"
+so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl17")] = "DP_cl17"
+so@meta.data %>% count(annotation_level1, annotation_level2)
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+
+annotation_level2_order = so@meta.data %>%
+    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
+    ) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
+    pull(annotation_level2) %>%
+    unique() %>%
+    as.character()
+
+test = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(test))
+
+so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(so$annotation_level2))
+
+so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+
+so@meta.data %>% count(annotation_level1, annotation_level2_group, annotation_level2)
+
+# saveRDS(so, "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 Final MDE plots 
