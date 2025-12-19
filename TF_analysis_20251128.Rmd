@@ -111,7 +111,7 @@ so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(anno
 on Desktop
 ```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
-so_orig = readRDS("igt1_96_withtotalvi20251128_clean.Rds")
+so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 # so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -155,7 +155,6 @@ remove prolif and miniverse since many level2 converge there. thymocyte and thym
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
 ```
-
 
 ```{r}
 Gene_AUC <- function(
@@ -353,7 +352,6 @@ Gene_AUC <- function(
 }
 
 ```
-
 
 Level1
 ```{r}
@@ -648,7 +646,7 @@ dev.off()
 
 ```
 
-**TF analysis across clusters level2 in  each level2**
+**TF analysis across clusters level2 in each level2**
 ```{r}
 pseudobulk_orig = readRDS(file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir))
 
@@ -784,9 +782,4 @@ for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
     
 }
 
-
-
-
-
 ```
-

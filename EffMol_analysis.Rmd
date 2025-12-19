@@ -1,0 +1,309 @@
+---
+title: "TF_analysis"
+output: html_document
+date: "2025-11-28"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+**Start interactive session on Midway3**
+```{bash}
+ssh -Y zemmour@midway3.rcc.uchicago.edu
+sinfo -s
+screen -S david
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=gpu --gres=gpu:1 --mem=128GB
+sinteractive --time=12:00:00 --account=pi-zemmour --partition=beagle3 --gres=gpu:1 --mem=96GB
+
+cd $LABHOME
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+#sinteractive --time=1:00:00 -p gpu --gres=gpu:1 --account=pi-zemmour 
+#source activate /project/jfkfloor2/zemmourlab/david/envs/scvi
+source activate /project/zemmour/david/envs/scvi_20240315 #for R and old scvi
+module load openblas/0.3.13 #load again or error
+
+module load python
+source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
+
+#cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis
+
+R
+options(max.print=1000)
+#options(Seurat.object.assay.version = 'v5')
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+
+
+```
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218"
+
+```
+
+
+**Most up-to-date data**
+on Midway
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+Calculate pseudobulk (on Midway)
+remove prolif and miniverse since many level2 converge there. thymocyte and thymus
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
+
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level1",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level2",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+```
+
+Gene/effmol list
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  c(sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])]), "Tox", "Tox2", "Tox3", "Tox4") %>% sort()
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0005615"]]))]) #go2eg[["GO:0005576"]]
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+# symbols$SYMBOL[grepl("^Gzma", symbols$SYMBOL)] #Gzm genes not in 3.16 org.Mm.eg.db!!
+# symbols$ENTREZID[grepl("14938", symbols$ENTREZID)]
+# unique(go2eg[["GO:0005615"]])[unique(go2eg[["GO:0005615"]]) == "14938"]
+#effmol[grepl("^Gzm", effmol)]
+
+# effmols = c(effmol[effmol %in% rownames(pseudobulk_orig)]) %>% sort()
+effmols = effmol[!grepl("^Igh|^Igk|^Igl|^Hba|^Hbb", effmol)]
+
+curated <- c(
+  "Tac1","Calca","Npy","Vip","Sst","Pomc","Oxt","Avp","Penk","Chat","Th","Tph1",
+  "Gad1","Gad2","Grin1",
+  "Il4","Il10","Il17a","Csf2","Ptgs2",
+  "Sphk1","Sphk2","P2rx7","Panx1","Nt5e",
+  "Prf1","Gzma","Gzmb","Gzmk","Gzmm",
+  "Fasl","Tnfsf10","Lta","Ifng","Tnf","Ltb",
+  "Il4","Il5","Il13","Il9","Areg","Il17a","Il17f","Il21","Il22","Csf2",
+  "Il9","Il10","Il21","Il22","Tnf","Il21",
+  "Il10","Tgfb1","Ebi3","Il12a",
+  "Gzmb","Areg",
+  "Entpd1","Nt5e","Ctla4",
+  "Cxcl9","Cxcl10","Cxcl11",
+  "Ccl1","Ccl17","Ccl22","Ccl20","Ccl3","Ccl4","Ccl5",
+  "Xcl1","Cxcl2",
+  "Cd40lg","Tnfsf9","Tnfsf4","Cd274","Pdcd1lg2",
+  "Lag3","Tigit","Havcr2",
+  "Areg","Il10","Tgfb1","Arg1",
+  "Entpd1","Nt5e"
+)
+curated[!curated %in% rownames(pseudobulk_orig)]
+curated[!curated %in% effmols]
+
+effmols = unique(effmols, curated) %>% sort()
+
+write.table(effmols, file = "~/Desktop/effmol_GO0005615_And_CBList.txt",quote = F, row.names = F, col.names = F )
+
+##
+# library(org.Hs.eg.db)
+# hs = org.Hs.eg.db
+# go2eg = as.list(org.Hs.egGO2ALLEGS)
+# symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+# cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+# cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+# #is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+# tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+# secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+```
+
+
+
+Level1
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level1")
+    
+Gene_AUC(pseudobulk,
+         genes = effmols, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level1),
+         mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
+         n_top = 20,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+)
+
+
+```
+
+Across Level2
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level2")
+    
+Gene_AUC(pseudobulk,
+         genes = effmols, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level2),
+         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         n_top = 110,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = colorRampPalette(c('white','cyan4','blue4'))(100), #colorRampPalette(c('white','red','brown'))(100), rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+         pdf_width = 12,
+         pdf_height = 15
+         
+)
+
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level2Top50")
+Gene_AUC(pseudobulk,
+         genes = effmols, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level2),
+         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         n_top = 50,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = colorRampPalette(c('white','orange','red4'))(100), #rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))  rev(viridis::rocket(100))
+         pdf_width = 12,
+         pdf_height = 10
+         
+)
+
+ColorRamp = rev(colorRampPalette(c('white','yellow4','red4'))(100))
+colorRampPalette(c('white','red','brown'))(100)
+colorRampPalette(c('white','cyan4','blue4'))(100)
+
+```
+
+
+in each Level2
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
+    print(ct)
+    out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", ct)
+    
+    pseudobulk = pseudobulk_orig[,grepl(sprintf("^%s\\-",ct), colnames(pseudobulk_orig))]
+    
+    Gene_AUC(pseudobulk,
+             genes = effmols, # vector of genes
+             out_dir = out_dir2,
+             mypal = mypal,              # named vector of colors for TF lines
+             order_groups = levels(so_orig$annotation_level2),
+             mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+             n_top = 70,                # number of top TF to highlight
+             expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+             cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+             pdf_width = 12,
+             pdf_height = 10
+    )
+}
+
+```
