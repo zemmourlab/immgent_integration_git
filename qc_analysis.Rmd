@@ -12,7 +12,7 @@ editor_options:
 ```{r}
 setwd('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/QC')
 
-libs = c("Seurat","BPCells", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
+libs = c("Seurat","BPCells", "ggrepel", "ggplot2", "dplyr", "reshape2", "ggrastr", "RColorBrewer", "pals", "scales", "pheatmap") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 
 options(Seurat.object.assay.version = 'v5')
@@ -52,7 +52,175 @@ ReorderIGT = function(igt = sample_qc$IGT) {
 
 ```
 
+**QC RNA and ADT per IGT or per sample**
+per IGT or per sample
+ncount_RNA
+nfeature_RNA
+ncount_ADT
+
+Load and prepare data frame
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+
+sample_qc = read.table('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/QC/Sample_metadata_withQC_IGT1-96.csv', header = T, sep = ",")
+sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id
+
+
+sample_qc = sample_qc %>% filter(IGT %in% c(
+    "IGT1","IGT2","IGT3","IGT5","IGT6","IGT7","IGT8","IGT9",
+    "IGT10","IGT11","IGT12","IGT13","IGT14","IGT15","IGT16","IGT17","IGT18","IGT19",
+    "IGT20","IGT21","IGT22","IGT23","IGT24","IGT25","IGT26","IGT27","IGT28","IGT29",
+    "IGT30","IGT31","IGT32","IGT33","IGT35","IGT36","IGT37","IGT38","IGT39","IGT40",
+    "IGT43","IGT44","IGT45","IGT46","IGT47","IGT48","IGT49",
+    "IGT50","IGT51","IGT52","IGT54","IGT55","IGT56","IGT58","IGT59",
+    "IGT60","IGT61","IGT64","IGT65","IGT66","IGT67","IGT68","IGT69",
+    "IGT70","IGT73","IGT74","IGT75","IGT76","IGT77","IGT78","IGT79",
+    "IGT80","IGT81","IGT82","IGT85","IGT87","IGT88",
+    "IGT90","IGT91","IGT92","IGT95","IGT96"
+))
+
+sample_qc$IGT = ReorderIGT(sample_qc$IGT)
+
+# unique(so_orig$IGT)
+# unique(sample_qc$IGT)
+# colnames(sample_qc)
+```
+
+QC boxplot across all experiments
+```{r}
+igt_qc = sample_qc %>% 
+    group_by(IGT) %>% 
+    summarize(ncells_preqc = sum(ncells_preqc), 
+              ncells_outliers_nGenes = sum(ncells_outliers_nGenes),
+              ncells_outliers_deadcells = sum(ncells_outliers_deadcells),
+              ncells_outliers_lowCountADT = sum(ncells_outliers_lowCountADT),
+              ncells_outliers_autofluorescence = sum(ncells_outliers_autofluorescence),
+              ncells_nonTcells = sum(ncells_nonTcells),
+              ncells_postqc = sum(ncells_postqc)) %>% 
+        mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
+               percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
+               percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
+               percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
+               percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
+               percent_nonTcells = ncells_nonTcells / ncells_preqc*100
+               )
+
+igt_qc_melt = melt(igt_qc, id.vars = "IGT")
+
+vars_keep <- c(
+  "percent_postqc", "percent_RNA_nGenes","percent_RNA_deadcells",
+  "percent_Protein_lowCount", "percent_Protein_nonspecific_signal",
+  "percent_nonTcells"
+)
+
+df <- igt_qc_melt %>%
+  filter(variable %in% vars_keep) %>%
+  group_by(variable) %>%
+  mutate(
+    q1 = quantile(value, 0.25, na.rm = TRUE),
+    q3 = quantile(value, 0.75, na.rm = TRUE),
+    iqr = q3 - q1,
+    is_outlier = value < (q1 - 1.5 * iqr) | value > (q3 + 1.5 * iqr)
+  ) %>%
+  ungroup()
+
+p <- ggplot(df, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  geom_jitter(aes(color = IGT), width = 0, size = 2) +
+  geom_text_repel(
+    data = df %>% filter(is_outlier),
+    aes(label = IGT, color = IGT),
+    max.overlaps = getOption("ggrepel.max.overlaps", default = 30)
+  ) +
+  scale_color_manual(values = mypal) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x  = element_text(angle = 75, vjust = 0.5, size = 10)) +
+  ggtitle("QC RNA and Protein by IGT") +
+  NoLegend() + NoGrid()
+
+pdf("QC_RNA_ADT_IGT.pdf", 10,8, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+QC per IGT (shows each HT)
+```{r}
+sample_qc = sample_qc %>% mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
+                     percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
+                     percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
+                     percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
+                     percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
+                     percent_nonTcells = ncells_nonTcells / ncells_preqc*100
+                     )
+
+sample_qc_melt = melt(sample_qc, id.vars = c("IGT", "hashtag_number"))
+
+
+pdf("QC_RNA_ADT_perIGT.pdf", 10,8, useDingbats = F)
+for (i in levels(sample_qc_melt$IGT)) {
+    pdf(sprintf("QC_RNA_ADT_%s.pdf", i), 10,8, useDingbats = F)
+    print(i)
+    sample_qc_melt_sub = sample_qc_melt %>% 
+        filter(IGT == i & variable %in% c("percent_postqc", "percent_RNA_nGenes", 
+                                         "percent_RNA_deadcells", "percent_Protein_lowCount", 
+                                         "percent_Protein_nonspecific_signal", "percent_nonTcells"))
+    p = ggplot(data = sample_qc_melt %>% 
+               filter(variable %in% c("percent_postqc", "percent_RNA_nGenes", 
+                                      "percent_RNA_deadcells", "percent_Protein_lowCount", 
+                                      "percent_Protein_nonspecific_signal", "percent_nonTcells")), 
+           aes(x = variable, y = as.numeric(value))) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), color = hashtag_number), width = 0, size = 2) +
+        geom_text_repel(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), label = hashtag_number), max.overlaps = getOption("ggrepel.max.overlaps", default = 10)) +
+        scale_color_manual(values = mypal) +
+        ylab("Percent") +
+        theme_bw() + theme(axis.title.x = element_blank()) + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + ggtitle(i) #+ NoLegend()
+        ggtitle(i) 
+    print(p)
+    dev.off()
+}
+dev.off()
+
+
+pdf("QC_ncells_perIGTandsample.pdf", 12,8, useDingbats = F)
+p <- ggplot(sample_qc_melt %>% filter(variable %in% c("ncells_postqc")), aes(y = as.numeric(value))) +
+  geom_boxplot(aes(x = "All"),outlier.shape = NA, fill = "grey", alpha = 0.5) +  # A single boxplot for all data
+  geom_jitter(aes(x = IGT, color = hashtag_number), width = 0, size = 2) +  # Jitter plot for each IGT
+  scale_color_manual(values = mypal) +
+  theme_bw() + 
+  theme(axis.title.x = element_blank()) + 
+scale_x_discrete(limits = c("All", as.character(levels(sample_qc_melt$IGT)))) +
+  ggtitle(label = "QC ncells by IGT and sample") + 
+  theme(axis.text.x  = element_text(angle = 75, vjust = 0.5, size = 10))
+print(p)
+dev.off()
+```
+
+Write the tables
+```{r}
+write.table(igt_qc, file = "QC_RNA_ADT_IGT_summary_table.csv",quote = F, sep = ",",row.names = F)
+write.table(sample_qc, file = "QC_RNA_ADT_sample_summary_table.csv",quote = F, sep = ",",row.names = F)
+```
+
+Transfer summary QC plot in each IGT
+```{bash}
+cd ~/google_drive/ImmgenT/analysis/QC/  
+
+for i in {1..56}; do \
+echo IGT$i ; \
+#ls ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/; \
+#ls QC_RNA_ADT_IGT${i}.pdf; \
+cp QC_RNA_ADT_IGT${i}.pdf ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/
+done 
+
+```
+
 **TCR**
+NOT COMPUTED YET FOR IGT 57-96 
 per IGT or per sample
 n sequences
 % cells with a, b, ab, 2a, 2b, 2ab
@@ -217,121 +385,8 @@ write.table(exp_igt_table, file = "QC_tcr_IGT1_56_tcr_table.csv",quote = F, sep 
 
 ```
 
-**QC RNA and ADT per IGT or per sample**
-per IGT or per sample
-ncount_RNA
-nfeature_RNA
-ncount_ADT
 
-```{r}
-sample_qc = read.table("~/google_drive/ImmgenT/analysis/QC/Sample_metadata_withQC.csv", header = T, sep = ",")
-sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id
-sample_qc$IGT = ReorderIGT(sample_qc$IGT)
-
-colnames(sample_qc)
-
-igt_qc = sample_qc %>% 
-    group_by(IGT) %>% 
-    summarize(ncells_preqc = sum(ncells_preqc), 
-              ncells_outliers_nGenes = sum(ncells_outliers_nGenes),
-              ncells_outliers_deadcells = sum(ncells_outliers_deadcells),
-              ncells_outliers_lowCountADT = sum(ncells_outliers_lowCountADT),
-              ncells_outliers_autofluorescence = sum(ncells_outliers_autofluorescence),
-              ncells_nonTcells = sum(ncells_nonTcells),
-              ncells_postqc = sum(ncells_postqc)) %>% 
-        mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
-               percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
-               percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
-               percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
-               percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
-               percent_nonTcells = ncells_nonTcells / ncells_preqc*100
-               )
-
-
-igt_qc_melt = melt(igt_qc, id.vars = "IGT")
-
-pdf("QC_RNA_ADT_IGT.pdf", 10,8, useDingbats = F)
-p = ggplot(igt_qc_melt %>% filter(variable %in% c("percent_postqc", "percent_RNA_nGenes","percent_RNA_deadcells", "percent_Protein_lowCount", "percent_Protein_nonspecific_signal", "percent_nonTcells")), aes(x = variable, y = value)) + geom_boxplot() + 
-    geom_jitter(width = 0, aes(color = IGT), size = 2) +
-    geom_text_repel(aes(x = variable, y = value, label = IGT), max.overlaps = getOption("ggrepel.max.overlaps", default = 30)) +
-    scale_color_manual(values = mypal) +
-    #scale_y_continuous(trans = log_trans(), breaks = c(0.01, 0.05, seq(0.1, 1, by = 0.1)) , labels =  c( 0.01, 0.05, seq(0.1, 1, by = 0.1))) + 
-    theme_bw() + theme(axis.title.x = element_blank())+ ggtitle(label = "QC RNA and Protein by IGT") + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + NoLegend()
-print(p)
-dev.off()
-
-sample_qc = sample_qc %>% mutate(percent_postqc = ncells_postqc / ncells_preqc*100, 
-                     percent_RNA_nGenes = ncells_outliers_nGenes / ncells_preqc*100,
-                     percent_RNA_deadcells = ncells_outliers_deadcells / ncells_preqc*100,
-                     percent_Protein_lowCount= ncells_outliers_lowCountADT / ncells_preqc*100,
-                     percent_Protein_nonspecific_signal= ncells_outliers_autofluorescence / ncells_preqc*100,
-                     percent_nonTcells = ncells_nonTcells / ncells_preqc*100
-                     )
-
-sample_qc_melt = melt(sample_qc, id.vars = c("IGT", "hashtag_number"))
-
-
-#pdf("QC_RNA_ADT_perIGT.pdf", 10,8, useDingbats = F)
-
-
-for (i in levels(sample_qc_melt$IGT)) {
-    pdf(sprintf("QC_RNA_ADT_%s.pdf", i), 10,8, useDingbats = F)
-    print(i)
-    sample_qc_melt_sub = sample_qc_melt %>% 
-        filter(IGT == i & variable %in% c("percent_postqc", "percent_RNA_nGenes", 
-                                         "percent_RNA_deadcells", "percent_Protein_lowCount", 
-                                         "percent_Protein_nonspecific_signal", "percent_nonTcells"))
-    p = ggplot(data = sample_qc_melt %>% 
-               filter(variable %in% c("percent_postqc", "percent_RNA_nGenes", 
-                                      "percent_RNA_deadcells", "percent_Protein_lowCount", 
-                                      "percent_Protein_nonspecific_signal", "percent_nonTcells")), 
-           aes(x = variable, y = as.numeric(value))) +
-        geom_boxplot(outlier.shape = NA) +
-        geom_jitter(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), color = hashtag_number), width = 0, size = 2) +
-        geom_text_repel(data = sample_qc_melt_sub, aes(x = variable, y = as.numeric(value), label = hashtag_number), max.overlaps = getOption("ggrepel.max.overlaps", default = 10)) +
-        scale_color_manual(values = mypal) +
-        ylab("Percent") +
-        theme_bw() + theme(axis.title.x = element_blank()) + theme(axis.text.x  = element_text(angle=75, vjust=0.5, size=10)) + ggtitle(i) #+ NoLegend()
-        ggtitle(i) 
-    print(p)
-    dev.off()
-}
-#dev.off()
-
-
-pdf("QC_ncells_perIGTandsample.pdf", 12,8, useDingbats = F)
-p <- ggplot(sample_qc_melt %>% filter(variable %in% c("ncells_postqc")), aes(y = as.numeric(value))) +
-  geom_boxplot(aes(x = "All"),outlier.shape = NA, fill = "grey", alpha = 0.5) +  # A single boxplot for all data
-  geom_jitter(aes(x = IGT, color = hashtag_number), width = 0, size = 2) +  # Jitter plot for each IGT
-  scale_color_manual(values = mypal) +
-  theme_bw() + 
-  theme(axis.title.x = element_blank()) + 
-scale_x_discrete(limits = c("All", as.character(levels(sample_qc_melt$IGT)))) +
-  ggtitle(label = "QC ncells by IGT and sample") + 
-  theme(axis.text.x  = element_text(angle = 75, vjust = 0.5, size = 10))
-print(p)
-dev.off()
-
-#Write the tables
-#write.table(igt_qc, file = "QC_RNA_ADT_IGT_summary_table.csv",quote = F, sep = ",",row.names = F)
-#write.table(sample_qc, file = "QC_RNA_ADT_sample_summary_table.csv",quote = F, sep = ",",row.names = F)
-
-
-```
-
-Transfer summary QC plot in each IGT
-```{bash}
-cd ~/google_drive/ImmgenT/analysis/QC/  
-
-for i in {1..56}; do \
-echo IGT$i ; \
-#ls ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/; \
-#ls QC_RNA_ADT_IGT${i}.pdf; \
-cp QC_RNA_ADT_IGT${i}.pdf ~/google_drive/ImmgenT/exp_id/*exp_id*/IGT${i}/
-done 
-
-```
-
+**Other plots**
 ```{r}
 sample_qc = read.table("~/google_drive/ImmgenT/analysis/QC/Sample_metadata_withQC.csv", header = T, sep = ",")
 sample_qc$IGT = sample_qc$immgent_IGT_10xlane_id

@@ -1687,7 +1687,7 @@ PlotAlluvialHighlight <- function(
     )
 }
 
-
+#df3 from previous block
 df3_plot <- df3 %>%
   mutate(
     # is this alluvium part of the highlighted condition?
@@ -1716,6 +1716,8 @@ df3_plot <- df3 %>%
   )
 df3_plot %>% count(is_highlight)
 pal_alluv <- c(other = "grey80", mypal_level2)  # mypal_level2 is named by annotation_level2
+df3_plot %>% count(fill_key)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
 
 highlight <- "CD8_cl10"
 df3_plot <- df3 %>%
@@ -1727,6 +1729,8 @@ df3_plot <- df3 %>%
     # alpha: low for background, high for highlight
     alpha_val = ifelse(is_highlight, 1, 0.25)
   )
+pal_alluv <- c(other = "grey80", CD8_cl10 = "red")  
+# pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
 df3_plot %>% count(is_highlight)
 PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
 

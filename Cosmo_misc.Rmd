@@ -276,6 +276,9 @@ dev.off()
 
 ```
 
+**Figure S1 - QC**
+--> in qc_analysis.Rmd up to line 222 (TCR)
+
 **Figure 1C**
 ```{r}
 igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220428_exp_id_05_Skin/IGT5/dataset_clean.Rds')
@@ -2577,7 +2580,40 @@ for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
 
 ```
 
-**Figure 6: Effector molecules**
+Ahrr expression
+```{r}
+pseudobulk = readRDS(file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pdf(sprintf("%s/annotation_level2_barplots_%s.pdf", out_dir, "OtherTF"), 12, 7, useDingbats = F)
+genes_to_plot = c("Ahrr", "Tox","Tox2", "Tbx21", "Gata3")
+for (gene_to_plot in genes_to_plot) {
+    print(gene_to_plot)
+    data = data.frame(
+        Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+        Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+    )
+    data$Cluster = gsub("\\-", "_", data$Cluster)
+    data$Cluster = factor(data$Cluster, levels = levels(so$annotation_level2))
+    data$level1 = so$annotation_level1[match(data$Cluster, so$annotation_level2)]
+    
+    p = ggplot(data, aes(x = Cluster, y = Expression, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p + NoGrid() + NoLegend())
+}
+dev.off()
+
+```
+
+
+**Figure 7: Effector molecules**
 
 
 !! using so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")  here
@@ -2741,5 +2777,349 @@ for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
 
 ```
 
+**Figure 8**
 
+PlotAlluvialHighlight specific clusters, conditions organ - for CD8_cl10
+```{r}
+library(ggplot2)
+library(ggalluvial)
+library(dplyr)
+library(tidyr)
+
+PlotAlluvialHighlight <- function(
+  df3_plot = df3_plot,
+  mypal_alluv = mypal_alluv,
+  title = "CD8: organ → cluster → condition",
+  alpha_range = c(0.2, 1),
+  x_limits = c("condition_detailed_simplified", "organ_simplified0", "annotation_level2")
+) {
+  ggplot(
+    df3_plot,
+    aes(
+      y     = count,
+      axis2 = organ_simplified0,
+      axis1 = annotation_level2,
+      axis3 = condition_detailed_simplified
+    )
+  ) +
+    geom_alluvium(
+      aes(fill = fill_key, alpha = alpha_val),
+      width  = 1/5,
+      colour = NA
+    ) +
+    geom_stratum(width = 1/5, fill = "white", color = "grey50") +
+    geom_text(
+      stat  = "stratum",
+      aes(label = after_stat(stratum)),
+      size  = 3,
+      angle = 90
+    ) +
+    scale_x_discrete(
+      limits = x_limits,
+      expand = c(.05, .05)
+    ) +
+    coord_flip() +
+    scale_fill_manual(values = mypal_alluv) +
+    scale_alpha(range = alpha_range, guide = "none") +
+    ggtitle(title) +
+    theme_minimal() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.title       = element_blank(),
+      axis.text        = element_blank(),
+      axis.ticks       = element_blank()
+    )
+}
+
+
+so_orig@meta.data %>% count(organ_simplified0)
+
+# df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(annotation_level2, organ_simplified0, condition_detailed_simplified) %>% slice_sample(n = 100) 
+
+df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD8" & !(annotation_level2 %in% c("CD8_prolif", "CD8_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(condition_detailed_simplified) %>%
+  slice_sample(n = 1000) 
+
+## 1. Hierarchical clustering for cluster (annotation_level2) order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_clust <- df1 %>%
+  select(annotation_level2, organ_simplified0, count) %>%
+  pivot_wider(
+    names_from  = organ_simplified0,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 2. Hierarchical clustering for organ order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_org <- df1 %>%
+  select(organ_simplified0, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_org) <- mat_org$organ_simplified0
+mat_org$organ_simplified0 <- NULL
+
+organ_order <- rownames(mat_org)[hclust(dist(mat_org))$order]
+
+## 3. Hierarchical clustering for condition_detailed order
+df2 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, condition_detailed_simplified) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+mat_cond <- df2 %>%
+  select(condition_detailed_simplified, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_cond) <- mat_cond$condition_detailed_simplified
+mat_cond$condition_detailed_simplified <- NULL
+
+cond_order <- rownames(mat_cond)[hclust(dist(mat_cond))$order]
+
+#4. Alluvial 3-way
+# Example: organ - cluster - condition_broad
+df3 <- df0 %>%
+  group_by(organ_simplified0, annotation_level2, condition_detailed_simplified) %>%
+  summarise(count = n(), .groups = "drop")
+
+df3 <- df3 %>%
+    mutate(
+        annotation_level2 = factor(annotation_level2, levels = cluster_order),
+        condition_detailed_simplified  = factor(condition_detailed_simplified,  levels = cond_order),
+        organ_simplified0  = factor(organ_simplified0,  levels = organ_order)
+    )
+
+highlight <- "CD8_cl10"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+pal_alluv <- c(other = "grey80", CD8_cl10 = "red")  
+# pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
+df3_plot %>% count(is_highlight)
+p = PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+pdf(sprintf("%s/alluvial_CD8_cl10.pdf", out_dir), 15,5, useDingbats = F)
+p
+# dev.off()
+
+```
+
+PlotAlluvialHighlight specific clusters, conditions organ - for CD4_cl13
+```{r}
+library(ggplot2)
+library(ggalluvial)
+library(dplyr)
+library(tidyr)
+
+# df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD4" & !(annotation_level2 %in% c("CD4_prolif", "CD4_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(annotation_level2, organ_simplified0, condition_detailed_simplified) %>% slice_sample(n = 100) 
+
+df0 = so_orig@meta.data %>% filter(annotation_level1 %in% "CD4" & !(annotation_level2 %in% c("CD4_prolif", "CD4_miniverse")) & !(organ_simplified0 %in% "SLO")) %>% group_by(condition_detailed_simplified) %>%
+  slice_sample(n = 1000) 
+
+## 1. Hierarchical clustering for cluster (annotation_level2) order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_clust <- df1 %>%
+  select(annotation_level2, organ_simplified0, count) %>%
+  pivot_wider(
+    names_from  = organ_simplified0,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_clust) <- mat_clust$annotation_level2
+mat_clust$annotation_level2 <- NULL
+
+cluster_order <- rownames(mat_clust)[hclust(dist(mat_clust))$order]
+
+## 2. Hierarchical clustering for organ order
+df1 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, organ_simplified0) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+
+mat_org <- df1 %>%
+  select(organ_simplified0, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_org) <- mat_org$organ_simplified0
+mat_org$organ_simplified0 <- NULL
+
+organ_order <- rownames(mat_org)[hclust(dist(mat_org))$order]
+
+## 3. Hierarchical clustering for condition_detailed order
+df2 = df0%>% 
+  ungroup() %>%
+  group_by(annotation_level2, condition_detailed_simplified) %>%
+  summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
+  as.data.frame()
+mat_cond <- df2 %>%
+  select(condition_detailed_simplified, annotation_level2, count) %>%
+  pivot_wider(
+    names_from  = annotation_level2,
+    values_from = count,
+    values_fill = 0
+  ) %>% as.data.frame()
+
+rownames(mat_cond) <- mat_cond$condition_detailed_simplified
+mat_cond$condition_detailed_simplified <- NULL
+
+cond_order <- rownames(mat_cond)[hclust(dist(mat_cond))$order]
+
+#4. Alluvial 3-way
+# Example: organ - cluster - condition_broad
+df3 <- df0 %>%
+  group_by(organ_simplified0, annotation_level2, condition_detailed_simplified) %>%
+  summarise(count = n(), .groups = "drop")
+
+df3 <- df3 %>%
+    mutate(
+        annotation_level2 = factor(annotation_level2, levels = cluster_order),
+        condition_detailed_simplified  = factor(condition_detailed_simplified,  levels = cond_order),
+        organ_simplified0  = factor(organ_simplified0,  levels = organ_order)
+    )
+
+
+highlight <- "CD4_cl14"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+pal_alluv <- c(other = "grey80", CD4_cl14 = "red")
+# pal_alluv <- c(other = "grey80", mypal_level2)  
+# pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
+df3_plot %>% count(is_highlight)
+p = PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+pdf(sprintf("%s/alluvial_CD4_cl14.pdf", out_dir), 15,5, useDingbats = F)
+p
+dev.off()
+
+```
+
+**Figure 8: cl10 + infection cleared + Ag specific + NLT vs cl10_noninfection**
+
+```{r}
+mdata_orig = so_orig@meta.data
+
+mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & condition_detailed_simplified %in% c("B16_ACT", "PDAC", "GBMclass", "GBMmes", "KP")) %>% count(condition_detailed_simplified)
+mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & !(condition_broad %in% c("healthy", "cancer"))) %>% count(condition_detailed_simplified)
+mdata_orig %>% filter( annotation_level2 %in% c("Treg_cl2") & condition_detailed_simplified %in% c("baseline")) %>% count(condition_detailed_simplified)
+
+res_list = list()
+
+mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !is.na(Ag_spe) & infection_phase == "cleared" & !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% count(condition_detailed_organ)
+mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !(condition_broad %in% c("bacteria", "fungus", "virus", "parasite"))& !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% count(condition_detailed_organ)
+
+group1 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !is.na(Ag_spe) & infection_phase == "cleared" & !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% pull(cellID)
+group2 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !(condition_broad %in% c("bacteria", "fungus", "virus", "parasite"))& !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% pull(cellID)
+length(group1)
+length(group2)
+res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("CD8_cl10 Trm vs CD8_cl10 nonTrm%s",""))
+# res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]]$p1
+# res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]]$p2
+# res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]]$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+group1 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !is.na(Ag_spe) & infection_phase == "cleared" & !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% pull(cellID)
+group2 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl1") & spleen_standard == T) %>% pull(cellID)
+length(group1)
+length(group2)
+res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("CD8_cl10 Trm vs CD8_cl1 spleen standard %s",""))
+# res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$p1
+# res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$p2
+# res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+group1 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl10") & !(condition_broad %in% c("bacteria", "fungus", "virus", "parasite"))& !(organ_simplified %in% c("spleen", "SLO", "LN"))) %>% pull(cellID)
+group2 = mdata_orig %>% filter( annotation_level2 %in% c("CD8_cl1") & spleen_standard == T) %>% pull(cellID)
+length(group1)
+length(group2)
+res_list[["CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"]] = FlashierDGE(F1, L1, group1, group2, title_plot = sprintf("CD8_cl10 Trm vs CD8_cl1 spleen standard %s",""))
+# res_list[["CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"]]$p1
+# res_list[["CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"]]$p2
+# res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$diff_genes %>% arrange(desc(log2FC)) %>% head(50) %>% pull(SYMBOL)
+
+all(res_list[[2]]$diff_genes$SYMBOL == res_list[[3]]$diff_genes$SYMBOL)
+
+i = "CD8cl10_Trm_vs_CD8cl1_spleenstandard"
+j = "CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"
+vplot = data.frame(fc1 = 2^(res_list[[i]]$diff_genes$log2FC), fc2 = 2^(res_list[[j]]$diff_genes$log2FC), SYMBOL = res_list[[i]]$diff_genes$SYMBOL)
+genes_to_plot = c(res_list[[i]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(200) %>% pull(SYMBOL), res_list[[j]]$diff_genes %>% arrange(desc(abs(log2FC))) %>% head(200) %>% pull(SYMBOL)) %>% unique()
+# genes_to_label = vplot[genes_to_plot, ]
+p1 = FCFCplot(vplot, 
+         xlab = "CD8_cl10 Trm vs baseline cl1 spleen", 
+         ylab = "CD8_cl10 nonTrm vs baseline cl1 spleen", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = genes_to_plot, xlimits = c(1/3, 3), ylimits = c(1/3, 3)) + NoGrid()
+p2 = FCFCplot(vplot, 
+         xlab = "CD8_cl10 Trm vs baseline cl1 spleen", 
+         ylab = "CD8_cl10 nonTrm vs baseline cl1 spleen", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = NULL, xlimits = c(1/3, 3), ylimits = c(1/3, 3)) + NoGrid()
+
+
+pdf(sprintf("%s/FlashierDGE_CD8_cl10_Trm_vs_nonTrm.pdf",out_dir), 7, 7, useDingbats = F)
+res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]]$p1 + NoGrid()
+res_list[["CD8cl10_Trm_vs_CD8cl10_nonTrm"]]$p2 + NoGrid()
+res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$p1 + NoGrid()
+res_list[["CD8cl10_Trm_vs_CD8cl1_spleenstandard"]]$p2 + NoGrid()
+res_list[["CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"]]$p1 + NoGrid()
+res_list[["CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"]]$p2 + NoGrid()
+print(p1)
+print(p2)
+dev.off()
+
+i1 = "CD8cl10_Trm_vs_CD8cl10_nonTrm"
+i2 = "CD8cl10_Trm_vs_CD8cl1_spleenstandard"
+i3 = "CD8cl10_nonTrm_vs_CD8cl1_spleenstandard"
+write.table(res_list[[i1]]$diff_genes, file = sprintf("%s/%s.txt",out_dir, i1), row.names = F, sep = "\t")
+write.table(res_list[[i2]]$diff_genes, file = sprintf("%s/%s.txt",out_dir, i2), row.names = F, sep = "\t")
+write.table(res_list[[i3]]$diff_genes, file = sprintf("%s/%s.txt",out_dir, i3), row.names = F, sep = "\t")
+saveRDS(res_list, file = sprintf("%s/FlashierDGE_CD8_cl10_Trm_vs_nonTrmAnalysis.Rds",out_dir) )
+
+
+
+```
 
