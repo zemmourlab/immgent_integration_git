@@ -6,7 +6,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-
 **Start interactive session on Midway3**
 ```{bash}
 ssh -Y zemmour@midway3.rcc.uchicago.edu
@@ -90,8 +89,11 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 # fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
 # fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
 
-out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128" 
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128" #with igt1_96_withtotalvi20251128_clean.Rds that still had DP_14 messing things up
 out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251219" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251219"
 
 ```
 
@@ -100,7 +102,8 @@ out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_a
 on Midway
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
 
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
 
@@ -111,7 +114,8 @@ so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(anno
 on Desktop
 ```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
-so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
+# so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
+so_orig = readRDS("igt1_96_withtotalvi20251218_clean_ADTonly.Rds")
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 # so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -119,7 +123,413 @@ so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row
 
 ```
 
+Gene_AUC function
+```{r}
+Gene_AUC <- function(
+        pseudobulk,
+        genes, # vector of genes
+        out_dir,
+        mypal = NULL,              # named vector of colors for TF lines
+        order_groups = levels(so$annotation_level2),
+        mypal_groups = mypal_level2,       # named vector of colors for level1 barplots
+        n_top = 20,                # number of top TF to highlight
+        expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+        cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+        pdf_width = 7,
+        pdf_height = 7
+        
+) {
+    # ---- sanity + setup ----
+    stopifnot("RNA" %in% names(pseudobulk))
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    # 1. Extract matrix for genes of interest
+    mat <- pseudobulk[["RNA"]]$data[genes, , drop = FALSE]
+    
+    # 2. Normalize each TF by its row sum
+    row_sums <- rowSums(mat)
+    row_sums[row_sums == 0] <- NA  # avoid division by zero
+    mat_norm <- mat / row_sums
+    
+    # 3. Filter TFs: at least one cluster with expression > expr_threshold
+    filt_expr <- rownames(mat)[rowSums(mat > expr_threshold, na.rm = TRUE) >= 1]
+    mat_norm_filt <- mat_norm[filt_expr, , drop = FALSE]
+    
+    # 4. Long format + cumulative curves
+    data_long <- mat_norm_filt |>
+        as.data.frame() |>
+        tibble::rownames_to_column(var = "Gene") |>
+        tidyr::pivot_longer(
+            cols = -Gene,
+            names_to = "Group",
+            values_to = "Expression"
+        ) |>
+        dplyr::group_by(Gene) |>
+        dplyr::arrange(dplyr::desc(Expression), .by_group = TRUE) |>
+        dplyr::mutate(
+            CumulativeExpression = cumsum(Expression),
+            Rank = dplyr::row_number()
+        ) |>
+        dplyr::ungroup()
+    
+    # 5. AUC per gene
+    gene_auc <- data_long |>
+        dplyr::group_by(Gene) |>
+        dplyr::summarise(
+            auc = sum(CumulativeExpression) / dplyr::n(),
+            .groups = "drop"
+        ) |>
+        dplyr::arrange(dplyr::desc(auc))
+    
+    # Write AUC table
+    utils::write.table(
+        gene_auc,
+        file = sprintf("%s/AUC.txt", out_dir),
+        quote = FALSE,
+        col.names = TRUE,
+        row.names = FALSE,
+        sep = "\t"
+    )
+    
+    # Top TFs
+    top_genes <- head(gene_auc$Gene, n_top)
+    
+    # 6. Cumulative curves PDF
+    pdf(sprintf("%s/cum_curves.pdf", out_dir),
+        7, 7, useDingbats = FALSE)
+    
+    p1 <- ggplot2::ggplot(
+        data_long,
+        ggplot2::aes(x = Rank, y = CumulativeExpression, group = Gene)
+    ) +
+        ggplot2::geom_line(size = 0.5, alpha = 0.1)
+    
+    p2 <- ggplot2::geom_line(
+        data = subset(data_long, Gene %in% top_genes),
+        mapping = ggplot2::aes(
+            x = Rank, y = CumulativeExpression,
+            group = Gene, color = Gene
+        ),
+        size = 1,
+        alpha = 1
+    )
+    
+    p3 <- ggrepel::geom_label_repel(
+        data = data_long |>
+            dplyr::filter(Gene %in% top_genes) |>
+            dplyr::group_by(Gene) |>
+            dplyr::slice_sample(n = 1) |>
+            dplyr::ungroup(),
+        ggplot2::aes(
+            x = Rank, y = CumulativeExpression,
+            label = Gene, color = Gene
+        ),
+        size = 4,
+        segment.size = 0.2,
+        segment.color = "grey",
+        max.overlaps = 50
+    )
+    
+    # Colors for lines
+    if (is.null(mypal)) {
+        cols <- grDevices::rainbow(length(top_genes))
+        names(cols) <- top_genes
+    } else {
+        cols <- mypal
+    }
+    
+    print(
+        p1 + p2 + p3 +
+            ggplot2::scale_color_manual(values = cols) +
+            ggplot2::labs(
+                title = "Cumulative Expression",
+                x = "Ranked Groups by Expression",
+                y = "Cumulative Expression"
+            ) +
+            ggplot2::theme_minimal() +
+            ZemmourLib::NoLegend() +
+            ZemmourLib::NoGrid()
+    )
+    
+    dev.off()
+    
+    # 7. Barplots for top genes (requires so + mypal_groups)
+    if (!is.null(so) && !is.null(mypal_groups)) {
+        pdf(sprintf("%s/barplots_topgenes.pdf", out_dir),
+            pdf_width, pdf_height, useDingbats = FALSE)
+        
+        for (g in top_genes) {
+            gene_to_plot <- g
+            data <- data.frame(
+                Group    = colnames(pseudobulk[["RNA"]]$data),
+                Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+            )
+            data$Group <- gsub("\\-", "_", data$Group)
+            data$Group <- factor(data$Group, levels = order_groups)
+            # data$level1  <- so$annotation_level1[match(data$Group, so$annotation_level1)]
+            
+            p <- ggplot2::ggplot(data, ggplot2::aes(x = Group, y = Expression, fill = Group)) +
+                ggplot2::geom_bar(stat = "identity") +
+                ggplot2::scale_fill_manual(values = mypal_groups) +
+                ggplot2::labs(
+                    title = sprintf("%s Expression in Groups", gene_to_plot),
+                    x = "Group", y = "Expression"
+                ) +
+                ggplot2::theme_minimal() +
+                ggplot2::theme(
+                    axis.text.x  = ggplot2::element_text(size = 8, angle = 90,
+                                                         hjust = 1, vjust = 0.5),
+                    axis.title.x = ggplot2::element_text(size = 10),
+                    axis.title.y = ggplot2::element_text(size = 10)
+                )
+            
+            print(p + ZemmourLib::NoGrid())
+            print(p + NoLegend() + ZemmourLib::NoGrid())
+        }
+        
+        dev.off()
+    }
+    
+    # 8. Heatmaps
+    pdf(sprintf("%s/heatmap_topgenes.pdf", out_dir),
+        pdf_width, pdf_height, useDingbats = FALSE)
+    
+    top_mat_norm <- mat_norm[top_genes, , drop = FALSE]
+    # top_mat_norm[top_mat_norm > 0.10] <- 0.1
+    # uplim <- round(max(top_mat_norm, na.rm = TRUE) * 1.1, 1)
+    
+    ColorRamp <- colorRampPalette(RColorBrewer::brewer.pal(9, "Blues"))(50)
+    
+    pheatmap::pheatmap(
+        top_mat_norm,
+        color = ColorRamp,
+        breaks         = seq(0, 1, length.out = length(ColorRamp) + 1),
+        legend_breaks  = seq(0, 1, by = 0.1),
+        legend_labels  = seq(0, 1, by = 0.1),
+        main           = "rows sum to 1"
+    )
+    
+    pheatmap::pheatmap( mat[top_genes, , drop = FALSE],
+                        color = cols_heatmap_gradient,
+                       main = "expression log1p CP10K")
+    
+    pheatmap::pheatmap(mat[top_genes, , drop = FALSE],
+                       color = cols_heatmap_gradient,
+                       cluster_cols = FALSE,
+                       main = "expression log1p CP10K")
+    
+    dev.off()
+    
+    # invisible(list(
+    #     gene_auc    = gene_auc,
+    #     data_long = data_long,
+    #     top_genes    = top_genes
+    # ))
+}
 
+
+```
+
+!! using so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")  here
+!! using so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds")  here
+```{r}
+# so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+```
+
+
+Calculate pseudobulk (on Midway)
+remove prolif and miniverse since many level2 converge there. thymocyte and thymus
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
+
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level1",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+
+pseudobulk = AggregateExpression(
+    object = so,
+    assay = "RNA",
+    group.by = "annotation_level2",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+```
+
+
+Gene/TF list
+```{r}
+library(org.Mm.eg.db)
+mm = org.Mm.eg.db
+go2eg = as.list(org.Mm.egGO2ALLEGS)
+symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+tf =  c(sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])]), "Tox", "Tox2", "Tox3", "Tox4") %>% sort()
+effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+
+tf = tf[tf %in% rownames(pseudobulk_orig)]
+
+##
+# library(org.Hs.eg.db)
+# hs = org.Hs.eg.db
+# go2eg = as.list(org.Hs.egGO2ALLEGS)
+# symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
+# cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
+# cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
+# #is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
+# tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
+# secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
+# chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+```
+
+Level1
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level1")
+    
+Gene_AUC(pseudobulk,
+         genes = tf, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level1),
+         mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
+         n_top = 20,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+)
+
+
+```
+
+Across Level2
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level2")
+    
+Gene_AUC(pseudobulk,
+         genes = tf, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level2),
+         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         n_top = 20,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = colorRampPalette(c('white','orange','brown'))(100),#rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+         pdf_width = 12,
+         pdf_height = 7
+         
+)
+
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level2Top50")
+Gene_AUC(pseudobulk,
+         genes = tf, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level2),
+         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         n_top = 50,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = colorRampPalette(c('white','orange','brown'))(100),#rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+         pdf_width = 12,
+         pdf_height = 10
+         
+)
+
+```
+
+
+in each Level2
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
+    print(ct)
+    out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", ct)
+    
+    pseudobulk = pseudobulk_orig[,grepl(sprintf("^%s\\-",ct), colnames(pseudobulk_orig))]
+    
+    Gene_AUC(pseudobulk,
+             genes = tf, # vector of genes
+             out_dir = out_dir2,
+             mypal = mypal,              # named vector of colors for TF lines
+             order_groups = levels(so_orig$annotation_level2),
+             mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+             n_top = 20,                # number of top TF to highlight
+             expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+             cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+    )
+}
+
+```
+
+Ahrr expression
+```{r}
+pseudobulk = readRDS(file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+pdf(sprintf("%s/annotation_level2_barplots_%s.pdf", out_dir, "OtherTF"), 12, 7, useDingbats = F)
+genes_to_plot = c("Ahrr", "Tox","Tox2", "Tbx21", "Gata3")
+for (gene_to_plot in genes_to_plot) {
+    print(gene_to_plot)
+    data = data.frame(
+        Cluster = names(pseudobulk[["RNA"]]$data[gene_to_plot, ]),
+        Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+    )
+    data$Cluster = gsub("\\-", "_", data$Cluster)
+    data$Cluster = factor(data$Cluster, levels = levels(so$annotation_level2))
+    data$level1 = so$annotation_level1[match(data$Cluster, so$annotation_level2)]
+    
+    p = ggplot(data, aes(x = Cluster, y = Expression, fill = level1)) +
+        scale_fill_manual(values = mypal_level1) +
+        geom_bar(stat = "identity") +
+        labs(title = sprintf("%s Expression in Clusters", gene_to_plot), x = "Cluster", y = "Expression") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10)
+        )
+    print(p + NoGrid() + NoLegend())
+}
+dev.off()
+
+```
+
+
+
+
+
+
+
+
+
+
+########CAN PROBABLY DELETE
 **Get TF list**
 ```{r}
 library(org.Mm.eg.db)

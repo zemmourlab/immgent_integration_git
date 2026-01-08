@@ -18,6 +18,7 @@ Most uptodate seurat object
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250212.Rds")
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
 
 ```
 
@@ -31,7 +32,7 @@ TG by TCR: allTGcells.csv
 **0. Load dataset**
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250316.Rds")
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
 so = so_orig
 
 so@meta.data = data.frame(cellID = colnames(so))
@@ -160,7 +161,7 @@ write.table(totalvi, file = "20250109_mde_incremental_fromEachLevel1.csv", sep =
 ```
 
 
-**1. Add single_cell_qc.csv**
+**1. Add single_cell_qc.csv and doublet_tcr.csv**
 ```{r}
 scqc = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/single_cell_qc.csv",header = T, sep = ",")
 all(rownames(scqc) == colnames(so))
@@ -546,7 +547,55 @@ so$annotation_level2_group[grepl("prolif",so$annotation_level2 )] = "proliferati
 so$annotation_level2_group[grepl("unclear",so$annotation_level2 )] = "other"
 so$annotation_level2_group[is.na(so$annotation_level2_group)] = "other"
 
-so$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "nonT", "remove", "unclear"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "nonT", "remove", "unclear"))
+
+annotation_level2_order = so@meta.data %>%
+    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
+    mutate(
+        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
+    ) %>%
+    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
+    pull(annotation_level2) %>%
+    unique() %>%
+    as.character()
+
+test = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(test))
+
+so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
+any(is.na(so$annotation_level2))
+
+so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+
+so@meta.data %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218.Rds")
+
+# so_orig = so
+# so$annotation_level2 = as.character(so$annotation_level2)
+# so$annotation_level2[so$annotation_level2 == "DNcl29"] = "DN_cl29"
+
+```
+
+add annotation_table_history_20260101.csv (from cluster_adjustments.Rmd)
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
+# so = so_orig
+# so$annotation_level1 = NULL
+# so$annotation_level2 = NULL
+# so$annotation_level2_parent1 = NULL
+# so$annotation_level2.IGTHT = NULL
+
+annotl1 = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260101.csv",header = T, sep = ",", row.names = 1)
+all(rownames(annotl1) == colnames(so))
+colnames(annotl1)
+so$annotation_level1 = annotl1[colnames(so),"level1"]
+so$annotation_level2 = annotl1[colnames(so),"level2"]
+so$annotation_level2_group = annotl1[colnames(so),"level2.group"]
+so$annotation_level2_thymocyte = annotl1[colnames(so),"level2.thymocyte"]
+
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP", "thymocyte", "nonT", "remove", "unclear"))
 
 annotation_level2_order = so@meta.data %>%
     select(annotation_level2, annotation_level1, annotation_level2_group) %>%
@@ -622,7 +671,8 @@ Load metadata csv file
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250311_v8.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250317_v8.csv",header = T, sep = ",")
 # m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250419_v9.csv",header = T, sep = ",")
-m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+# m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+m = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20260107_v11.csv",header = T, sep = ",")
 
 # changing here and not in the original file to keep consistent with the database
 colnames(m)
@@ -635,6 +685,7 @@ m$hashtag_number = NULL
 m$sample_id = NULL
 m$count_unique = NULL
 m$sample_code.1 = NULL
+m$comments = NULL
 
 colnames(m)
 ```
@@ -906,15 +957,18 @@ so[['ADT']]$data = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128.Rds") ##  Treg_cl7--> Treg_cl1, nonconv_cl17-->DP_cl17, nonconv_cl55-->DP_cl55 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218.Rds") ##  DP_cl14 --> unclear and metadata v10, doublet_tcr
-
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218.Rds") ##  DP_cl14 --> unclear and metadata v10, doublet_tcr
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251231.Rds") ## nonconv renames ZBTB16
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260101.Rds") ## nonconv renames Tz
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107.Rds") ## metadatav11
 ```
 
-**11. Save clean version**
+**11. Save clean version + add mde_incremental**
 
 ```{r}
 so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
-so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP", "thymocyte"))
 
 dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/"
 so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEachLevel1.csv",dir_with_file), prefix = "mde_incremental", calculate_umap = F)
@@ -924,8 +978,11 @@ so = AddLatentData(so, latent_file = sprintf("%s/20250109_mde_incremental_fromEa
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds")
+
 ```
+
 
 **12.Save version with CITEseq only**
 ```{r}
@@ -935,12 +992,17 @@ so[['RNA']] = NULL
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
 # saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
-saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean_ADTonly.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean_ADTonly.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251231_clean_ADTonly.Rds")
+# saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260101_clean_ADTonly.Rds")
+saveRDS(so,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+
+
 ```
 
 **12. Split by lineage**
 ```{r}
-prefix = "igt1_96_withtotalvi20250710_clean.Rds"
+prefix = "igt1_96_withtotalvi20260107_clean.Rds"
 so = readRDS(prefix)
 
 cd4 = so[,so$annotation_level1 == "CD4"]
@@ -965,8 +1027,11 @@ saveRDS(dn,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT
 dp = so[,so$annotation_level1 == "DP"]
 saveRDS(dp,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP_%s", prefix))
 
-nonconv = so[,so$annotation_level1 == "nonconv"]
-saveRDS(nonconv,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv_%s", prefix))
+# nonconv = so[,so$annotation_level1 == "nonconv"]
+# saveRDS(nonconv,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/nonconv_%s", prefix))
+
+tz = so[,so$annotation_level1 == "Tz"]
+saveRDS(nonconv,sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Tz_%s", prefix))
 
 ```
 

@@ -2096,8 +2096,8 @@ nonconv_cl55 --> DP_cl55
 nonconv_cl17 --> DP_cl17 
 DP_cl14 --> unclear (only 8 cells, should just remove)
 ```{r}
-# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
-# so = so_orig
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710.Rds")
+so = so_orig
 so$annotation_level2 = as.character(so$annotation_level2)
 so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl55")] = "DP"
@@ -2105,17 +2105,18 @@ so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl55")] = "DP_cl55"
 so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl17")] = "DP"
 so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl17")] = "DP_cl17"
 so$annotation_level1[so$annotation_level2 %in% c("DP_cl14")] = "unclear"
-so$annotation_level2[so$annotation_level2 %in% c("DP_cl14")] = "unclear_cl14"
 so$annotation_level2_group[so$annotation_level2 %in% c("DP_cl14")] = "other"
-so@meta.data %>% count(annotation_level1, annotation_level2)
+so$annotation_level2[so$annotation_level2 %in% c("DP_cl14")] = "unclear_cl14"
+
+so@meta.data %>% count(annotation_level1, annotation_level2, annotation_level2_group)
 # so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
 so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
 
-annot = data.frame(cell_id = colnames(so_orig), so_orig@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2")])
+annot = data.frame(cell_id = colnames(so), so@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2")])
 colnames(annot) = c("cell_id", "level1", "level2.group", "level2")
 table(annot$level2.group, annot$level1)
 sum(rowSums(apply(annot,2,is.na)))
-write.table(x = annot, file = "annotation_table_20251218.csv", row.names = F, quote = F, sep = ",")
+write.table(x = annot, file = "annotation_table_20251231.csv", row.names = F, quote = F, sep = ",")
 
 annot_summary  = annot %>%
   group_by(level2, level1, level2.group) %>%
@@ -2124,60 +2125,274 @@ annot_summary  = annot %>%
     cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", level2), sub("^.*_cl", "", level2), NA))  # Extract cluster number and convert to numeric
   ) %>%
   arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
+
+annot_summary %>% as.data.frame()
  
 write.table(x = annot_summary, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_history_20251218.csv", row.names = F, quote = F, sep = ",")
 
 ```
 
-update annotation DP_cl14 (remove)
+**annotation_table_20251231.csv FORGET**
+
+update annotation:
+thymus cells --> thymocyte prefix
+nonconv --> ZBTB16
+8 cells that are from spleen and labeled a thymocyte --> unclear_thymocyte
 ```{r}
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128.Rds")
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218.Rds")
 so = so_orig
+so$annotation_level1 = as.character(so$annotation_level1)
+so$annotation_level1 = gsub("nonconv","Tz", so$annotation_level1)
+
 so$annotation_level2 = as.character(so$annotation_level2)
-so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
-so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl55")] = "DP"
-so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl55")] = "DP_cl55"
-so$annotation_level1[so$annotation_level2 %in% c("nonconv_cl17")] = "DP"
-so$annotation_level2[so$annotation_level2 %in% c("nonconv_cl17")] = "DP_cl17"
-so@meta.data %>% count(annotation_level1, annotation_level2)
+so$annotation_level2 = gsub("nonconv","Tz", so$annotation_level2)
+
+so@meta.data %>% filter(organ_simplified == "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+so$annotation_level2[so$organ_simplified == "thymus" & !(so$annotation_level1 %in% c("unclear", "remove", "nonT", "thymocyte"))] = paste("thymocyte", so$annotation_level2[so$organ_simplified == "thymus" & !(so$annotation_level1 %in% c("unclear", "remove", "nonT", "thymocyte"))], sep = "_")
+so$annotation_level2_group[so$organ_simplified == "thymus" & !(so$annotation_level1 %in% c("unclear", "remove", "nonT"))] = "preT"
+so$annotation_level1[so$organ_simplified == "thymus" & !(so$annotation_level1 %in% c("unclear", "remove", "nonT"))] = "thymocyte"
+so@meta.data %>% filter(organ_simplified == "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+
+so@meta.data %>% filter(annotation_level2_group == "preT") %>% count(organ_simplified, annotation_level1, annotation_level2, annotation_level2_group)
+so$annotation_level2[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "unclear_thymocyte"
+so$annotation_level2_group[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "other"
+so$annotation_level1[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "unclear"
+
+so@meta.data %>% filter(organ_simplified == "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+so@meta.data %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level1)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level2)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level2_group)
+
 # so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
-so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+any(is.na(so$annotation_level1))
 
-annotation_level2_order = so@meta.data %>%
-    select(annotation_level2, annotation_level1, annotation_level2_group) %>%
-    group_by(annotation_level2, annotation_level1, annotation_level2_group) %>%
-    mutate(
-        cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", annotation_level2), sub("^.*_cl", "", annotation_level2), NA))  # Extract cluster number and convert to numeric
-    ) %>%
-    arrange(annotation_level1, cluster_num, annotation_level2) %>% 
-    pull(annotation_level2) %>%
-    unique() %>%
-    as.character()
 
-test = factor(so$annotation_level2, levels = annotation_level2_order)
-any(is.na(test))
+annot = data.frame(cell_id = colnames(so), so@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2")])
+colnames(annot) = c("cell_id", "level1", "level2.group", "level2")
+table(annot$level2.group, annot$level1)
+sum(rowSums(apply(annot,2,is.na)))
+write.table(x = annot, file = "annotation_table_20260101.csv", row.names = F, quote = F, sep = ",")
 
-so$annotation_level2 = factor(so$annotation_level2, levels = annotation_level2_order)
-any(is.na(so$annotation_level2))
+annot_summary  = annot %>%
+  group_by(level2, level1, level2.group) %>%
+  summarize(counts = n(), .groups = "drop") %>%
+  mutate(
+    cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", level2), sub("^.*_cl", "", level2), NA))  # Extract cluster number and convert to numeric
+  ) %>%
+  arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
 
-so$annotation_level2.IGTHT = paste(so$annotation_level2, so$IGTHT, sep = ".")
+annot_summary %>% as.data.frame()
+ 
+write.table(x = annot_summary, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_history_20260101.csv", row.names = F, quote = F, sep = ",")
 
-so@meta.data %>% count(annotation_level1, annotation_level2_group, annotation_level2)
+```
 
-# saveRDS(so, "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")
+**annotation_table_20260101.csv**
+
+update annotation:
+thymus cells --> thymocyte prefix
+nonconv --> ZBTB16
+8 cells that are from spleen and labeled a thymocyte --> unclear_thymocyte
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218.Rds")
+so = so_orig
+so$annotation_level1 = as.character(so$annotation_level1)
+so$annotation_level1 = gsub("nonconv","Tz", so$annotation_level1)
+
+so$annotation_level2 = as.character(so$annotation_level2)
+so$annotation_level2 = gsub("nonconv","Tz", so$annotation_level2)
+
+## add thymocyte for all thymus cells
+thymus_samples = so@meta.data %>% filter(organ_simplified == "thymus") %>% pull(IGTHT) %>% unique()
+so@meta.data %>% filter(IGTHT %in% thymus_samples) %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+so$annotation_level2_thymocyte = so$annotation_level2
+so$annotation_level2_thymocyte[so$IGTHT %in% thymus_samples & !(so$annotation_level1 %in% c("unclear", "remove", "nonT", "thymocyte"))] = paste("thymocyte", so$annotation_level2[so$IGTHT %in% thymus_samples & !(so$annotation_level1 %in% c("unclear", "remove", "nonT", "thymocyte"))], sep = "_")
+so$annotation_level2_group[so$IGTHT %in% thymus_samples & !(so$annotation_level1 %in% c("unclear", "remove", "nonT"))] = "preT"
+so$annotation_level1[so$IGTHT %in% thymus_samples & !(so$annotation_level1 %in% c("unclear", "remove", "nonT"))] = "thymocyte"
+so@meta.data %>% filter(IGTHT %in% thymus_samples) %>% count(annotation_level1, annotation_level2, annotation_level2_thymocyte, annotation_level2_group)
+so$annotation_level2[grepl("thymocyte", so$annotation_level2_thymocyte)] = "thymocyte"
+so@meta.data %>% filter(IGTHT %in% thymus_samples) %>% count(annotation_level1, annotation_level2, annotation_level2_thymocyte, annotation_level2_group)
+
+so@meta.data %>% filter(annotation_level2_group == "preT") %>% count(organ_simplified, annotation_level1, annotation_level2, annotation_level2_group)
+so$annotation_level2[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "unclear_thymocyte"
+so$annotation_level2_group[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "other"
+so$annotation_level1[so$organ_simplified != "thymus" & so$annotation_level1 %in% c("thymocyte")] = "unclear"
+
+so@meta.data %>% filter(organ_simplified == "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_thymocyte, annotation_level2_group)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level1, annotation_level2, annotation_level2_thymocyte, annotation_level2_group)
+so@meta.data %>% count(annotation_level1, annotation_level2, annotation_level2_group)
+
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level1)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level2)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level2_group)
+so@meta.data %>% filter(organ_simplified != "thymus") %>% count(annotation_level2_thymocyte)
+
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+any(is.na(so$annotation_level1))
+
+
+annot = data.frame(cell_id = colnames(so), so@meta.data[,c("annotation_level1", "annotation_level2_group", "annotation_level2","annotation_level2_thymocyte")])
+colnames(annot) = c("cell_id", "level1", "level2.group", "level2", "level2.thymocyte")
+table(annot$level2.group, annot$level1)
+sum(rowSums(apply(annot,2,is.na)))
+write.table(x = annot, file = "annotation_table_20260101.csv", row.names = F, quote = F, sep = ",")
+
+annot_summary  = annot %>%
+  group_by(level2, level1, level2.group, level2.thymocyte) %>%
+  summarize(counts = n(), .groups = "drop") %>%
+  mutate(
+    cluster_num = as.numeric(ifelse(grepl("_cl\\d+$", level2), sub("^.*_cl", "", level2), NA))  # Extract cluster number and convert to numeric
+  ) %>%
+  arrange(level1, cluster_num, level2) # Arrange first by level1, then numerically, then alphabetically
+
+annot_summary %>% as.data.frame()
+ 
+write.table(x = annot_summary, file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_history_20260101.csv", row.names = F, quote = F, sep = ",")
 
 ```
 
 
+**annotation_table_20260101 for IGT97-104**
+DP_cl14 --> unclear_cl14
+Treg_cl7 --> Treg_cl1
+nonconv_cl17 --> DP_cl17
+nonconv_cl55 --> DP_cl55 
+nonconv --> Tz
 
+Thymus cells in 97-104: 
+IGT97	HT4
+IGT97	HT5
+IGT98	HT2
+IGT98	HT3
+IGT98	HT4
+IGT98	HT5
+IGT102	HT16
+IGT102	HT17
+IGT103	HT16
+IGT103	HT17
+```{r}
+annot_orig = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260101.csv', header = T, sep = ",")
+colnames(annot_orig) = c("IGT.CellID","level1","level2.group","level2")
 
+annot_orig$level2.thymocyte = annot_orig$level2
+annot_orig$level2[grepl("thymocyte", annot_orig$level2)] = "thymocyte"
 
+# annot_orig %>% count(level1, level2, level2.group)
+# annot_orig %>% count(level1, level2,level2.thymocyte, level2.group)
 
+##Identify the changes
+annot_old = read.table(file = '/Users/david/Desktop/GSE297097_annotation_table_20250505_IGT1_104.csv', header = T, sep = ",")
+annot_old2 = annot_old[match(annot_orig$IGT.CellID,annot_old$IGT.CellID),]
 
+library(dplyr)
+library(stringr)
 
+annot_joined <- annot_old2 %>%
+  select(
+    IGT.CellID,
+    level1_old  = level1,
+    level2_old  = level2
+  ) %>%
+  inner_join(
+    annot_orig %>%
+      select(
+        IGT.CellID,
+        level1_new = level1,
+        level2_new = level2
+      ),
+    by = "IGT.CellID"
+  )
 
+level1_changes <- annot_joined %>%
+  filter(level1_old != level1_new)
 
+level1_changes %>% count(level1_old, level1_new)
 
+level2_changes <- annot_joined %>%
+  filter(level2_old != level2_new)
+
+level2_changes %>% count(level2_old, level2_new)
+
+##Make the changes for IGT97-104
+annot_old = read.table(file = '/Users/david/Desktop/GSE297097_annotation_table_20250505_IGT1_104.csv', header = T, sep = ",")
+annot_old <- annot_old %>% mutate(IGT = str_extract(IGT.CellID, "^IGT\\d+"))
+annot_old <- annot_old %>% mutate(IGTHT = str_extract(level2.IGTHT, "I\\d+H\\d+"))
+
+annot_old2 = annot_old %>% filter(IGT %in% c("IGT97", "IGT98", "IGT99", "IGT100", "IGT101", "IGT102", "IGT103", "IGT104"))
+annot_old3 = annot_old2
+
+annot_old3$level1[annot_old2$level2 == "DP_cl14"] = "unclear"
+annot_old3$level2[annot_old2$level2 == "DP_cl14"] = "unclear_cl14"
+annot_old3$level2.group[annot_old2$level2 == "DP_cl14"] = "other"
+
+annot_old3$level1[annot_old2$level2 == "Treg_cl7"] = "Treg"
+annot_old3$level2[annot_old2$level2 == "Treg_cl7"] = "Treg_cl1"
+annot_old3$level2.group[annot_old2$level2 == "Treg_cl7"] = "resting"
+
+annot_old3$level1[annot_old2$level2 == "nonconv_cl17"] = "DP"
+annot_old3$level2[annot_old2$level2 == "nonconv_cl17"] = "DP_cl17"
+annot_old3$level2.group[annot_old2$level2 == "nonconv_cl17"] = "other"
+
+annot_old3$level1[annot_old2$level2 == "nonconv_cl55"] = "DP"
+annot_old3$level2[annot_old2$level2 == "nonconv_cl55"] = "DP_cl55"
+annot_old3$level2.group[annot_old2$level2 == "nonconv_cl55"] = "other"
+
+annot_old3$level1 = gsub("nonconv", "Tz", annot_old3$level1)
+annot_old3$level2 = gsub("nonconv", "Tz", annot_old3$level2)
+
+annot_old3 %>% count(level1, level2, level2.group)
+
+## add thymocytes for all thymus cells
+thymus_samples = c("I97H4","I97H5","I98H2","I98H3","I98H4","I98H5","I102H16","I102H17","I103H16","I103H17")
+annot_old3 %>% filter(IGTHT %in% thymus_samples) %>% count(level1, level2, level2.group)
+annot_old3$level2.thymocyte = annot_old3$level2
+annot_old3$level2.thymocyte[annot_old3$IGTHT %in% thymus_samples & !(annot_old3$level1 %in% c("unclear", "remove", "nonT", "thymocyte"))] = paste("thymocyte", annot_old3$level2[annot_old3$IGTHT %in% thymus_samples & !(annot_old3$level1 %in% c("unclear", "remove", "nonT", "thymocyte"))], sep = "_")
+annot_old3$level2.group[annot_old3$IGTHT %in% thymus_samples & !(annot_old3$level1 %in% c("unclear", "remove", "nonT"))] = "preT"
+annot_old3$level1[annot_old3$IGTHT %in% thymus_samples & !(annot_old3$level1 %in% c("unclear", "remove", "nonT"))] = "thymocyte"
+annot_old3 %>% filter(IGTHT %in% thymus_samples) %>% count(level1, level2, level2.thymocyte, level2.group)
+annot_old3$level2[grepl("thymocyte", annot_old3$level2.thymocyte)] = "thymocyte"
+annot_old3 %>% filter(IGTHT %in% thymus_samples) %>% count(level1, level2, level2.thymocyte, level2.group)
+
+##Merge both annot_orig and annot_old
+annot_orig$IGTHT = annot_old$IGTHT[match(annot_orig$IGT.CellID,annot_old$IGT.CellID)]
+annot_orig$IGT = annot_old$IGT[match(annot_orig$IGT.CellID,annot_old$IGT.CellID)]
+any(is.na(annot_orig$IGTHT))
+any(is.na(annot_orig$IGT))
+
+annot_orig$level2.IGTHT = paste(annot_orig$level2, annot_orig$IGTHT, sep = ".")
+
+head(annot_orig)
+annot_orig = annot_orig[,colnames(annot_old3)]
+colnames(annot_orig) == colnames(annot_old3) 
+
+annot_updated = rbind(annot_orig, annot_old3)
+
+annot_updated %>% count(level1)
+annot_updated %>% count(level1,level2, level2.group)
+annot_updated %>% count(level1,level2,level2.thymocyte, level2.group)
+write.table(annot_updated, file = '/Users/david/Desktop/GSE297097_annotation_table_20260101_IGT1_104.csv', row.names = F, col.names = T, quote = F, sep = ",")
+
+##Add MDEX and Y
+mde = read.table("/Users/david/Desktop/GSE297097_mde_incremental_level1_All_data.csv",header = T, sep = ",") 
+
+annot_updated2 = merge(annot_updated, mde, by.x = "IGT.CellID", by.y = "X", all.x = T, all.y = F)
+any(is.na(annot_updated2$mdeTOTALVI_1))
+any(is.na(annot_updated2$mdeTOTALVI_2))
+
+##Clean up: remove TCRBKO in I102H17/I103H17, remove "remove", column names
+annot_updated3 = annot_updated2 %>% filter(!(IGTHT %in% c("I102H17", "I103H17")), !(level1 %in% c("remove")))
+annot_updated3 %>% count(level1,level2, level2.group)
+
+colnames(annot_updated3) = c("IGT.cellID","level1","level2","level2.group","level2.IGTHT","IGT","IGTHT","level2.thymocyte","mdeX","mdeY")
+annot_updated3 %>% count(level1)
+write.table(annot_updated3 %>% select(!c(level2.IGTHT,level2.thymocyte)), file = '/Users/david/Desktop/GSE297097_annotation_table_20260101_IGT1_104_cleaned.csv', row.names = F, col.names = T, quote = F, sep = ",")
+
+```
 
 
 
@@ -2261,9 +2476,6 @@ for (i in unique(so2$annotation_level2_group)) {
     print(p)
 }
 dev.off()
-
-
-
 
 
 

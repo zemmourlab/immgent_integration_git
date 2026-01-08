@@ -32,19 +32,19 @@ module load python
 source activate /project/zemmour/david/envs/scvi120_20241008 #for scvi 1.2.0
 
 #cd /project/jfkfloor2/zemmourlab/david/immgent/analysis/integration/IGT1_56
-cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis
 
 R
 options(max.print=1000)
 #options(Seurat.object.assay.version = 'v5')
-setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/")
+setwd("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis")
 
 
 ```
 
 ```{r}
 # setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
-libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+libs = c("ZemmourLib","ggrepel","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
 sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
 #source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
 
@@ -93,6 +93,8 @@ mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
 out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218" 
 out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218"
 
+ensure_directory(out_dir)
+
 ```
 
 
@@ -100,7 +102,8 @@ out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffM
 on Midway
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -109,7 +112,7 @@ so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
 on Desktop
 ```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
-so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
+so_orig = readRDS("igt1_96_withtotalvi20251218_clean_ADTonly.Rds")
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
 # so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -117,7 +120,7 @@ so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(anno
 
 ```
 
-Calculate pseudobulk (on Midway)
+**Calculate pseudobulk (on Midway)**
 remove prolif and miniverse since many level2 converge there. thymocyte and thymus
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
@@ -133,8 +136,8 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) 
 
 pseudobulk = AggregateExpression(
     object = so,
@@ -146,127 +149,287 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) 
 
 pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
 ```
 
-Gene/effmol list
+**Gene/effmol list (code in datasets folder effmol.R)**
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251218"))
 
-library(org.Mm.eg.db)
-mm = org.Mm.eg.db
-go2eg = as.list(org.Mm.egGO2ALLEGS)
-symbols = select(mm, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-#is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-tf =  c(sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])]), "Tox", "Tox2", "Tox3", "Tox4") %>% sort()
-effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0005615"]]))]) #go2eg[["GO:0005576"]]
-chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+effmol = read.table(file = "/Users/david/Library/CloudStorage/Dropbox/datasets/effmol_GO0005615_And_CBList.txt")[,1]
+# effmol = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/effmol_GO0005615_And_CBList.txt")[,1]
 
-# symbols$SYMBOL[grepl("^Gzma", symbols$SYMBOL)] #Gzm genes not in 3.16 org.Mm.eg.db!!
-# symbols$ENTREZID[grepl("14938", symbols$ENTREZID)]
-# unique(go2eg[["GO:0005615"]])[unique(go2eg[["GO:0005615"]]) == "14938"]
-#effmol[grepl("^Gzm", effmol)]
-
-# effmols = c(effmol[effmol %in% rownames(pseudobulk_orig)]) %>% sort()
-effmols = effmol[!grepl("^Igh|^Igk|^Igl|^Hba|^Hbb", effmol)]
-
-curated <- c(
-  "Tac1","Calca","Npy","Vip","Sst","Pomc","Oxt","Avp","Penk","Chat","Th","Tph1",
-  "Gad1","Gad2","Grin1",
-  "Il4","Il10","Il17a","Csf2","Ptgs2",
-  "Sphk1","Sphk2","P2rx7","Panx1","Nt5e",
-  "Prf1","Gzma","Gzmb","Gzmk","Gzmm",
-  "Fasl","Tnfsf10","Lta","Ifng","Tnf","Ltb",
-  "Il4","Il5","Il13","Il9","Areg","Il17a","Il17f","Il21","Il22","Csf2",
-  "Il9","Il10","Il21","Il22","Tnf","Il21",
-  "Il10","Tgfb1","Ebi3","Il12a",
-  "Gzmb","Areg",
-  "Entpd1","Nt5e","Ctla4",
-  "Cxcl9","Cxcl10","Cxcl11",
-  "Ccl1","Ccl17","Ccl22","Ccl20","Ccl3","Ccl4","Ccl5",
-  "Xcl1","Cxcl2",
-  "Cd40lg","Tnfsf9","Tnfsf4","Cd274","Pdcd1lg2",
-  "Lag3","Tigit","Havcr2",
-  "Areg","Il10","Tgfb1","Arg1",
-  "Entpd1","Nt5e"
-)
-curated[!curated %in% rownames(pseudobulk_orig)]
-curated[!curated %in% effmols]
-
-effmols = unique(effmols, curated) %>% sort()
-
-write.table(effmols, file = "~/Desktop/effmol_GO0005615_And_CBList.txt",quote = F, row.names = F, col.names = F )
-
-##
-# library(org.Hs.eg.db)
-# hs = org.Hs.eg.db
-# go2eg = as.list(org.Hs.egGO2ALLEGS)
-# symbols = select(hs, keys = unique(unlist(go2eg)), columns = "SYMBOL", keytype = "ENTREZID")
-# cc = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0007049"]]))])
-# cellmembrane = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(unlist(list(go2eg[["GO:0009986"]], go2eg[["GO:0009897"]], go2eg[["GO:0016494"]], go2eg[["GO:0098552"]])))]) #go2eg[["GO:0016020"]]
-# #is_cellmembrane = rownames(cor_genes) %in% is_cellmembrane
-# tf =  sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0003700"]])])
-# secretedmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-# effmol = sort(symbols$SYMBOL[symbols$ENTREZID %in% unique(go2eg[["GO:0005615"]])])
-# chemreceptor = symbols$SYMBOL[symbols$ENTREZID %in% unique(c(go2eg[["GO:0004950"]]))]
+effmol = effmol[effmol %in% rownames(pseudobulk_orig)]
 ```
 
-
-
-Level1
+**Gene_AUC function**
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+
+Gene_AUC <- function(
+        pseudobulk,
+        genes, # vector of genes
+        out_dir,
+        mypal = NULL,              # named vector of colors for TF lines
+        order_groups = levels(so$annotation_level2),
+        mypal_groups = mypal_level2,       # named vector of colors for level1 barplots
+        n_top = 20,                # number of top TF to highlight
+        expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+        cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+        pdf_width = 7,
+        pdf_height = 7
+        
+) {
+    # ---- sanity + setup ----
+    stopifnot("RNA" %in% names(pseudobulk))
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    # 1. Extract matrix for genes of interest
+    mat <- pseudobulk[["RNA"]]$data[genes, , drop = FALSE]
+    
+    # 2. Normalize each TF by its row sum
+    row_sums <- rowSums(mat)
+    row_sums[row_sums == 0] <- NA  # avoid division by zero
+    mat_norm <- mat / row_sums
+    
+    # 3. Filter TFs: at least one cluster with expression > expr_threshold
+    filt_expr <- rownames(mat)[rowSums(mat > expr_threshold, na.rm = TRUE) >= 1]
+    mat_norm_filt <- mat_norm[filt_expr, , drop = FALSE]
+    
+    # 4. Long format + cumulative curves
+    data_long <- mat_norm_filt |>
+        as.data.frame() |>
+        tibble::rownames_to_column(var = "Gene") |>
+        tidyr::pivot_longer(
+            cols = -Gene,
+            names_to = "Group",
+            values_to = "Expression"
+        ) |>
+        dplyr::group_by(Gene) |>
+        dplyr::arrange(dplyr::desc(Expression), .by_group = TRUE) |>
+        dplyr::mutate(
+            CumulativeExpression = cumsum(Expression),
+            Rank = dplyr::row_number()
+        ) |>
+        dplyr::ungroup()
+    
+    # 5. AUC per gene
+    gene_auc <- data_long |>
+        dplyr::group_by(Gene) |>
+        dplyr::summarise(
+            auc = sum(CumulativeExpression) / dplyr::n(),
+            .groups = "drop"
+        ) |>
+        dplyr::arrange(dplyr::desc(auc))
+    
+    # Write AUC table
+    utils::write.table(
+        gene_auc,
+        file = sprintf("%s/AUC.txt", out_dir),
+        quote = FALSE,
+        col.names = TRUE,
+        row.names = FALSE,
+        sep = "\t"
+    )
+    
+    # Top TFs
+    top_genes <- head(gene_auc$Gene, n_top)
+    
+    # 6. Cumulative curves PDF
+    pdf(sprintf("%s/cum_curves.pdf", out_dir),
+        7, 7, useDingbats = FALSE)
+    
+    p1 <- ggplot2::ggplot(
+        data_long,
+        ggplot2::aes(x = Rank, y = CumulativeExpression, group = Gene)
+    ) +
+        ggplot2::geom_line(size = 0.5, alpha = 0.1)
+    
+    p2 <- ggplot2::geom_line(
+        data = subset(data_long, Gene %in% top_genes),
+        mapping = ggplot2::aes(
+            x = Rank, y = CumulativeExpression,
+            group = Gene, color = Gene
+        ),
+        size = 1,
+        alpha = 1
+    )
+    
+    p3 <- ggrepel::geom_label_repel(
+        data = data_long |>
+            dplyr::filter(Gene %in% top_genes) |>
+            dplyr::group_by(Gene) |>
+            dplyr::slice_sample(n = 1) |>
+            dplyr::ungroup(),
+        ggplot2::aes(
+            x = Rank, y = CumulativeExpression,
+            label = Gene, color = Gene
+        ),
+        size = 4,
+        segment.size = 0.2,
+        segment.color = "grey",
+        max.overlaps = 50
+    )
+    
+    # Colors for lines
+    if (is.null(mypal)) {
+        cols <- grDevices::rainbow(length(top_genes))
+        names(cols) <- top_genes
+    } else {
+        cols <- mypal
+    }
+    
+    print(
+        p1 + p2 + p3 +
+            ggplot2::scale_color_manual(values = cols) +
+            ggplot2::labs(
+                title = "Cumulative Expression",
+                x = "Ranked Groups by Expression",
+                y = "Cumulative Expression"
+            ) +
+            ggplot2::theme_minimal() +
+            ZemmourLib::NoLegend() +
+            ZemmourLib::NoGrid()
+    )
+    
+    dev.off()
+    
+    # 7. Barplots for top genes (requires so + mypal_groups)
+    if (!is.null(so) && !is.null(mypal_groups)) {
+        pdf(sprintf("%s/barplots_topgenes.pdf", out_dir),
+            pdf_width, pdf_height, useDingbats = FALSE)
+        
+        for (g in top_genes) {
+            gene_to_plot <- g
+            data <- data.frame(
+                Group    = colnames(pseudobulk[["RNA"]]$data),
+                Expression = pseudobulk[["RNA"]]$data[gene_to_plot, ]
+            )
+            data$Group <- gsub("\\-", "_", data$Group)
+            data$Group <- factor(data$Group, levels = order_groups)
+            # data$level1  <- so$annotation_level1[match(data$Group, so$annotation_level1)]
+            
+            p <- ggplot2::ggplot(data, ggplot2::aes(x = Group, y = Expression, fill = Group)) +
+                ggplot2::geom_bar(stat = "identity") +
+                ggplot2::scale_fill_manual(values = mypal_groups) +
+                ggplot2::labs(
+                    title = sprintf("%s Expression in Groups", gene_to_plot),
+                    x = "Group", y = "Expression"
+                ) +
+                ggplot2::theme_minimal() +
+                ggplot2::theme(
+                    axis.text.x  = ggplot2::element_text(size = 8, angle = 90,
+                                                         hjust = 1, vjust = 0.5),
+                    axis.title.x = ggplot2::element_text(size = 10),
+                    axis.title.y = ggplot2::element_text(size = 10)
+                )
+            
+            print(p + ZemmourLib::NoGrid())
+            print(p + NoLegend() + ZemmourLib::NoGrid())
+        }
+        
+        dev.off()
+    }
+    
+    # 8. Heatmaps
+    pdf(sprintf("%s/heatmap_topgenes.pdf", out_dir),
+        pdf_width, pdf_height, useDingbats = FALSE)
+    
+    top_mat_norm <- mat_norm[top_genes, , drop = FALSE]
+    # top_mat_norm[top_mat_norm > 0.10] <- 0.1
+    # uplim <- round(max(top_mat_norm, na.rm = TRUE) * 1.1, 1)
+    
+    ColorRamp <- colorRampPalette(RColorBrewer::brewer.pal(9, "Blues"))(50)
+    
+    pheatmap::pheatmap(
+        top_mat_norm,
+        color = ColorRamp,
+        breaks         = seq(0, 1, length.out = length(ColorRamp) + 1),
+        legend_breaks  = seq(0, 1, by = 0.1),
+        legend_labels  = seq(0, 1, by = 0.1),
+        main           = "rows sum to 1"
+    )
+    
+    pheatmap::pheatmap( mat[top_genes, , drop = FALSE],
+                        color = cols_heatmap_gradient,
+                       main = "expression log1p CP10K")
+    
+    pheatmap::pheatmap(mat[top_genes, , drop = FALSE],
+                       color = cols_heatmap_gradient,
+                       cluster_cols = FALSE,
+                       main = "expression log1p CP10K")
+    
+    dev.off()
+    
+    # invisible(list(
+    #     gene_auc    = gene_auc,
+    #     data_long = data_long,
+    #     top_genes    = top_genes
+    # ))
+}
+
+
+```
+
+**Level1**
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218"))
 
 pseudobulk = pseudobulk_orig
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level1")
+# out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level1")
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218/%s", "level1")
+
     
 Gene_AUC(pseudobulk,
-         genes = effmols, # vector of genes
+         genes = effmol, # vector of genes
          out_dir = out_dir2,
          mypal = mypal,              # named vector of colors for TF lines
          order_groups = levels(so_orig$annotation_level1),
          mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
-         n_top = 20,                # number of top TF to highlight
+         n_top = 50,                # number of top TF to highlight
          expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
-         cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
-)
+         cols_heatmap_gradient = colorRampPalette(c('white','red','brown'))(100))
 
+ColorRamp = rev(colorRampPalette(c('white','yellow4','red4'))(100))
+colorRampPalette(c('white','red','brown'))(100)
+colorRampPalette(c('white','cyan4','blue4'))(100)
 
 ```
 
-Across Level2
+**Across Level2**
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218"))
 
 pseudobulk = pseudobulk_orig
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level2")
-    
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218/%s", "level2")
+   
+mypal_level2.1 = so_orig@meta.data %>% count(annotation_level1, annotation_level2)
+mypal_level2.1$colors = mypal_level1[mypal_level2.1$annotation_level1]
+mypal_level2.1 = setNames(mypal_level2.1$colors, nm = mypal_level2.1$annotation_level2)
+ 
 Gene_AUC(pseudobulk,
-         genes = effmols, # vector of genes
+         genes = effmol, # vector of genes
          out_dir = out_dir2,
          mypal = mypal,              # named vector of colors for TF lines
          order_groups = levels(so_orig$annotation_level2),
-         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         mypal_groups = mypal_level2.1,       # named vector of colors for groups in barplots
          n_top = 110,                # number of top TF to highlight
          expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
-         cols_heatmap_gradient = colorRampPalette(c('white','cyan4','blue4'))(100), #colorRampPalette(c('white','red','brown'))(100), rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
-         pdf_width = 12,
-         pdf_height = 15
+         cols_heatmap_gradient = colorRampPalette(c('white','red','brown'))(100), #colorRampPalette(c('white','red','brown'))(100), rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+         pdf_width = 15,
+         pdf_height = 10
          
 )
 
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", "level2Top50")
+out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218/%s", "level2Top50")
 Gene_AUC(pseudobulk,
-         genes = effmols, # vector of genes
+         genes = effmol, # vector of genes
          out_dir = out_dir2,
          mypal = mypal,              # named vector of colors for TF lines
          order_groups = levels(so_orig$annotation_level2),
-         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         mypal_groups = mypal_level2.1,       # named vector of colors for groups in barplots
          n_top = 50,                # number of top TF to highlight
          expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
          cols_heatmap_gradient = colorRampPalette(c('white','orange','red4'))(100), #rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))  rev(viridis::rocket(100))
@@ -275,35 +438,902 @@ Gene_AUC(pseudobulk,
          
 )
 
-ColorRamp = rev(colorRampPalette(c('white','yellow4','red4'))(100))
-colorRampPalette(c('white','red','brown'))(100)
-colorRampPalette(c('white','cyan4','blue4'))(100)
-
 ```
 
 
-in each Level2
+**in each Level2**
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218"))
 
 for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
     print(ct)
-    out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251128/%s", ct)
+    out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/EffMol_analysis/20251218/%s", ct)
     
     pseudobulk = pseudobulk_orig[,grepl(sprintf("^%s\\-",ct), colnames(pseudobulk_orig))]
     
     Gene_AUC(pseudobulk,
-             genes = effmols, # vector of genes
+             genes = effmol, # vector of genes
              out_dir = out_dir2,
              mypal = mypal,              # named vector of colors for TF lines
              order_groups = levels(so_orig$annotation_level2),
              mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
              n_top = 70,                # number of top TF to highlight
              expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
-             cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+             cols_heatmap_gradient = colorRampPalette(c('white','red','brown'))(100),
              pdf_width = 12,
              pdf_height = 10
     )
 }
 
 ```
+
+**Context dominance (sample) or cluster dominance**
+- within-cluster across-sample variance (context variance)
+- within-sample across-cluster variance (cluster variance)
+--> score = median(context variance) / median(cluster variance)
+
+make_pseudobulk fucntion
+```{r}
+
+make_pseudobulk <- function(
+        obj = so,
+        sample_col  = "IGTHT",
+        cluster_col = "annotation_level2",
+        assay       = "RNA",
+        features    = c("Ifng", "Il4", "Il5")
+) {
+    # 1) Build per-cell metadata with sample, cluster, sc_group
+    meta <- obj@meta.data %>%
+        mutate(
+            sample  = .data[[sample_col]],
+            cluster = .data[[cluster_col]]
+        ) %>%
+        filter(!is.na(sample), !is.na(cluster))
+    
+    meta$sc_group <- interaction(meta$cluster, meta$sample, drop = TRUE)
+    meta$sc_group = gsub("\\_", "-", meta$sc_group)
+    
+    # Make sure identities follow sc_group
+    obj$sc_group = meta$sc_group
+    Idents(obj) <- meta$sc_group
+    
+    # 2) Pseudobulk mean expression per (sample, cluster)
+    message("AggregateExpression")
+    pb <- AggregateExpression(
+        obj,
+        assays        = assay,
+        features      = features,
+        group.by      = "sc_group",
+        normalization.method = "LogNormalize",
+        scale.factor  = 10000,
+        verbose       = TRUE,
+        return.seurat = TRUE
+    )
+    
+    # 3) Summarize original obj@meta.data per sc_group
+    message("Adding metadata")
+    group_meta <- meta %>%
+        group_by(sc_group) %>%
+        summarise(
+            sample  = dplyr::first(sample),
+            cluster = dplyr::first(cluster),
+            n_cells = dplyr::n(),
+            # for all *other* columns, just keep the first value in that group
+            across(
+                .cols = setdiff(colnames(meta), c("sample", "cluster", "sc_group")),
+                .fns  = dplyr::first,
+                .names = "{.col}"
+            ),
+            .groups = "drop"
+        )
+
+    # 4) Add this to the pseudobulk object metadata
+    pb_meta <- pb@meta.data
+    pb_meta$sc_group <- rownames(pb_meta)
+    
+    pb_meta <- pb_meta %>%
+        left_join(group_meta, by = "sc_group") %>%
+        relocate(sample, cluster, n_cells, .before = dplyr::everything())
+    
+    pb@meta.data <- pb_meta
+    
+    pb
+}
+```
+
+make_pseudobulk level2.IGTHT --> igt1_96_pseudobulk_byannotationlevel2IGTHT_CountsOnly.Rds
+```{r}
+#Plot a gene in a cluster across samples
+# pb = make_pseudobulk(obj = so, sample_col = "IGTHT", cluster_col = "annotation_level2", features  = c("Ifng", "Il4", "Il5"))
+pb = make_pseudobulk(obj = so, sample_col = "IGTHT", cluster_col = "annotation_level2", features  = NULL)
+# saveRDS(pb, file = sprintf("%s/igt1_96_pseudobulk_byannotationlevel2IGTHT_log1pCP10K.Rds", out_dir))
+# pb = readRDS(sprintf("%s/igt1_96_pseudobulk_byannotationlevel2IGTHT_log1pCP10K.Rds", out_dir))
+pb$sc_group2 = gsub("\\-","",pb$sc_group)
+counts_mat <- LayerData(pb[["RNA"]], layer = "counts") 
+colnames(counts_mat) = gsub("\\-","",colnames(counts_mat))
+pb_small <- CreateSeuratObject(counts = counts_mat, assay = "RNA")
+m <- pb@meta.data[match(colnames(pb_small), pb$sc_group2), , drop = FALSE]
+rownames(m) = pb$sc_group2
+all(rownames(m) == colnames(pb_small))
+pb_small@meta.data = m
+# saveRDS(pb_small, file = sprintf("%s/igt1_96_pseudobulk_byannotationlevel2IGTHT_CountsOnly.Rds", out_dir))
+
+```
+
+Normalize and Barplot genes 
+```{r}
+pb_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byannotationlevel2IGTHT_CountsOnly.Rds", out_dir))
+pb = NormalizeData(pb_orig, assay = "RNA", normalization.method = "LogNormalize", scale.factor = 10000)
+
+library(dplyr)
+library(ggplot2)
+
+Barplot_Pseudobulk <- function(
+  pb,
+  gene,
+  clusters,
+  fill_color = mypal_level2,
+  min_cells = 20,
+  ymax      = 10,
+  assay     = "RNA",
+  layer     = "data",
+  x_col     = "sample_code",   # <--- NEW: which metadata column on x
+  x_lab     = NULL             # <--- NEW: label for x-axis (optional)
+) {
+  if (is.null(x_lab)) x_lab <- x_col
+
+  # pull pseudobulk expression for this gene
+  mat <- LayerData(pb[[assay]], layer = layer)
+  if (!gene %in% rownames(mat)) {
+    stop("Gene ", gene, " not found in assay ", assay, " (layer ", layer, ").")
+  }
+
+  # check x_col exists in metadata
+  if (!x_col %in% colnames(pb@meta.data)) {
+    stop("Column ", x_col, " not found in pb@meta.data.")
+  }
+
+  tmp <- data.frame(
+    gene = as.numeric(mat[gene, ]),
+    pb@meta.data,
+    check.names = FALSE
+  )
+
+  df <- tmp %>%
+    filter(
+      cluster %in% clusters,
+      n_cells >= min_cells
+    )
+
+  ggplot(df, aes(x = .data[[x_col]], y = gene, fill = annotation_level2)) +
+    geom_col() +
+    labs(
+      x = x_lab,
+      y = "Pseudobulk expression log1pCP10K",
+      title = sprintf(
+        "%s expression in %s across samples (n_cells \u2265 %d)",
+        gene,
+        paste(clusters, collapse = ","),
+        min_cells
+      )
+    ) +
+    ylim(0, ymax) +
+    scale_fill_manual(values = fill_color) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    ) +
+    NoGrid()
+}
+
+
+pdf(sprintf("%s/Barplot_Pseudobulk_Foxp3_Il4_Ifng_Il17a_S10a8.pdf",out_dir), 10,5, useDingbats = F)
+Barplot_Pseudobulk(pb = pb, gene = "Foxp3",clusters = c("Treg_cl2"), fill_color = mypal_level2, min_cells = 20, ymax= 4, x_col= "IGTHT")
+Barplot_Pseudobulk(pb = pb, gene = "Il4",clusters = c("CD4_cl15"), fill_color = mypal_level2, min_cells = 20, ymax= 4, x_col= "IGTHT")
+Barplot_Pseudobulk(pb = pb, gene = "Ifng",clusters = c("CD4_cl21"), fill_color = mypal_level2, min_cells = 20, ymax= 4, x_col= "IGTHT")
+Barplot_Pseudobulk(pb = pb, gene = "Il17a",clusters = c("CD4_cl17"), fill_color = mypal_level2, min_cells = 20, ymax= 4, x_col= "IGTHT")
+# Barplot_Pseudobulk(pb = pb, gene = "S100a8",clusters = c("CD4_cl15"), fill_color = mypal_level2, min_cells = 20, ymax= 4, x_col= "IGTHT")
+dev.off()
+
+
+#3. Barplot: Ifng pseudobulk mean expression per cluster in a specific sample I74H18
+mygene = "Foxp3" #"Il4"
+mysamples = "I5H5"#"I74H18"
+tmp = data.frame(gene = pb[["RNA"]]$data[mygene,], pb@meta.data)
+
+df <- tmp %>%
+  filter(
+    IGTHT %in% mysamples,
+    n_cells >= 20
+  )
+
+ggplot(df, aes(x = annotation_level2, y = gene, fill = annotation_level2)) +
+    geom_col() +
+    labs(
+        x = "Clusters",
+        y = "Pseudobulk expression log1pCP10K",
+        title = sprintf("%s expression in %s across clusters (n_cells ≥ 20)",mygene, paste(mysamples, collapse = ","))
+    ) +
+    ylim(0,10)+
+    scale_fill_manual(values = mypal_level2) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    ) + NoGrid()
+
+
+```
+
+Study Fano or variance?
+Fano doesn't seem much better, maybe CV^2, stick to variance
+```{r}
+library(dplyr)
+library(ggplot2)
+library(Matrix)
+
+assay <- "RNA"
+
+## 1. Use *counts* layer (non-log) for variance–mean
+mat_counts <- LayerData(pb[["RNA"]], layer = "counts")  # genes x pseudobulk bins
+mat_counts = mat_counts[,sample(size = 1000, x = 1:ncol(mat_counts))]
+
+# Compute per-gene mean and variance across pseudobulk bins
+gene_stats <- tibble(
+  gene = rownames(mat_counts),
+  mean = Matrix::rowMeans(mat_counts),
+  var  = apply(mat_counts, 1, var)  # use base apply, Matrix works fine here
+) %>%
+  filter(mean > 0, var > 0)   # avoid zeros for log scales
+
+# 2. Variance–mean plot (log–log)
+gg_var_mean <- ggplot(gene_stats, aes(x = mean, y = var)) +
+  geom_point(alpha = 0.3) +
+  # scale_x_log10() +
+  # scale_y_log10() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    x = "Mean count (per gene, pseudobulk bins)",
+    y = "Variance",
+    title = "Variance–mean relationship (log–log)"
+  ) +
+  theme_bw()
+
+gg_var_mean
+
+# 3. Fano factor vs mean (var / mean)
+gene_stats <- gene_stats %>%
+  mutate(fano = var / mean)
+
+gg_fano <- ggplot(gene_stats, aes(x = mean, y = fano)) +
+  geom_point(alpha = 0.3) +
+  # scale_x_log10() +
+  # scale_y_log10() +
+  labs(
+    x = "Mean count (per gene, pseudobulk bins)",
+    y = "Fano factor (variance / mean)",
+    title = "Fano factor vs mean (log–log)"
+  ) +
+  theme_bw()
+
+gg_fano
+
+# 4. Fano factor vs mean (var / mean)
+gene_stats <- gene_stats %>% mutate(cv2 = var / (mean^2 + 1e-12))
+
+gg_cv <- ggplot(gene_stats, aes(x = mean, y = cv2)) +
+  geom_point(alpha = 0.3) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    x = "Mean count (per gene, pseudobulk bins)",
+    y = "cv2 factor (variance / mean)",
+    title = "cv2 factor vs mean (log–log)"
+  ) +
+  theme_bw()
+
+gg_cv
+
+
+```
+
+
+context_lineage_variance_score_pb
+```{r}
+VarianceDecompClusterSample <- function(
+  pb_obj,
+  gene,
+  sample_col  = "sample",
+  cluster_col = "cluster",
+  n_cells_col = "n_cells",
+  assay       = "RNA",
+  layer       = "data",
+  min_cells_per_sc        = 20,
+  min_samples_per_cluster = 5,
+  min_clusters_per_sample = 5,
+  dispersion  = c("var", "fano", "cv2"),   # NEW: choose metric
+  var_fun     = stats::var          # still used for var part
+) {
+  dispersion <- match.arg(dispersion)
+
+  # Helper: compute dispersion for a numeric vector
+  compute_disp <- function(x) {
+    x <- x[is.finite(x)]
+    if (length(x) <= 1) return(NA_real_)
+
+    v <- var_fun(x, na.rm = TRUE)
+    
+    eps <- 1e-12
+
+    if (dispersion == "var") {
+      return(v)
+    } else if (dispersion == "fano") {
+      m <- mean(x, na.rm = TRUE)
+      if (!is.finite(m) || m <= 0) return(NA_real_)
+      return(v / (m + 1e-12))  # Fano factor
+    } else if (dispersion == "cv2") {
+      m <- mean(x, na.rm = TRUE)
+      if (!is.finite(m) || m <= 0) return(NA_real_)
+      return(v / (m^2 + eps))  # CV^2 factor
+    }
+    
+  }
+
+  # 0) Checks
+  if (!gene %in% rownames(pb_obj[[assay]])) {
+    stop("gene not found in pseudobulk assay: ", assay)
+  }
+
+  # 1) Pull pseudobulk expression for this gene from a LAYER
+  mat   <- LayerData(pb_obj[[assay]], layer = layer)
+  cells <- colnames(pb_obj)
+  expr  <- mat[gene, cells]
+
+  # 2) Build (sample, cluster) table from pseudobulk metadata
+  meta <- pb_obj@meta.data
+
+  df <- meta[cells, , drop = FALSE] %>%
+    dplyr::mutate(
+      sample  = .data[[sample_col]],
+      cluster = .data[[cluster_col]],
+      n_cells = .data[[n_cells_col]],
+      value   = as.numeric(expr)
+    ) %>%
+    dplyr::select(sample, cluster, n_cells, value) %>%
+    dplyr::filter(!is.na(sample), !is.na(cluster))
+
+  # Filter sparse (sample, cluster) bins
+  sc <- df %>%
+    dplyr::filter(n_cells >= min_cells_per_sc)
+
+  if (nrow(sc) == 0) {
+    warning("No (sample, cluster) bins passed min_cells_per_sc filter.")
+    return(list(
+      gene = gene,
+      dispersion = dispersion,
+      score = NA_real_,
+      disp_across_samples_by_cluster = tibble(),
+      disp_across_clusters_by_sample = tibble(),
+      sc_table = tibble()
+    ))
+  }
+
+  # 3) Coverage filters
+  # clusters with enough samples
+  keep_clusters <- sc %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::summarise(nsamples = dplyr::n_distinct(sample), .groups = "drop") %>%
+    dplyr::filter(nsamples >= min_samples_per_cluster) %>%
+    dplyr::pull(cluster)
+
+  sc <- sc %>% dplyr::filter(cluster %in% keep_clusters)
+
+  # samples with enough clusters
+  keep_samples <- sc %>%
+    dplyr::group_by(sample) %>%
+    dplyr::summarise(nclusters = dplyr::n_distinct(cluster), .groups = "drop") %>%
+    dplyr::filter(nclusters >= min_clusters_per_sample) %>%
+    dplyr::pull(sample)
+
+  sc <- sc %>% dplyr::filter(sample %in% keep_samples)
+
+  if (nrow(sc) == 0) {
+    warning("No (sample, cluster) bins passed coverage filters.")
+    return(list(
+      gene = gene,
+      dispersion = dispersion,
+      score = NA_real_,
+      disp_across_samples_by_cluster = tibble(),
+      disp_across_clusters_by_sample = tibble(),
+      sc_table = tibble()
+    ))
+  }
+
+  # 4) "Context" dispersion: within each cluster, across samples
+  disp_across_samples_by_cluster <- sc %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::summarise(
+      disp_across_samples = compute_disp(value),
+      nsamples            = dplyr::n_distinct(sample),
+      .groups             = "drop"
+    )
+
+  # 5) "Lineage" dispersion: within each sample, across clusters
+  disp_across_clusters_by_sample <- sc %>%
+    dplyr::group_by(sample) %>%
+    dplyr::summarise(
+      disp_across_clusters = compute_disp(value),
+      nclusters            = dplyr::n_distinct(cluster),
+      .groups              = "drop"
+    )
+
+  # 6) Context-dominant score (median ratio)
+  score <- mean(disp_across_samples_by_cluster$disp_across_samples, na.rm = TRUE) /
+           mean(disp_across_clusters_by_sample$disp_across_clusters, na.rm = TRUE)
+
+  list(
+    gene = gene,
+    dispersion = dispersion,
+    score = score,
+    disp_across_samples_by_cluster = disp_across_samples_by_cluster,
+    disp_across_clusters_by_sample = disp_across_clusters_by_sample,
+    sc_table = sc
+  )
+}
+
+genelist = read.table(sprintf('%s/level2/AUC.txt', out_dir), header = T)
+
+mygenes = genelist %>% arrange(desc(auc)) %>% top_n(110) %>% pull(Gene)
+
+vardecomp_list = list()
+for (g in mygenes) {
+    print(g)
+    vardecomp_list[[g]] = VarianceDecompClusterSample(pb_obj = pb, sample_col  = "sample_code", cluster_col = "annotation_level2", gene = g,layer = "data", dispersion = "var", min_cells_per_sc = 20, min_samples_per_cluster = 5,  min_clusters_per_sample = 5)
+}
+
+
+
+g = "Foxp3"
+vardecomp_list[[g]] = VarianceDecompClusterSample(pb_obj = pb, sample_col  = "sample_code", cluster_col = "annotation_level2", gene = g, layer = "data", dispersion = "var", min_cells_per_sc = 20, min_samples_per_cluster = 5,  min_clusters_per_sample = 5)
+mean(na.omit(vardecomp_list[[g]]$disp_across_samples_by_cluster$disp_across_samples))
+mean(na.omit(vardecomp_list[[g]]$disp_across_clusters_by_sample$disp_across_clusters))
+
+disp_across_samples = c()
+disp_across_clusters = c()
+scores = c()
+for (g in names(vardecomp_list)) {
+    print(g)
+    disp_across_samples[g] = mean(na.omit(vardecomp_list[[g]]$disp_across_samples_by_cluster$disp_across_samples))
+    disp_across_clusters[g] = mean(na.omit(vardecomp_list[[g]]$disp_across_clusters_by_sample$disp_across_clusters))
+    scores[g] = vardecomp_list[[g]]$score
+    
+}
+
+df = data.frame(SYMBOL = names(vardecomp_list), disp_across_samples, disp_across_clusters, scores)
+
+library(ggrepel)
+
+N_label <- nrow(df)  # number of genes to label
+
+df_label <- df %>%
+  arrange(abs(log10(scores))) %>%   # highest scores first
+  slice_head(n = N_label)
+
+pdf(sprintf("%s/ScatterPlot_VarDecomp_ClusterSample.pdf",out_dir), 10,10, useDingbats = F)
+ggplot(df, aes(disp_across_samples, disp_across_clusters)) +
+  geom_point(aes(color = abs(log10(scores))), alpha = 0.6, size = 2) +
+  geom_text_repel(
+    data = df_label,
+    aes(label = SYMBOL),
+    size = 3,
+    max.overlaps = Inf
+  ) +
+    geom_abline(slope = 1, intercept = 0,
+              color = "brown", linetype = "dashed") +
+  scale_x_log10(limits = c(10^-5, 1)) +
+  scale_y_log10(limits = c(10^-5, 1)) +
+  # xlim(0, 0.7) +
+  # ylim(0, 0.7) +
+  theme_bw() +
+  scale_color_viridis_b() +
+  labs(
+    x = "Variance across samples - Mean dispersion across samples by cluster",
+    y = "Variance across clusters - Mean dispersion across clusters by sample",
+    color = "abs(log10(score))"
+  )
+
+ggplot(df, aes(disp_across_samples, disp_across_clusters)) +
+  geom_point(aes(color = abs(log10(scores))), alpha = 1, size = 4) +
+  # geom_text_repel(
+  #   data = df_label,
+  #   aes(label = SYMBOL),
+  #   size = 3,
+  #   max.overlaps = Inf
+  # ) +
+    geom_abline(slope = 1, intercept = 0,
+              color = "brown", linetype = "dashed") +
+  scale_x_log10(limits = c(10^-5, 1)) +
+  scale_y_log10(limits = c(10^-5, 1)) +
+  # xlim(0, 0.7) +
+  # ylim(0, 0.7) +
+  theme_bw() +
+  scale_color_viridis_b() +
+  labs(
+    x = "Variance across samples - Mean dispersion across samples by cluster",
+    y = "Variance across clusters - Mean dispersion across clusters by sample",
+    color =  "abs(log10(score))"
+  )
+dev.off()
+
+
+
+######
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "fano", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+median(na.omit(out_mean$disp_across_samples_by_cluster$disp_across_samples))
+median(na.omit(out_mean$disp_across_samples_by_cluster$mean_value))
+median(na.omit(out_mean$disp_across_clusters_by_sample$disp_across_clusters))
+median(na.omit(out_mean$disp_across_clusters_by_sample$mean_value))
+
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "fano", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+# out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+# out_mean$score
+
+out_mean <- VarianceDecompClusterSample(pb_obj = pb, gene = "Nr4a1",layer = "data", dispersion = "var",  min_cells_per_sc = 20)
+out_mean$score
+
+```
+
+(context_lineage_variance_score_pb with regression of var to the mean)
+```{r}
+library(dplyr)
+
+context_lineage_variance_score_pb <- function(
+  pb_obj,
+  gene,
+  sample_col  = "sample",
+  cluster_col = "cluster",
+  n_cells_col = "n_cells",
+  assay       = "RNA",
+  layer       = "data",
+  min_cells_per_sc        = 20,
+  min_samples_per_cluster = 5,
+  min_clusters_per_sample = 5,
+  dispersion  = c("var", "fano", "cv2", "resid_poly"),
+  var_fun     = stats::var
+) {
+  dispersion <- match.arg(dispersion)
+  eps <- 1e-8
+
+  # 0) Checks
+  if (!gene %in% rownames(pb_obj[[assay]])) {
+    stop("gene not found in pseudobulk assay: ", assay)
+  }
+
+  # 1) Pull pseudobulk expression for this gene from a layer
+  mat   <- LayerData(pb_obj[[assay]], layer = layer)
+  cells <- colnames(pb_obj)
+  expr  <- mat[gene, cells]
+
+  # 2) Build (sample, cluster) table from pseudobulk metadata
+  meta <- pb_obj@meta.data
+
+  df <- meta[cells, , drop = FALSE] %>%
+    dplyr::mutate(
+      sample  = .data[[sample_col]],
+      cluster = .data[[cluster_col]],
+      n_cells = .data[[n_cells_col]],
+      value   = as.numeric(expr)
+    ) %>%
+    dplyr::select(sample, cluster, n_cells, value) %>%
+    dplyr::filter(!is.na(sample), !is.na(cluster))
+
+  # Filter sparse (sample, cluster) bins
+  sc <- df %>%
+    dplyr::filter(n_cells >= min_cells_per_sc)
+
+  if (nrow(sc) == 0) {
+    warning("No (sample, cluster) bins passed min_cells_per_sc filter.")
+    return(list(
+      gene = gene,
+      dispersion = dispersion,
+      score = NA_real_,
+      disp_across_samples_by_cluster = tibble(),
+      disp_across_clusters_by_sample = tibble(),
+      sc_table = tibble()
+    ))
+  }
+
+  # 3) Coverage filters
+  # clusters with enough samples
+  keep_clusters <- sc %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::summarise(nsamples = dplyr::n_distinct(sample), .groups = "drop") %>%
+    dplyr::filter(nsamples >= min_samples_per_cluster) %>%
+    dplyr::pull(cluster)
+
+  sc <- sc %>% dplyr::filter(cluster %in% keep_clusters)
+
+  # samples with enough clusters
+  keep_samples <- sc %>%
+    dplyr::group_by(sample) %>%
+    dplyr::summarise(nclusters = dplyr::n_distinct(cluster), .groups = "drop") %>%
+    dplyr::filter(nclusters >= min_clusters_per_sample) %>%
+    dplyr::pull(sample)
+
+  sc <- sc %>% dplyr::filter(sample %in% keep_samples)
+
+  if (nrow(sc) == 0) {
+    warning("No (sample, cluster) bins passed coverage filters.")
+    return(list(
+      gene = gene,
+      dispersion = dispersion,
+      score = NA_real_,
+      disp_across_samples_by_cluster = tibble(),
+      disp_across_clusters_by_sample = tibble(),
+      sc_table = tibble()
+    ))
+  }
+
+  # ---- Helper to apply dispersion choice given mean & var vectors ----
+  compute_disp_from_mean_var <- function(mean_vec, var_vec) {
+    out <- rep(NA_real_, length(mean_vec))
+
+    valid <- is.finite(mean_vec) & is.finite(var_vec) &
+      (mean_vec > 0) & (var_vec >= 0)
+
+    if (!any(valid)) return(out)
+
+    if (dispersion == "var") {
+      out[valid] <- var_vec[valid]
+    } else if (dispersion == "fano") {
+      out[valid] <- var_vec[valid] / (mean_vec[valid] + eps)
+    } else if (dispersion == "cv2") {
+      out[valid] <- var_vec[valid] / ((mean_vec[valid]^2) + eps)
+    } else if (dispersion == "resid_poly") {
+      # log–log polynomial regression: log10(var) ~ poly(log10(mean), 2)
+      x <- log10(mean_vec[valid] + eps)
+      y <- log10(var_vec[valid] + eps)
+
+      if (sum(valid) >= 3) {
+        fit_df <- data.frame(x = x, y = y)
+        fit <- lm(y ~ poly(x, 2), data = fit_df)
+
+        # residuals only for valid entries
+        res <- residuals(fit)
+        out[valid] <- res
+      } else {
+        warning("Not enough points for resid_poly; falling back to raw variance.")
+        out[valid] <- var_vec[valid]
+      }
+    }
+
+    out
+  }
+
+  # 4) "Context" dispersion: within each cluster, across samples
+  disp_across_samples_by_cluster <- sc %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      var_value  = var_fun(value, na.rm = TRUE),
+      nsamples   = dplyr::n_distinct(sample),
+      .groups    = "drop"
+    )
+
+  disp_across_samples_by_cluster$disp_across_samples <-
+    compute_disp_from_mean_var(
+      disp_across_samples_by_cluster$mean_value,
+      disp_across_samples_by_cluster$var_value
+    )
+
+  # 5) "Lineage" dispersion: within each sample, across clusters
+  disp_across_clusters_by_sample <- sc %>%
+    dplyr::group_by(sample) %>%
+    dplyr::summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      var_value  = var_fun(value, na.rm = TRUE),
+      nclusters  = dplyr::n_distinct(cluster),
+      .groups    = "drop"
+    )
+
+  disp_across_clusters_by_sample$disp_across_clusters <-
+    compute_disp_from_mean_var(
+      disp_across_clusters_by_sample$mean_value,
+      disp_across_clusters_by_sample$var_value
+    )
+
+  # 6) Context-dominant score (median ratio of dispersions)
+  score <- median(disp_across_samples_by_cluster$disp_across_samples, na.rm = TRUE) /
+           median(disp_across_clusters_by_sample$disp_across_clusters, na.rm = TRUE)
+
+  list(
+    gene = gene,
+    dispersion = dispersion,
+    score = score,
+    disp_across_samples_by_cluster = disp_across_samples_by_cluster,
+    disp_across_clusters_by_sample = disp_across_clusters_by_sample,
+    sc_table = sc
+  )
+}
+
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Ifng",layer = "data", dispersion = "resid_poly", min_cells_per_sc = 20)
+out_mean$score
+
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Il4",layer = "data", dispersion = "resid_poly", min_cells_per_sc = 20)
+out_mean$score
+
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "fano", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "resid_poly", min_cells_per_sc = 20)
+out_mean$score
+
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "var", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "fano", min_cells_per_sc = 20)
+out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "cv2", min_cells_per_sc = 20)
+out_mean$score
+# out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Foxp3",layer = "data", dispersion = "fano",  min_cells_per_sc = 20)
+# out_mean$score
+out_mean <- context_lineage_variance_score_pb(pb_obj = pb, gene = "Gata3",layer = "data", dispersion = "resid_poly", min_cells_per_sc = 20)
+out_mean$score
+
+```
+
+
+
+####
+```{r}
+library(Seurat)
+library(dplyr)
+library(tidyr)
+
+context_lineage_variance_score <- function(
+  obj,
+  gene,
+  sample_col  = "sample_code",
+  cluster_col = "annotation_level2",
+  assay       = DefaultAssay(obj),
+  slot        = "data",      # "data" (lognorm) or "counts"
+  metric      = c("mean", "frac"),  # mean expression OR fraction expressing
+  expr_thresh = 0,           # threshold for "expressing" (used if metric="frac")
+  min_cells_per_sc = 20,     # filter sparse (sample,cluster) bins
+  min_samples_per_cluster = 5,
+  min_clusters_per_sample = 5,
+  var_fun     = stats::var   # could swap to mad() if you prefer robustness
+) {
+  metric <- match.arg(metric)
+
+  # Expression vector
+  if (!gene %in% rownames(obj[[assay]])) stop("gene not found in assay")
+  expr <- GetAssayData(obj, assay = assay, slot = slot)[gene, ]
+  cells <- colnames(obj)
+
+  # Metadata + expression
+  df <- obj@meta.data[cells, c(sample_col, cluster_col), drop = FALSE] %>%
+    mutate(expr = as.numeric(expr[cells])) %>%
+    rename(sample = !!sample_col, cluster = !!cluster_col) %>%
+    filter(!is.na(sample), !is.na(cluster))
+
+  # Summarize to sample x cluster
+  sc <- df %>%
+    group_by(sample, cluster) %>%
+    summarise(
+      n = n(),
+      value = dplyr::case_when(
+        metric == "mean" ~ mean(expr),
+        metric == "frac" ~ mean(expr > expr_thresh)
+      ),
+      .groups = "drop"
+    ) %>%
+    filter(n >= min_cells_per_sc)
+
+  # Ensure enough coverage
+  # clusters with enough samples
+  keep_clusters <- sc %>%
+    group_by(cluster) %>%
+    summarise(nsamples = n_distinct(sample), .groups = "drop") %>%
+    filter(nsamples >= min_samples_per_cluster) %>%
+    pull(cluster)
+
+  sc <- sc %>% filter(cluster %in% keep_clusters)
+
+  # samples with enough clusters
+  keep_samples <- sc %>%
+    group_by(sample) %>%
+    summarise(nclusters = n_distinct(cluster), .groups = "drop") %>%
+    filter(nclusters >= min_clusters_per_sample) %>%
+    pull(sample)
+
+  sc <- sc %>% filter(sample %in% keep_samples)
+
+  # 1) Context variance: within each cluster, variance across samples
+  var_across_samples_by_cluster <- sc %>%
+    group_by(cluster) %>%
+    summarise(
+      var_across_samples = var_fun(value, na.rm = TRUE),
+      nsamples = n_distinct(sample),
+      .groups = "drop"
+    )
+
+  # 2) Lineage variance: within each sample, variance across clusters
+  var_across_clusters_by_sample <- sc %>%
+    group_by(sample) %>%
+    summarise(
+      var_across_clusters = var_fun(value, na.rm = TRUE),
+      nclusters = n_distinct(cluster),
+      .groups = "drop"
+    )
+
+  # 3) Context-dominant score (median ratio)
+  score <- median(var_across_samples_by_cluster$var_across_samples, na.rm = TRUE) /
+           median(var_across_clusters_by_sample$var_across_clusters, na.rm = TRUE)
+
+  list(
+    gene = gene,
+    metric = metric,
+    score = score,
+    var_across_samples_by_cluster = var_across_samples_by_cluster,
+    var_across_clusters_by_sample = var_across_clusters_by_sample,
+    sc_table = sc
+  )
+}
+
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+
+# ---- Example usage ----
+# Mean expression version
+out_mean <- context_lineage_variance_score(obj = so, gene = "Ifng", metric = "mean")
+
+# Fraction expressing version (often better for sparse cytokines)
+out_frac <- context_lineage_variance_score(obj, gene = "IFNG", metric = "frac", expr_thresh = 0)
+
+out_mean$score
+out_frac$score
+
+median(out_mean$var_across_samples_by_cluster$var_across_samples)
+median(out_mean$var_across_clusters_by_sample$var_across_clusters)
+
+```
+```
+
+
