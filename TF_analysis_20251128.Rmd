@@ -95,6 +95,9 @@ out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_a
 out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251219" 
 out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251219"
 
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107"
+
 ```
 
 
@@ -103,7 +106,8 @@ on Midway
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
 
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
 
@@ -115,7 +119,7 @@ on Desktop
 ```{r}
 setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
 # so_orig = readRDS("igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
-so_orig = readRDS("igt1_96_withtotalvi20251218_clean_ADTonly.Rds")
+so_orig = readRDS("igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 # so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -266,7 +270,7 @@ Gene_AUC <- function(
             )
             data$Group <- gsub("\\-", "_", data$Group)
             data$Group <- factor(data$Group, levels = order_groups)
-            # data$level1  <- so$annotation_level1[match(data$Group, so$annotation_level1)]
+            data$annotation_level1  <- pseudobulk$annotation_level1[match(data$Group, pseudobulk$annotation_level1)]
             
             p <- ggplot2::ggplot(data, ggplot2::aes(x = Group, y = Expression, fill = Group)) +
                 ggplot2::geom_bar(stat = "identity") +
@@ -330,11 +334,10 @@ Gene_AUC <- function(
 
 ```
 
-!! using so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds")  here
-!! using so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds")  here
+
 ```{r}
 # so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
-so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
 ```
 
 
@@ -342,7 +345,8 @@ Calculate pseudobulk (on Midway)
 remove prolif and miniverse since many level2 converge there. thymocyte and thymus
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
 
 pseudobulk = AggregateExpression(
@@ -355,8 +359,8 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) 
 
 pseudobulk = AggregateExpression(
     object = so,
@@ -368,10 +372,10 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) #out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"
+# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
+# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) 
 
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107"))
 ```
 
 
@@ -406,11 +410,39 @@ tf = tf[tf %in% rownames(pseudobulk_orig)]
 
 Level1
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir))
 
 pseudobulk = pseudobulk_orig
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level1")
+out_dir2 = sprintf("%s/%s",out_dir, "level1")
     
+Gene_AUC(pseudobulk,
+         genes = tf, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level1),
+         mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
+         n_top = 20,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+)
+
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("%s/%s",out_dir, "level1Top2")
+Gene_AUC(pseudobulk,
+         genes = tf, # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level1),
+         mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
+         n_top = 2,                # number of top TF to highlight
+         expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+)
+
+pseudobulk = pseudobulk_orig[,pseudobulk_orig$annotation_level1 != "Treg"]
+out_dir2 = sprintf("%s/%s",out_dir, "level1_CD4noTreg")
+so_orig$annotation_level1b = as.character(so_orig$annotation_level1)
+so_orig$annotation_level1b[so_orig$annotation_level1b == "Treg"] = "CD4"
 Gene_AUC(pseudobulk,
          genes = tf, # vector of genes
          out_dir = out_dir2,
@@ -427,17 +459,24 @@ Gene_AUC(pseudobulk,
 
 Across Level2
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir))
+pseudobulk_orig$annotation_level2 = gsub("\\-", "_", pseudobulk_orig$annotation_level2)
+pseudobulk_orig$annotation_level1 = sub("_.*", "", pseudobulk_orig$annotation_level2)
+
+df = data.frame(pseudobulk_orig$annotation_level1, pseudobulk_orig$annotation_level2)
+df$mypal_level1b = mypal_level1[pseudobulk_orig$annotation_level1]
+mypal_level1b = setNames(df$mypal_level1b, nm = pseudobulk_orig$annotation_level2)
+
+colnames(pseudobulk_orig)
 
 pseudobulk = pseudobulk_orig
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level2")
-    
+out_dir2 = sprintf("%s/%s",out_dir, "level2")
 Gene_AUC(pseudobulk,
          genes = tf, # vector of genes
          out_dir = out_dir2,
          mypal = mypal,              # named vector of colors for TF lines
          order_groups = levels(so_orig$annotation_level2),
-         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         mypal_groups = mypal_level1b,       # named vector of colors for groups in barplots
          n_top = 20,                # number of top TF to highlight
          expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
          cols_heatmap_gradient = colorRampPalette(c('white','orange','brown'))(100),#rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
@@ -446,13 +485,13 @@ Gene_AUC(pseudobulk,
          
 )
 
-out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", "level2Top50")
+out_dir2 = sprintf("%s/%s",out_dir, "level2Top50")
 Gene_AUC(pseudobulk,
          genes = tf, # vector of genes
          out_dir = out_dir2,
          mypal = mypal,              # named vector of colors for TF lines
          order_groups = levels(so_orig$annotation_level2),
-         mypal_groups = mypal_level2,       # named vector of colors for groups in barplots
+         mypal_groups = mypal_level1,       # named vector of colors for groups in barplots
          n_top = 50,                # number of top TF to highlight
          expr_threshold = 0.5,       # threshold for filtering genes, in CK10K
          cols_heatmap_gradient = colorRampPalette(c('white','orange','brown'))(100),#rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
@@ -461,16 +500,32 @@ Gene_AUC(pseudobulk,
          
 )
 
+pseudobulk = pseudobulk_orig
+out_dir2 = sprintf("%s/%s",out_dir, "level2_select1")
+Gene_AUC(pseudobulk,
+         genes = c("Sox13", "Foxp3", "Zbtb16", "Tbx21", "Gata3", "Rorc", "Tox", "Tox2", "Hes1", "Pparg", "Tcf7"), # vector of genes
+         out_dir = out_dir2,
+         mypal = mypal,              # named vector of colors for TF lines
+         order_groups = levels(so_orig$annotation_level2),
+         mypal_groups = mypal_level1b,       # named vector of colors for groups in barplots
+         n_top = 20,                # number of top TF to highlight
+         expr_threshold = 0,       # threshold for filtering genes, in CK10K
+         cols_heatmap_gradient = colorRampPalette(c('white','orange','brown'))(100),#rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100)),
+         pdf_width = 9,
+         pdf_height = 3
+         
+)
+
 ```
 
 
 in each Level2
 ```{r}
-pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128"))
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir))
 
-for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
+for (ct in c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP")) {
     print(ct)
-    out_dir2 = sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20251128/%s", ct)
+    out_dir2 = sprintf("%s/%s", out_dir, ct)
     
     pseudobulk = pseudobulk_orig[,grepl(sprintf("^%s\\-",ct), colnames(pseudobulk_orig))]
     

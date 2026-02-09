@@ -60,6 +60,7 @@ Prefix
 # prefix = "SampleComp/20250224"
 # prefix = "SampleComp/20250226"
 prefix = "SampleComp/20250226_2"
+prefix = "SampleComp/20260107"
 
 # reduc = "totalvi_20241006"
 # clusters = "annotation_level1"
@@ -80,15 +81,17 @@ if (!dir.exists(prefix)) {
 # so = readRDS("igt1_96_withtotalvi20250212.Rds")
 # so = readRDS("igt1_96_withtotalvi20250226.Rds")
 # so = so[,!so$annotation_level1 %in% c("unclear", "nonT", "remove")]
+# so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
 
-so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
-so$annotation_level2[so$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
-so$annotation_level1 = factor(so$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
 
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/exp_id/IGT1_96_sample_metadata.csv",header = T, sep = ",")
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250124_v7.csv",header = T, sep = ",")
 # sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250226_v8.csv",header = T, sep = ",")
-sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+# sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20250628_v10.csv",header = T, sep = ",")
+sample_metadata = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20260107_v11.csv",header = T, sep = ",")
 
 ```
 
@@ -186,7 +189,7 @@ pdf(file = sprintf("%s/annotation_level2_Sample_Composition_heatmap.pdf", prefix
 
 pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = "Percent of cells in each Sample", na_col = "#FDE725")
 
-for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","Tz", "DN", "DP")) {
     print(i)
     colz = grepl(sprintf("%s_",i), colnames(tmp3))
     pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = sprintf("Percent of cells in each Sample for %s clusters",i), na_col = "#FDE725")
@@ -203,7 +206,7 @@ m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerSample_withMetadata.Rds
 
 # which(colnames(m3) == "sample_name")
 # i = "CD4"
-for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for(i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","Tz", "DN", "DP")) {
     print(i)
     sub = c(which(grepl(sprintf("%s_",i), colnames(m3))), seq(which(colnames(m3) == "sample_name"),ncol(m3)))
     write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerSample_withMetadata_%s.txt", prefix,i) ,row.names = F, col.names = T, sep = "\t", quote = F)
@@ -305,7 +308,7 @@ labels_matrix[labels_matrix==0] = ""
 pdf(file = sprintf("%s/annotation_level2_IGT_Composition_heatmap.pdf", prefix), width =20, height =20, useDingbats = F)
 pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 5, main = "Percent of cells in each Sample", na_col = "#FDE725")
 
-for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","Tz", "DN", "DP")) {
     print(i)
     colz = grepl(sprintf("%s_",i), colnames(tmp3))
     pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = sprintf("Percent of cells in each IGT for %s clusters",i), na_col = "#FDE725")
@@ -374,7 +377,7 @@ labels_matrix[labels_matrix==0] = ""
 pdf(file = sprintf("%s/annotation_level2_Organ_Composition_heatmap.pdf", prefix), width =20, height =10, useDingbats = F)
 pheatmap(mat = tmp3*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix, number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 5, main = "Percent of cells in each Organ", na_col = "#FDE725")
 
-for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for (i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","Tz", "DN", "DP")) {
     print(i)
     colz = grepl(sprintf("%s_",i), colnames(tmp3))
     pheatmap(mat = tmp3[,colz]*100, cluster_rows = F, cluster_cols = F, display_numbers = labels_matrix[,colz], number_format = "%.0f", breaks = seq(0,100,length.out = length(ColorRamp)+1), col = ColorRamp, fontsize_row = 10, fontsize_col = 10, fontsize = 10, main = sprintf("Percent of cells in each Organ for %s clusters",i), na_col = "#FDE725")
@@ -388,7 +391,7 @@ split by annotation_level1
 ```{r}
 m3 = readRDS(file = sprintf("%s/annotation_level2_PropPerOrgan.Rds", prefix))
 
-for( i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","nonconv", "DN", "DP")) {
+for( i in c("CD4", "CD8", "Treg", "gdT", "CD8aa","Tz", "DN", "DP")) {
     print(i)
     sub = c(which(grepl(sprintf("%s_|organ_simplified",i), colnames(m3))))
     write.table(m3[,sub], file = sprintf("%s/annotation_level2_PropPerOrgan_%s.txt", prefix,i) ,row.names = F, col.names = T, sep = "\t", quote = F)

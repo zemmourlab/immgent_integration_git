@@ -2394,9 +2394,120 @@ write.table(annot_updated3 %>% select(!c(level2.IGTHT,level2.thymocyte)), file =
 
 ```
 
+**Renaming numbers to letter**
+Create conversion table
+```{r}
+pdf(width = 30, height = 30, useDingbats = F, file = "~/Desktop/MDE_level2_20260107_annot.pdf")
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = "annotation_level1", ncol = 3, label = T) + scale_color_manual(values = mypal_level2) + NoLegend() 
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = "annotation_level1", ncol = 3, label = T) + scale_color_manual(values = mypal_level2)
+dev.off()
+
+annotation_table_conversion = read.table('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260201_conversion.csv', header = T, sep = ",")
+
+key = annotation_table_conversion[,c(1,2)] %>% distinct()
+colnames(key) = c("old", "new")
+
+library(stringr)
+
+annotation_table_conversion$level2.thymocyte.new = annotation_table_conversion$level2.thymocyte
+
+for (i in seq_len(nrow(key))) {
+  annotation_table_conversion$level2.thymocyte.new <- str_replace(
+    annotation_table_conversion$level2.thymocyte.new,
+    paste0("(^|_)", key$old[i], "$"),
+    paste0("\\1", key$new[i])
+  )
+}
+
+annotation_table_conversion$level2.thymocyte.new = gsub("\\_", ".", annotation_table_conversion$level2.thymocyte.new)
+
+# setdiff(annotation_table_conversion$level2.thymocyte.new, annotation_table_conversion$level2.thymocyte)
+
+annotation_table_conversion %>% filter(level1 == "CD8") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "CD4") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "Treg") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "gdT") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "CD8aa") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "DN") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "DP") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "unclear") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "thymocyte") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "remove") %>% arrange(order)
+annotation_table_conversion %>% filter(level1 == "nonT") %>% arrange(order)
+
+```
+
+Write annotation_table_20260206.csv and annotation_table_history_20260206.csv
+```{r}
+annot_orig = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260101.csv', header = T, sep = ",")
+
+annot = annot_orig
+
+#Fix unclear and thymocytes
+annot$level2.thymocyte[annot$level1 == "unclear" & annot$level2.thymocyte == "thymocyte"] = "unclear_thymocyte"
+annot %>% filter(level1 %in% c("thymocyte", "unclear")) %>% count(level1, level2, level2.thymocyte) %>% arrange(level1, level2.thymocyte)
+annot$level2[annot$level1 == "unclear" & annot$level2 == "thymocyte"] = "unclear_thymocyte"
+
+#update annotation
+annot$level2.new = annot$level2
+m = match(annot$level2, annotation_table_conversion$level2)
+annot$level2.new[!is.na(m)] = annotation_table_conversion$level2.new[m[!is.na(m)]]
+annot %>% count(level2, level2.new) %>% arrange(level2.new)
+annot %>% count(level1, level2.new) %>% arrange(level2.new)
+
+annot$level2.thymocyte.new = annot$level2.thymocyte
+m = match(annot$level2.thymocyte, annotation_table_conversion$level2.thymocyte)
+annot$level2.thymocyte.new[!is.na(m)] = annotation_table_conversion$level2.thymocyte.new[m[!is.na(m)]]
+annot %>% filter(level1 == "thymocyte") %>% count(level2, level2.new) %>% arrange(level2.new)
+annot %>% filter(level1 == "thymocyte") %>% count(level2.thymocyte, level2.thymocyte.new) %>% arrange(level2.thymocyte.new)
+annot %>% filter(level1 != "thymocyte") %>% count(level2.thymocyte, level2.thymocyte.new) %>% arrange(level2.thymocyte.new)
+annot %>% count(level1, level2.new) %>% arrange(level2.new)
+
+colnames(annot) = c("cell_id", "level1", "level2.group", "level2.v1", "level2.thymocyte.v1", "level2", "level2.thymocyte")
+annot = annot[,c("cell_id", "level1", "level2.group", "level2", "level2.thymocyte", "level2.v1", "level2.thymocyte.v1")]
+
+annot %>% count(level1, level2, level2.group)
+sum(rowSums(apply(annot,2,is.na)))
+
+write.table(x = annot, file = "annotation_table_20260206.csv", row.names = F, quote = F, sep = ",")
+
+annot_summary = annot %>% count(level1, level2, level2.group)
+annot_summary$order = annotation_table_conversion$order[match(annot_summary$level2, annotation_table_conversion$level2.new)]
+annot_summary$level1 = factor(annot_summary$level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "Tz", "DN", "DP", "thymocyte", "unclear", "remove", "nonT"))
+
+annot_summary = annot_summary %>% arrange(level1, order)
+annot_summary$order2 = 1:nrow(annot_summary)
+annot_summary$order = annot_summary$order2
+annot_summary$order2 = NULL
+
+annot_summary %>% as.data.frame()
+
+write.table(x = annot_summary, file = "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_history_20260206.csv", row.names = F, quote = F, sep = ",")
 
 
-Final MDE plots 
+```
+
+
+Write GSE297097 annotation table for IGT 1-104
+```{r}
+
+annot = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/GSE297097_annotation_table_20260101_IGT1_104_cleaned.csv', header = T, sep = ",")
+
+annot_updated = annot
+annot_updated$level2.v1 = annot_updated$level2
+m = match(annot_updated$level2.v1, key$old)
+any(is.na(m))
+annot_updated$level2[!is.na(m)] = key$new[m[!is.na(m)]]
+
+annot_updated %>% count(level2.v1, level2) %>% arrange(level2)
+any(is.na(annot_updated$level2))
+
+write.table(annot_updated, file = 'GSE297097_annotation_table_20260206_IGT1_104_cleaned.csv', sep = ",", quote = F, row.names = F, col.names = T)
+
+
+```
+
+**Final MDE plots **
 ```{r}
 so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
 # mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))

@@ -61,11 +61,13 @@ sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.
 
 ```{r}
 # setwd("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/")
-source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
+#source("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R")
 
 setwd("/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/immgent_color_palettes")
 prefix = "20250709"
 prefix = "20250714"
+prefix = "20260109"
+prefix = "20260206"
 
 so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean_ADTonly.Rds")
 so = list()
@@ -75,6 +77,17 @@ so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
 so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
 so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
 so[["nonconv"]] = so_orig[,so_orig$annotation_level1 == "nonconv"]
+so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
+so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
+
+so_orig = readRDS("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+so = list()
+so[["CD4"]] = so_orig[,so_orig$annotation_level1 == "CD4"]
+so[["CD8"]] =  so_orig[,so_orig$annotation_level1 == "CD8"]
+so[["Treg"]] =  so_orig[,so_orig$annotation_level1 == "Treg"]
+so[["gdT"]] = so_orig[,so_orig$annotation_level1 == "gdT"]
+so[["CD8aa"]] = so_orig[,so_orig$annotation_level1 == "CD8aa"]
+so[["Tz"]] = so_orig[,so_orig$annotation_level1 == "Tz"]
 so[["DN"]] = so_orig[,so_orig$annotation_level1 == "DN"]
 so[["DP"]] = so_orig[,so_orig$annotation_level1 == "DP"]
 
@@ -89,7 +102,9 @@ mypal_list = list()
 
 **Level1 palette**
 ```{r}
-mypal_list[["level1"]] = c(CD4 = "blue", CD8 = "darkorange2", Treg = "deeppink", gdT = "chartreuse3", CD8aa = "darkorchid", nonconv = "darkgoldenrod1",DN = "deepskyblue",DP="red",thymocyte = "grey")
+# mypal_list[["level1"]] = c(CD4 = "blue", CD8 = "darkorange2", Treg = "deeppink", gdT = "chartreuse3", CD8aa = "darkorchid", nonconv = "darkgoldenrod1",DN = "deepskyblue",DP="red",thymocyte = "grey")
+
+mypal_list[["level1"]] = c(CD4 = "blue", CD8 = "darkorange2", Treg = "deeppink", gdT = "chartreuse3", CD8aa = "darkorchid", Tz = "darkgoldenrod1",DN = "deepskyblue",DP="red",thymocyte = "grey")
 
 # DimPlot(so_orig, reduction = "mde2_totalvi_20241006", group.by = "annotation_level1", raster = T, cols = mypal_list[["level1"]], label = T, label.box = F) + NoLegend()
 
@@ -142,7 +157,8 @@ mypal_list[[i]][sprintf("%s_miniverse",i)] = "grey"
 mypal_list[[i]] = mypal_list[[i]][!is.na(names(mypal_list[[i]]))]
 # DimPlot(so[[i]], reduction = "mde_incremental", group.by = "annotation_level2", raster = T, cols = mypal_list[[i]], label = T, label.box = F) + NoLegend()
 
-i = "nonconv"
+#i = "nonconv"
+i = "Tz"
 tocol = levels(so_orig$annotation_level2)[grepl(i,levels(so_orig$annotation_level2))]
 mypal_list[[i]] = setNames(mypal, tocol)
 mypal_list[[i]][sprintf("%s_prolif",i)] = "black"
@@ -191,6 +207,8 @@ levels(so_orig$annotation_level2)[!levels(so_orig$annotation_level2) %in% unlist
 # names(mypal_level2) = unlist(lapply(mypal_list, names), use.names = F) 
 
 mypal_list[["level2"]] = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["nonconv"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]],mypal_list[["nonT"]], mypal_list[["remove"]] , mypal_list[["unclear"]] )
+
+mypal_list[["level2"]] = c(mypal_list[["CD4"]], mypal_list[["CD8"]], mypal_list[["Treg"]], mypal_list[["gdT"]], mypal_list[["Tz"]], mypal_list[["CD8aa"]], mypal_list[["DN"]], mypal_list[["DP"]],mypal_list[["thymocyte"]],mypal_list[["nonT"]], mypal_list[["remove"]] , mypal_list[["unclear"]] )
 
 ```
 
@@ -285,9 +303,9 @@ dev.off()
 
 **Palette for Topics**
 ```{r}
-# cls = colors()[!grepl("gray|grey",colors()) ]
-# mypal_topics = sample(cls, 200)
-mypal_topics = RColorBrewer::brewer.pal(8,name = "Accent")
+cls = colors()[!grepl("gray|grey",colors()) ]
+mypal_topics = sample(cls, 200)
+# mypal_topics = RColorBrewer::brewer.pal(8,name = "Accent")
 names(mypal_topics) = paste("F", 1:200, sep = "")
 mypal_topics["F1"] = "blue"
 mypal_topics["F68"] = "deeppink"
@@ -308,7 +326,6 @@ dev.off()
 
 ```
 
-
 **Save palettes**
 ```{r}
 
@@ -319,6 +336,49 @@ saveRDS(mypal_list, sprintf("%s/immgent_color_palettes_list_%s.Rds", prefix, pre
 for (i in names(mypal_list)) {
     write.table(mypal_list[[i]],file = sprintf("%s/immgent_color_palettes_%s.csv",prefix,i),quote = F, sep = ",", col.names = F)
 }
+
+```
+
+**Update palettes with new annotation prefix = 20260206 **
+
+```{r}
+prefix = "20260206"
+
+mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20260109", "20260109"))
+mypal_list_orig = mypal_list
+
+annotation_table_conversion = read.table('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260201_conversion.csv', header = T, sep = ",")
+key = annotation_table_conversion[,c(1,2)] %>% distinct()
+colnames(key) = c("old", "new")
+
+names(mypal_list[["level2"]]) = key$new[match(names(mypal_list[["level2"]]), key$old)]
+mypal_list[["level2"]][grepl("\\.P", names(mypal_list[["level2"]]))] = "black"
+mypal_list[["level2"]][grepl("\\.wM", names(mypal_list[["level2"]]))] = "grey"
+
+mypal_list[["CD8"]] = NULL
+mypal_list[["CD4"]] = NULL
+mypal_list[["Treg"]] = NULL
+mypal_list[["gdT"]] = NULL
+mypal_list[["Tz"]] = NULL
+mypal_list[["CD8aa"]] = NULL
+mypal_list[["DN"]] = NULL
+mypal_list[["DP"]] = NULL
+mypal_list[["thymocyte"]] = NULL
+mypal_list[["nonT"]] = NULL
+mypal_list[["remove"]] = NULL
+mypal_list[["unclear"]] = NULL
+
+names(mypal_list[["level2_option2"]]) = key$new[match(names(mypal_list[["level2_option2"]]), key$old)]
+mypal_list[["level2_option2"]][grepl("\\.P", names(mypal_list[["level2_option2"]]))] = "black"
+mypal_list[["level2_option2"]][grepl("\\.wM", names(mypal_list[["level2_option2"]]))] = "grey"
+
+saveRDS(mypal_list, sprintf("%s/immgent_color_palettes_list_%s.Rds", prefix, prefix))
+
+for (i in names(mypal_list)) {
+    write.table(mypal_list[[i]],file = sprintf("%s/immgent_color_palettes_%s.csv",prefix,i),quote = F, sep = ",", col.names = F)
+}
+
+which(so_orig[["mde_incremental"]]@cell.embeddings[so_orig$annotation_level2 %in% "CD4_cl13",1] < 1 & so_orig[["mde_incremental"]]@cell.embeddings[so_orig$annotation_level2 %in% "CD4_cl13",2] < -1.5) %>% length()
 
 ```
 

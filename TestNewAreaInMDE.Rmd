@@ -120,7 +120,7 @@ library(dplyr)
 knn_novelty_scores <- function(old_mat, new_mat, k = 10) {
   old_mat <- as.matrix(old_mat)
   new_mat <- as.matrix(new_mat)
-  stopifnot(ncol(old_mat) == 2, ncol(new_mat) == 2)
+  stopifnot(ncol(old_mat) >= 2, ncol(new_mat) >= 2, ncol(old_mat) == ncol(new_mat))
   if (nrow(new_mat) <= k) stop("Need k < number of new points.")
 
   # Mean distance to k nearest REFERENCE neighbors

@@ -1,0 +1,1292 @@
+---
+title: "miniverse_misc"
+output: html_document
+date: "2026-01-09"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/miniverse
+R
+```
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("stringr", "ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = immgent_colors$level2
+mypal_level2["not classified"] = "black"
+names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_level2group = c(resting = "blue", "activated" = "red", proliferating = "black", miniverse = "grey")
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+
+```{r}
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/miniverse/misc_plots"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/miniverse/misc_plots" 
+```
+
+**Most up-to-date data**
+on Midway
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+
+
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+# so_orig = readRDS("igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so_orig = readRDS("igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+**Miniverse on MDE**
+```{r}
+pdf(sprintf("%s/MDE_miniverse.pdf", out_dir), 5,5, useDingbats = F)
+p = DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2_group", raster = T, cols = c(resting = "grey", "activated" = "grey", proliferating = "black", miniverse = "red", other = "grey"))
+p
+p+NoLegend()
+dev.off()
+
+```
+
+_org
+
+**Distribution across lineages, healthy and not healthy**
+```{r}
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20260107'))
+
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+mdata = mdata_orig %>% filter(target_cells_simplified %in% c("CD45p", "allT"))
+# mdata = mdata_orig %>% select(matches("CD8"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+pops <- c("CD4_miniverse", "CD8_miniverse", "Treg_miniverse", "gdT_miniverse", "CD8aa_miniverse", "Tz_miniverse", "DN_miniverse", "DP_miniverse")
+
+# build the matching column names
+prop_cols   <- paste0(pops, ".prop")
+ncells_cols <- paste0(pops, ".ncells")
+
+# ---- long format: prop + ncells paired correctly ----
+df_long <- mdata_orig %>%
+  dplyr::select(any_of(c("sample_code", "condition_broad","condition_detailed_simplified","organ_simplified")),  # keep whatever metadata you want
+         any_of(prop_cols),
+         any_of(ncells_cols)) %>%
+  pivot_longer(
+    cols = any_of(c(prop_cols, ncells_cols)),
+    names_to = c("pop", "metric"),
+    names_pattern = "^(.*)\\.(prop|ncells)$",
+    values_to = "value"
+  ) %>%
+  pivot_wider(names_from = metric, values_from = value) %>%   # columns: prop, ncells
+  mutate(
+    prop = as.numeric(prop),
+    ncells = as.numeric(ncells),
+    pop = factor(pop, levels = pops)
+  ) %>%
+  filter(!is.na(prop), !is.na(ncells)) %>%
+  filter(ncells > 10)   # <-- your rule: keep only samples with >10 cells for that pop
+df_long$annotation_level1 = sub("_.*", "", df_long$pop)
+df_long$annotation_level1 = factor(df_long$annotation_level1, levels = levels(so_orig$annotation_level1))
+df_long$health_group <- ifelse(df_long$condition_broad == "healthy", "healthy", "non_healthy")
+df_long$health_group <- factor(df_long$health_group, levels = c("healthy", "non_healthy"))
+
+p <- ggplot(
+  df_long,
+  aes(x = annotation_level1, y = prop * 100, fill = annotation_level1)
+) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_fill_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = ""
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Level1.pdf", out_dir), 7, 7, useDingbats = F)
+p
+dev.off()
+
+p <- ggplot(
+  df_long,
+  aes(x = annotation_level1, y = prop * 100, fill = health_group)
+) +
+  geom_boxplot(
+    aes(group = interaction(annotation_level1, health_group)),
+    position = position_dodge(width = 0.8),
+    outlier.shape = NA
+  ) +
+  geom_point(
+    aes(group = health_group),
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_fill_manual(values = c("grey", "white")) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = "Healthy (left) vs non-healthy (right)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Level1_ConditionBroad.pdf", out_dir), 10, 7, useDingbats = F)
+p
+
+p <- ggplot(
+  df_long,
+  aes(x = annotation_level1, y = prop * 100, fill = annotation_level1)
+) +
+  geom_boxplot(
+    aes(group = interaction(annotation_level1, health_group)),
+    position = position_dodge(width = 0.8),
+    outlier.shape = NA
+  ) +
+  geom_point(
+    aes(group = health_group),
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_fill_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = "Healthy (left) vs non-healthy (right)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Level1_ConditionBroad2.pdf", out_dir), 10, 7, useDingbats = F)
+p
+dev.off()
+
+p <- ggplot(
+  df_long,
+  aes(x = organ_simplified, y = prop * 100)
+) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(aes(color = annotation_level1),
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_color_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = ""
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Organ.pdf", out_dir), 7, 5, useDingbats = F)
+p
+dev.off()
+
+
+#######
+# 1) define health status + lineage label
+df_long2 <- df_long %>%
+  mutate(
+    health_group = ifelse(condition_broad == "healthy", "healthy", "nothealthy"),
+    annotation_level1 = sub("_.*", "", pop),
+    annotation_level1 = factor(annotation_level1, levels = levels(so_orig$annotation_level1)),
+    pop_health = paste0(pop, "_", health_group)   # e.g. CD4_miniverse_healthy
+  )
+
+# 2) order x by lineage (annotation_level1) and within-lineage by health
+# (healthy first, then nothealthy)
+lvl <- df_long2 %>%
+  distinct(pop, annotation_level1, health_group, pop_health) %>%
+  mutate(
+    health_group = factor(health_group, levels = c("healthy", "nothealthy"))
+  ) %>%
+  arrange(annotation_level1, health_group) %>%
+  pull(pop_health)
+
+df_long2 <- df_long2 %>%
+  mutate(pop_health = factor(pop_health, levels = lvl))
+
+# 3) plot
+p <- ggplot(df_long2, aes(x = pop_health, y = prop * 100, fill = annotation_level1)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 0.8, alpha = 0.7) +
+  scale_fill_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold")
+  )
+
+p
+
+
+
+
+
+##########
+
+myclusters = colnames(mdata)[grepl("ncells",colnames(mdata))] %>% gsub(pattern = ".ncells", replacement = "")
+
+pdf(sprintf("%s/scatterplot_clusters_prop_by_ncells.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    p = ggplot(mdata, aes(x = !!sym(nc), y = !!sym(np), color = organ_simplified)) +
+        geom_point() +
+        theme_minimal() +
+        scale_color_manual(values = mypal_organ) +
+        # geom_text(data = top20, aes(label = sample_type), size = 3, vjust = -0.5)
+        geom_text_repel(data = top20, aes(label = sample_type),
+                        size = 3, 
+                        box.padding = 0.35, 
+                        point.padding = 0.5, 
+                        segment.color = 'grey50')
+    print(p)
+    
+}
+dev.off()
+
+pdf(sprintf("%s/scatterplot_clusters_nprop_organ.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7, color = "black") +
+        geom_text_repel(data = top20, aes(label = sample_type), 
+                        size = 3, vjust = -0.5, color = "red") +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10, color = condition_broad)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7) +
+        scale_color_manual(values = mypal_condition_broad) +
+        geom_text_repel(data = top20, aes(label = sample_type, color = condition_broad), 
+                        size = 3, vjust = -0.5) +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+}
+dev.off()
+
+
+```
+
+**Distribution across organs**
+```{r}
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20260107'))
+
+mdata_orig = readRDS(file = sprintf("%s/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds", prefix))
+mdata_orig$IGT_10xlane_id = NULL
+mdata_orig$organism_id = NULL
+mdata_orig$IGT = mdata_orig$immgent_IGT_10xlane_id
+mdata_orig$immgent_IGT_10xlane_id = NULL
+mdata_orig$HT = mdata_orig$hashtag_number
+mdata_orig$hashtag_number = NULL
+mdata_orig$sample_id = NULL
+mdata_orig$count_unique = NULL
+colnames(mdata_orig)
+
+mdata = mdata_orig %>% filter(target_cells_simplified %in% c("CD45p", "allT"))
+# mdata = mdata_orig %>% select(matches("CD8"), IGTHT, sample_name:last_col()) %>% as.data.frame()
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+pops <- c("CD4_miniverse", "CD8_miniverse", "Treg_miniverse", "gdT_miniverse", "CD8aa_miniverse", "Tz_miniverse", "DN_miniverse", "DP_miniverse")
+
+# build the matching column names
+prop_cols   <- paste0(pops, ".prop")
+ncells_cols <- paste0(pops, ".ncells")
+
+# ---- long format: prop + ncells paired correctly ----
+df_long <- mdata_orig %>%
+  dplyr::select(any_of(c("sample_code", "condition_broad","condition_detailed_simplified","organ_simplified")),  # keep whatever metadata you want
+         any_of(prop_cols),
+         any_of(ncells_cols)) %>%
+  pivot_longer(
+    cols = any_of(c(prop_cols, ncells_cols)),
+    names_to = c("pop", "metric"),
+    names_pattern = "^(.*)\\.(prop|ncells)$",
+    values_to = "value"
+  ) %>%
+  pivot_wider(names_from = metric, values_from = value) %>%   # columns: prop, ncells
+  mutate(
+    prop = as.numeric(prop),
+    ncells = as.numeric(ncells),
+    pop = factor(pop, levels = pops)
+  ) %>%
+  filter(!is.na(prop), !is.na(ncells)) %>%
+  filter(ncells > 10)   # <-- your rule: keep only samples with >10 cells for that pop
+df_long$annotation_level1 = sub("_.*", "", df_long$pop)
+df_long$annotation_level1 = factor(df_long$annotation_level1, levels = levels(so_orig$annotation_level1))
+df_long$health_group <- ifelse(df_long$condition_broad == "healthy", "healthy", "non_healthy")
+df_long$health_group <- factor(df_long$health_group, levels = c("healthy", "non_healthy"))
+
+
+
+p <- ggplot(
+  df_long,
+  aes(x = annotation_level1, y = prop * 100, fill = health_group)
+) +
+  geom_boxplot(
+    aes(group = interaction(annotation_level1, health_group)),
+    position = position_dodge(width = 0.8),
+    outlier.shape = NA
+  ) +
+  geom_point(
+    aes(group = health_group),
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_fill_manual(values = c("grey", "white")) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = "Healthy (left) vs non-healthy (right)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Level1_ConditionBroad.pdf", out_dir), 10, 7, useDingbats = F)
+p
+
+p <- ggplot(
+  df_long,
+  aes(x = annotation_level1, y = prop * 100, fill = annotation_level1)
+) +
+  geom_boxplot(
+    aes(group = interaction(annotation_level1, health_group)),
+    position = position_dodge(width = 0.8),
+    outlier.shape = NA
+  ) +
+  geom_point(
+    aes(group = health_group),
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  scale_fill_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)",
+    subtitle = "Healthy (left) vs non-healthy (right)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 13)
+  )
+pdf(sprintf("%s/Proportion_miniverse_Level1_ConditionBroad2.pdf", out_dir), 10, 7, useDingbats = F)
+p
+dev.off()
+
+
+#######
+# 1) define health status + lineage label
+df_long2 <- df_long %>%
+  mutate(
+    health_group = ifelse(condition_broad == "healthy", "healthy", "nothealthy"),
+    annotation_level1 = sub("_.*", "", pop),
+    annotation_level1 = factor(annotation_level1, levels = levels(so_orig$annotation_level1)),
+    pop_health = paste0(pop, "_", health_group)   # e.g. CD4_miniverse_healthy
+  )
+
+# 2) order x by lineage (annotation_level1) and within-lineage by health
+# (healthy first, then nothealthy)
+lvl <- df_long2 %>%
+  distinct(pop, annotation_level1, health_group, pop_health) %>%
+  mutate(
+    health_group = factor(health_group, levels = c("healthy", "nothealthy"))
+  ) %>%
+  arrange(annotation_level1, health_group) %>%
+  pull(pop_health)
+
+df_long2 <- df_long2 %>%
+  mutate(pop_health = factor(pop_health, levels = lvl))
+
+# 3) plot
+p <- ggplot(df_long2, aes(x = pop_health, y = prop * 100, fill = annotation_level1)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 0.8, alpha = 0.7) +
+  scale_fill_manual(values = mypal_level1) +
+  labs(
+    x = NULL,
+    y = "% of cells",
+    title = "Miniverse proportions (filtered: ncells > 10)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(size = 16),
+    axis.text.x  = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold")
+  )
+
+p
+
+
+
+
+
+##########
+
+myclusters = colnames(mdata)[grepl("ncells",colnames(mdata))] %>% gsub(pattern = ".ncells", replacement = "")
+
+pdf(sprintf("%s/scatterplot_clusters_prop_by_ncells.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    p = ggplot(mdata, aes(x = !!sym(nc), y = !!sym(np), color = organ_simplified)) +
+        geom_point() +
+        theme_minimal() +
+        scale_color_manual(values = mypal_organ) +
+        # geom_text(data = top20, aes(label = sample_type), size = 3, vjust = -0.5)
+        geom_text_repel(data = top20, aes(label = sample_type),
+                        size = 3, 
+                        box.padding = 0.35, 
+                        point.padding = 0.5, 
+                        segment.color = 'grey50')
+    print(p)
+    
+}
+dev.off()
+
+pdf(sprintf("%s/scatterplot_clusters_nprop_organ.pdf",  prefix), 15,10, useDingbats = F)
+for (cl in myclusters) {
+    print(cl)
+    nc = sprintf("%s.ncells", cl)
+    np = sprintf("%s.prop", cl)
+    
+    top20 = mdata %>%
+        filter(!!sym(nc) > 10) %>%
+        arrange(desc(!!sym(np))) %>%
+        head(20)
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7, color = "black") +
+        geom_text_repel(data = top20, aes(label = sample_type), 
+                        size = 3, vjust = -0.5, color = "red") +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+    
+    q = ggplot(mdata, aes(x = organ_simplified, y = !!sym(np), size = !!sym(nc) >= 10, color = condition_broad)) +
+        scale_size_manual(values = c(0.5,2)) +
+        geom_jitter(width = 0.2, alpha = 0.7) +
+        scale_color_manual(values = mypal_condition_broad) +
+        geom_text_repel(data = top20, aes(label = sample_type, color = condition_broad), 
+                        size = 3, vjust = -0.5) +
+        theme_minimal() +
+        labs(x = "Organ (simplified)", 
+             y = np, 
+             title = sprintf("%s by Organ (Top 20 Labeled)", np)) +
+        theme(axis.text.x = element_text(size = 14, angle = 45, hjust = 1))
+    print(q) 
+}
+dev.off()
+
+
+```
+
+
+**Percent mt, ribo and lncRNA**
+On Midway
+```{r}
+so$miniverse_status <- ifelse(
+  so$annotation_level2_group == "miniverse",
+  "miniverse",
+  "not_miniverse"
+)
+so$miniverse_status = factor(so$miniverse_status, levels = c("not_miniverse", "miniverse"))
+
+so$log10_nCount_RNA <- log10(so$nCount_RNA)
+so$log10_nCount_ADT <- log10(so$nCount_ADT)
+
+gm_rik_genes = rownames(so)[grepl(x = rownames(so), pattern = "Gm|Rik$|\\-ps$")]
+mt_genes = rownames(so)[grepl(x = rownames(so), pattern = "^mt-")]
+ribo_genes = rownames(so)[grepl(x = rownames(so), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")]
+so[["percent.gmrik"]] <- PercentageFeatureSet(so, features = gm_rik_genes, assay = "RNA")
+so[["percent.mt"]] <- PercentageFeatureSet(so, features = mt_genes, assay = "RNA")
+so[["percent.ribo"]] <- PercentageFeatureSet(so, features = ribo_genes, assay = "RNA")
+
+exclude_genes <- unique(c(mt_genes, ribo_genes, gm_rik_genes))
+excluded_counts <- Matrix::colSums(so[["RNA"]]$counts[exclude_genes, , drop = FALSE])
+
+so$log10_nCount_RNA_clean <- log10(so$nCount_RNA - excluded_counts)
+
+
+p1 = VlnPlot(so, features = "percent.mt", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+p2 = VlnPlot(so, features = "percent.gmrik", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+p3 = VlnPlot(so, features = "percent.ribo", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+p4 = VlnPlot(so[,so$cite_seq ==T], features = "log10_nCount_ADT", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+p5 = VlnPlot(so, features = "log10_nCount_RNA", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+p6 = VlnPlot(so, features = "log10_nCount_RNA_clean", group.by = "annotation_level1", split.by = "miniverse_status", pt.size = 0) + scale_fill_manual(values = c("grey", "red"))
+
+pdf(sprintf("%s/percent_mt_ribo_lncRNA_nCountRNAADT.pdf", out_dir), 10, 7, useDingbats = F)
+p1
+p2
+p3
+p4
+p5
+p6
+dev.off()
+
+# tmp = so@meta.data %>% select(cellID, nCount_RNA, nCount_ADT, percent.gmrik, percent.mt, percent.ribo, log10_nCount_RNA_clean) %>% write.table(sprintf("%s/percent_mt_ribo_lncRNA_nCountRNAADT.txt", out_dir), quote = F, sep = "\t")
+
+mean(so$nCount_RNA)
+
+so@meta.data %>% group_by(miniverse_status) %>% summarize(mean(nCount_RNA))
+so@meta.data %>% group_by(miniverse_status) %>% summarize(mean(percent.mt))
+so@meta.data %>% group_by(miniverse_status) %>% summarize(mean(percent.ribo))
+
+```
+
+**Less protein expression in miniverse cells**
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(tibble)
+
+#' Pseudobulk ADT miniverse diff per protein (miniverse - not_miniverse), averaged across IGTHT
+#'
+#' @param so Seurat object (cell-level)
+#' @param cell_subset Logical vector (length = ncol(so)) OR a vector of cell names to keep.
+#'                    Example: so$annotation_level1 == "CD4" & so$cite_seq == TRUE
+#' @param proteins Character vector of ADT features to use (e.g. "good" panel). Default = all ADT features.
+#' @param slot_use "counts" or "data" for GetAssayData on the pseudobulk object (after NormalizeData). Default "data".
+#' @param group_by_igt Column name for sample grouping (e.g. "IGTHT"). Default "IGTHT".
+#' @param miniverse_col Column name containing the miniverse flag/status. Default "miniverse_status".
+#' @param assay_adt ADT assay name. Default "ADT".
+#' @param normalize_pb Logical. If TRUE, normalize pseudobulk ADT with LogNormalize(1e4). Default TRUE.
+#' @param pb_slot_for_aggregate Slot used for aggregation in AggregateExpression ("counts" recommended). Default "counts".
+#'
+#' @return A list with:
+#'   - prot_diff: per-protein mean(diff_miniverse) across IGTHT
+#'   - diff_df: per-protein per-IGTHT diffs
+#'   - pb: pseudobulk Seurat object
+miniverse_prot_diff <- function(
+  so,
+  cell_subset,
+  proteins = NULL,
+  slot_use = c("data", "counts"),
+  group_by_igt = "IGTHT",
+  miniverse_col = "miniverse_status",
+  assay_adt = "ADT",
+  normalize_pb = TRUE,
+  pb_slot_for_aggregate = "counts"
+) {
+  slot_use <- match.arg(slot_use)
+
+  message("subset cells")
+  if (is.logical(cell_subset)) {
+    stopifnot(length(cell_subset) == ncol(so))
+    so_sub <- so[, cell_subset]
+  } else {
+    # assume cell names
+    so_sub <- so[, intersect(cell_subset, colnames(so))]
+  }
+
+  message("checks")
+  if (!assay_adt %in% names(so_sub@assays)) {
+    stop(sprintf("Assay '%s' not found in Seurat object.", assay_adt))
+  }
+  if (!all(c(group_by_igt, miniverse_col) %in% colnames(so_sub@meta.data))) {
+    stop("Missing required metadata columns in so@meta.data: ",
+         paste(setdiff(c(group_by_igt, miniverse_col), colnames(so_sub@meta.data)), collapse = ", "))
+  }
+
+  message("make group label: IGTHT_miniverse_status")
+  so_sub$IGTHT_miniverse <- paste(so_sub[[group_by_igt]][, 1], so_sub[[miniverse_col]][, 1], sep = "_")
+  Idents(so_sub) <- "IGTHT_miniverse"
+
+  message("pseudobulk aggregation")
+  pb <- AggregateExpression(
+    so_sub,
+    assays = assay_adt,
+    slot = pb_slot_for_aggregate,
+    group.by = "IGTHT_miniverse",
+    return.seurat = TRUE
+  )
+
+  if (normalize_pb) {
+    pb <- NormalizeData(pb, assay = assay_adt, normalization.method = "LogNormalize", scale.factor = 1e4)
+  }
+
+  message("choose proteins")
+  if (is.null(proteins)) {
+    proteins <- rownames(pb[[assay_adt]])
+  } else {
+    proteins <- intersect(proteins, rownames(pb[[assay_adt]]))
+  }
+  if (length(proteins) == 0) stop("No proteins left after intersecting with pb ADT features.")
+
+  message("matrix (features x pseudobulk groups)")
+  mat <- GetAssayData(pb[proteins, ], assay = assay_adt, slot = slot_use)
+
+  message("long df")
+  df <- as.data.frame(as.matrix(mat)) %>%
+    rownames_to_column("protein") %>%
+    pivot_longer(-protein, names_to = "group", values_to = "expr") %>%
+    # split group into IGTHT + status; robust to "_" or "-" in the separator
+    separate(
+      group,
+      into = c("IGTHT", "miniverse_status"),
+      sep = "-(?=miniverse|not-miniverse)",
+      remove = TRUE
+    )
+
+  message("per protein x IGTHT diff")
+  diff_df <- df %>%
+    dplyr::select(protein, IGTHT, miniverse_status, expr) %>%
+    pivot_wider(names_from = miniverse_status, values_from = expr) %>%
+    filter(!is.na(miniverse), !is.na(not)) %>%
+    mutate(diff_miniverse = miniverse - not)
+
+
+  message("average diff across IGTHT per protein")
+  prot_diff <- diff_df %>%
+    group_by(protein) %>%
+    summarise(
+      diff_miniverse = mean(diff_miniverse, na.rm = TRUE),
+      n_IGTHT = n(),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(diff_miniverse))
+
+  list(prot_diff = prot_diff, diff_df = diff_df, pb = pb)
+}
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+
+so$miniverse_status <- ifelse(
+  so$annotation_level2_group == "miniverse",
+  "miniverse",
+  "not_miniverse"
+)
+so$miniverse_status = factor(so$miniverse_status, levels = c("not_miniverse", "miniverse"))
+
+good = na.omit(rownames(so[["ADT"]]@meta.features)[so[["ADT"]]@meta.features$classification == "good"])
+
+so$miniverse_status <- ifelse(so$annotation_level2_group == "miniverse", "miniverse", "not_miniverse")
+so$miniverse_status <- factor(so$miniverse_status, levels = c("not_miniverse", "miniverse"))
+
+good <- na.omit(rownames(so[["ADT"]]@meta.features)[so[["ADT"]]@meta.features$classification == "good"])
+
+res_prot_diff = list()
+for (i in unique(so$annotation_level1)) {
+    print(i)
+    res <- miniverse_prot_diff(
+        so,
+        cell_subset = (so$annotation_level1 == i & so$cite_seq == TRUE),
+        proteins = good,
+        slot_use = "counts"
+    )
+    res$prot_diff$annotation_level1 = i
+    res$diff_df$annotation_level1 = i
+    res_prot_diff[[i]] <- res$prot_diff
+}
+
+pdf(sprintf("%s/DecreaseProtADTinMiniverse.pdf", out_dir), 5, 10, useDingbats = F)
+for (i in unique(so$annotation_level1)) {
+    print(i)
+   p = ggplot(res_prot_diff[[i]], aes(x = reorder(protein, diff_miniverse), y = diff_miniverse)) +
+  geom_point(size = 3, alpha = 0.8) +
+    geom_hline(yintercept = 0, linetype = "dashed", colour = "brown") +
+  coord_flip() +
+    
+  labs(x = NULL, y = "miniverse − not_miniverse",
+       title = sprintf("%s: Difference in protein expression", i)) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 12),
+    axis.title.x = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+   print(p)
+}
+dev.off()
+
+res_prot_diff_m = Reduce(rbind, res_prot_diff)
+res_prot_diff_m$annotation_level1 = factor(res_prot_diff_m$annotation_level1, levels = levels(so$annotation_level1))
+
+res_prot_diff_m <- res_prot_diff_m %>%
+  mutate(
+    is_isotype = grepl("^Isotype", protein)
+  )
+
+plot_df <- res_prot_diff_m %>%
+  mutate(
+    is_isotype = grepl("^Isotype", protein)
+  )
+
+label_df <- plot_df %>%
+  group_by(annotation_level1) %>%
+  slice_min(diff_miniverse, n = 10, with_ties = FALSE) %>%
+  ungroup()
+
+p = ggplot(plot_df, aes(x = annotation_level1, y = diff_miniverse)) +
+  geom_point(
+    aes(color = annotation_level1, size = is_isotype),
+    position = position_jitter(width = 0, height = 0),
+    size = 2,
+    alpha = 0.5
+  ) +
+  geom_text_repel(
+    data = label_df,
+    aes(label = protein),
+    color = "black",
+    size = 3,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    point.padding = 0.2,
+    segment.alpha = 0.5
+  ) +
+  # scale_color_manual(
+  #   values = c(`TRUE` = "blue", `FALSE` = "grey60"),
+  #   guide = "none"
+  # ) +
+    scale_color_manual(values = mypal_level1) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.4) +
+  labs(
+    x = NULL,
+    y = "miniverse − not_miniverse (ADT)",
+    title = "Bottom 10 miniverse-depleted proteins per lineage"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x  = element_text(size = 14),
+    axis.text.y  = element_text(size = 12),
+    axis.title.y = element_text(size = 14),
+    plot.title   = element_text(size = 16, face = "bold")
+  )
+pdf(sprintf("%s/DecreaseProtADTinMiniverse_SummaryPlot.pdf", out_dir), 7, 7, useDingbats = F)
+p + NoLegend()
+dev.off()
+
+
+## If want to plot diff_miniverse for each IGTHT
+ggplot(diff_df, aes(x = reorder(protein, diff_miniverse, FUN = median), y = diff_miniverse)) +
+  geom_point(position = position_jitter(width = 0, height = 0.08), alpha = 0.5, size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2.2) +
+  labs(x = NULL, y = "miniverse − not_miniverse (log-normalized ADT)",
+       title = "ADT pseudobulk diffs per IGTHT (mean overlay)") +
+  theme_classic()
+```
+
+**FCFC plots**
+```{r}
+
+diff_list = list()
+for (i in c("CD4", "Treg", "CD8", "gdT", "CD8aa", "nonconv", "DN", "DP")) {
+    print(i)
+    dir = sprintf('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/%s/DGE_limma/20250109/ttlist_Level2Group.Rds', i)
+    tmp = readRDS(dir)
+    tmp$Miniverse_vs_All
+    diff_list[[i]] = tmp$Miniverse_vs_All
+    diff_list[[i]]$annotation_level1 = i
+}
+
+diff_list_m = Reduce(rbind, diff_list)
+
+cl <- c("CD4", "Treg", "CD8", "gdT", "CD8aa", "nonconv", "DN", "DP")
+wide_df <- diff_list_m %>%
+  dplyr::select(SYMBOL, annotation_level1, logFC) %>%
+  distinct() %>%
+  pivot_wider(names_from = annotation_level1, values_from = logFC)
+
+pdf(sprintf("%s/FCFC_miniverse.pdf", out_dir), 5, 5, useDingbats = F)
+for (i in seq_along(cl)) {
+  for (j in (i+1):length(cl)) {
+    xcol <- cl[i]
+    ycol <- cl[j]
+    message(sprintf("%s vs %s", xcol, ycol))
+
+    df_ij <- wide_df %>%
+      filter(!is.na(.data[[xcol]]), !is.na(.data[[ycol]]))
+
+    p <- ggplot(df_ij, aes(x = .data[[xcol]], y = .data[[ycol]])) +
+      geom_scattermore(
+        pointsize = 4,
+        alpha = 0.6,
+        color = "black",
+        pixels = c(1024, 1024)
+      ) +
+      geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3) +
+      geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.3) +
+      coord_equal(xlim = c(-5, 5), ylim = c(-5, 5)) +
+      labs(
+        x = sprintf("logFC (%s)", xcol),
+        y = sprintf("logFC (%s)", ycol),
+        title = "Differential expression"
+      ) +
+      theme_classic() +
+      theme(
+        axis.title = element_text(size = 14),
+        axis.text  = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold")
+      )
+
+    print(p)
+  }
+}
+dev.off()
+
+```
+
+
+**Prolif score**
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250109.Rds")
+mypal_level1 = setNames(mypal, unique(so_orig$annotation_level1))
+mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+mypal_level2_parent1 = setNames(rev(mypal)[-3], unique(so_orig$annotation_level2_parent1))
+
+# hmc = read.table("/Users/david/Library/CloudStorage/Dropbox/datasets/human_mouse_orthologs_tableS4_zilionis.csv",skip = 2, header = T, sep = ",")
+# cc_genes = read.table("/Users/david/Library/CloudStorage/Dropbox/datasets/CellCycleGenes_DominguezCellRes2016.csv", header = T, sep = ",")
+# cc_genes$Mouse_ortholog = hmc$Mouse_ortholog[match(cc_genes$Symbol,hmc$Human_ortholog)]
+# write.table(x =cc_genes,file =  "/Users/david/Library/CloudStorage/Dropbox/datasets/CellCycleGenes_DominguezCellRes2016_withmouseorthologs.csv", sep = ",", row.names = F, col.names = T, quote = T)
+
+cc_genes = read.table("CellCycleGenes_DominguezCellRes2016_withmouseorthologs.csv", header = T, sep = ",")
+so = NormalizeData(so)
+so = CellCycleScoring(so, s.features = na.omit(cc_genes$Mouse_ortholog[cc_genes$Phase == "G1-S"]), g2m.features = na.omit(cc_genes$Mouse_ortholog[cc_genes$Phase == "G2-M"]))
+
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "Phase", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = mypal)
+so$is_prolif = so$S.Score >0.07 | so$G2M.Score >0.15
+so$prolif_score
+
+df <- so@meta.data %>% dplyr::select(S.Score, G2M.Score, annotation_level2_group)
+
+pdf(sprintf("%s/Prolif_scores.pdf", out_dir), 7, 7, useDingbats = F)
+plot(density(so$S.Score), main = "S score Prolif in red")
+lines(density(so$S.Score[so$annotation_level2_group == "proliferating"]), add = T, col = "red")
+plot(density(so$G2M.Score), main = "G2M score Prolif in red")
+lines(density(so$G2M.Score[so$annotation_level2_group == "proliferating"]), add = T, col = "red")
+ggplot(df, aes(x = S.Score, y = G2M.Score)) + geom_scattermore(color = "black", pointsize = 1, pixels = c(512,512)) +
+    geom_point(data = df %>% filter(annotation_level2_group == "proliferating"), color = "red", size = 0.6, alpha = 1) +
+    labs(
+        title = "Proliferating cells highlighted",
+        x = "S phase score",
+        y = "G2M phase score"
+    ) +
+    theme_bw() +
+    theme(
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text.x  = element_text(size = 14),
+        axis.text.y  = element_text(size = 14),
+        plot.title   = element_text(size = 16, face = "bold")
+    ) +
+    NoGrid() +
+    NoLegend()
+# plot(so$S.Score,so$G2M.Score, pch = ".", main = " proliferating in red")
+# points(so$S.Score[so$annotation_level2_group == "proliferating"],so$G2M.Score[so$annotation_level2_group == "proliferating"], pch = ".", col = "red")
+dev.off()
+
+pdf(sprintf("%s/Prolif_scores_inMiniverse.pdf", out_dir), 7, 7, useDingbats = F)
+plot(density(so$S.Score), main = "S score miniverse in red")
+lines(density(so$S.Score[so$annotation_level2_group == "miniverse"]), add = T, col = "red")
+plot(density(so$G2M.Score), main = "G2M score miniverse in red")
+lines(density(so$G2M.Score[so$annotation_level2_group == "miniverse"]), add = T, col = "red")
+ggplot(df, aes(x = S.Score, y = G2M.Score)) + geom_scattermore(color = "black", pointsize = 1, pixels = c(512,512)) +
+    # geom_scattermore(data = df %>% filter(annotation_level2_group %in% c("miniverse")), pointsize = 1, pixels = c(512,512), color = "red",alpha = 1) +
+    geom_point(data = df %>% filter(annotation_level2_group == "miniverse"), color = "red", size = 0.6, alpha = 1) +
+    labs(
+        title = "Miniverse cells highlighted",
+        x = "S phase score",
+        y = "G2M phase score"
+    ) +
+    theme_bw() +
+    theme(
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text.x  = element_text(size = 14),
+        axis.text.y  = element_text(size = 14),
+        plot.title   = element_text(size = 16, face = "bold")
+    ) +
+    NoGrid() +
+    NoLegend()
+# plot(so$S.Score,so$G2M.Score, pch = ".", main = "annotation_level2_parent1 miniverse in red")
+# points(so$S.Score[so$annotation_level2_group == "miniverse"],so$G2M.Score[so$annotation_level2_group == "miniverse"], pch = ".", col = "red")
+dev.off()
+
+pdf(sprintf("%s/Prolif_scores_inNotMiniverseNotProlif.pdf", out_dir), 7, 7, useDingbats = F)
+plot(density(so$S.Score), main = "S score Not miniverse Not Prolif in red")
+lines(density(so$S.Score[!so$annotation_level2_group %in% c("miniverse", "proliferating")]), add = T, col = "red")
+plot(density(so$G2M.Score), main = "G2M score Not miniverse Not Prolif in red")
+lines(density(so$G2M.Score[!so$annotation_level2_group %in% c("miniverse", "proliferating")]), add = T, col = "red")
+ggplot(df, aes(x = S.Score, y = G2M.Score)) + geom_scattermore(color = "black", pointsize = 1, pixels = c(512,512)) +
+    # geom_scattermore(data = df %>% filter(annotation_level2_group %in% c("proliferating")), pointsize = 1, pixels = c(512,512), color = "red",alpha = 1) +
+    geom_scattermore(data = df %>% filter(!annotation_level2_group %in% c("miniverse", "proliferating")), pointsize = 1, pixels = c(512,512), color = "red",alpha = 1) +
+    labs(
+        title = "Not Miniverse, Not Prolif cells highlighted",
+        x = "S phase score",
+        y = "G2M phase score"
+    ) +
+    theme_bw() +
+    theme(
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text.x  = element_text(size = 14),
+        axis.text.y  = element_text(size = 14),
+        plot.title   = element_text(size = 16, face = "bold")
+    ) +
+    NoGrid() +
+    NoLegend()
+# plot(so$S.Score,so$G2M.Score, pch = ".", main = "Not miniverse Not Prolif in red")
+# points(so$S.Score[!so$annotation_level2_group %in% c("miniverse", "proliferating")],so$G2M.Score[!so$annotation_level2_group %in% c("miniverse", "proliferating")], pch = ".", col = "red")
+dev.off()
+
+pdf("Prolif_score_MDE.pdf", 5, 5,useDingbats = F)
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", slot = "data", features = "S.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde2_totalvi_20241006", slot = "data", features = "G2M.Score", order = F, raster = T, raster.dpi = c(1024,1024))
+dev.off()
+DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_prolif", raster = T, raster.dpi = c(1024,1024), label = F) + scale_color_manual(values = c("grey", "red"))
+
+# write.table(file = "Prolif_scores.csv", x = data.frame(cell_id = colnames(so), so@meta.data[,c("S.Score", "G2M.Score", "Phase")]), row.names = F, quote = F, sep = ",")
+
+```
+
+*GSEA analysis on miniverse**
+--> GSEA_signatures.Rda
+```{r}
+library(fgsea)
+library(msigdbr)
+# prefix = "flashier"
+# prefix2 = "20240718_knolim_pe_pl"
+# fit = readRDS(sprintf("%s/%s/fit.Rds", prefix,prefix2))
+# 
+# message("Calculating Factor matrix")
+# res = ldf(fit, type = "i")
+# factors = with(res, F %*% diag(D)  ) #same as res$L %*% diag(res$D)
+# mean_shifted_log_counts = rowMeans(t(shifted_log_counts))
+# all(names(mean_shifted_log_counts) == rownames(factors))
+# colnames(factors) = sprintf("david.factor.%s", 1:ncol(factors))
+
+dir = sprintf('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20250109_freeze/%s/DGE_limma/20250109/ttlist_Level2Group.Rds', "CD4")
+tmp = readRDS(dir)
+ranks = tmp$Miniverse_vs_All$logFC
+names(ranks)  = tmp$Miniverse_vs_All$SYMBOL
+any(is.na(names(ranks) ))
+
+message("Loading signatures")
+# load("/project/zemmour/david/signatures/mouse/signaturelist20171024.Rda")
+load("/Users/david/Library/CloudStorage/Dropbox/datasets/signaturelist20241120.Rda")
+signaturelist1 = signaturelist
+
+# load("/project/zemmour/david/signatures/mouse/signaturelistGSEA.Rda")
+load("/Users/david/Library/CloudStorage/Dropbox/datasets/GSEA_mysigdb/signaturelistGSEA.Rda")
+signaturelist2 = signaturelist
+
+signaturelist = c(signaturelist1, signaturelist2)
+names(signaturelist)
+
+signaturelist = signaturelist[grepl("Treg|treg|TREG|TCELL", names(signaturelist))]
+#names(signaturelist)[grepl("Treg|treg|Foxp3", names(signaturelist))]
+#names(signaturelist)[grepl("IPEX", names(signaturelist))]
+
+fgseaRes = fgseaMultilevel(signaturelist, ranks, scoreType = "pos", minSize = 5)
+fgseaRes
+fgseaRes$pval
+fgseaRes$NES
+# saveRDS(fgseaRes,file = sprintf("%s/GSEA_signatures_MiniversevsAllinCD4.Rds",out_dir))
+fgseaRes = readRDS(file = sprintf("%s/GSEA_signatures_MiniversevsAllinCD4.Rds",out_dir))
+vplot = data.frame(SYMBOL = unlist(fgseaRes[,"pathway"]), fc = unlist(fgseaRes[,"NES"]), pval = unlist(fgseaRes[,"padj"]))
+towrite = vplot
+colnames(towrite) = c("SYMBOL", "NES", "padj")
+# write.table(x = towrite, file = sprintf("%s/GSEA_signatures_MiniversevsAllinCD4.txt", out_dir), sep = "\t", row.names = F, quote = F)
+
+pdf(sprintf("%s/Volcano_GSEA_signatures_MiniversevsAllinCD4.pdf", out_dir), 15, 15, useDingbats = F)
+# p = Vplot(vplot = vplot, xlab = "", xlimits = NULL, ylimits = NULL) + ggtitle("")
+# sub = vplot %>% filter(pval < 0.05) %>% arrange(desc(abs(log2(fc)))) %>% slice_head(n = 50) %>% rownames() #select(SYMBOL) %>% as.vector()
+# q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL), size = 2, max.overlaps = Inf, box.padding = 0.3, point.padding = 0.2, segment.alpha = 0.5)
+# print(q)
+sig <- fgseaRes %>%
+  filter(padj < 0.05) %>%
+  mutate(log10FDR = -log10(padj))
+# label: top 15 by FDR (or by |NES|)
+lab <- sig %>%
+  arrange(padj) %>%
+  slice_head(n = 15)
+ggplot(sig, aes(x = NES, y = log10FDR)) +
+  geom_point(alpha = 0.8, size = 1.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.3) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", linewidth = 0.3) +
+  ggrepel::geom_text_repel(data = lab, aes(label = pathway), size = 3, max.overlaps = Inf) +
+  theme_classic() +
+  labs(x = "NES", y = "-log10(FDR)", title = "Significant pathways (fgsea)")
+
+topN <- 20
+plot_df <- fgseaRes %>%
+  filter(padj < 0.05) %>%
+  arrange(desc(NES)) %>%
+  slice_head(n = topN) %>%
+  bind_rows(
+    fgseaRes %>%
+      filter(padj < 0.05) %>%
+      arrange(NES) %>%
+      slice_head(n = topN)
+  ) %>%
+  mutate(pathway = factor(pathway, levels = unique(pathway[order(NES)])))
+ggplot(plot_df, aes(x = NES, y = pathway)) +
+  geom_point(aes(size = -log10(padj)), alpha = 0.85) +
+  theme_classic() +
+  labs(x = "NES", y = NULL, size = "-log10(FDR)",
+       title = paste0("Top ", topN, " up and down pathways (FDR < 0.05)"))
+
+dev.off()
+
+
+plotEnrichment(signaturelist[["GSE37532_VISCERAL_ADIPOSE_TISSUE_VS_LN_DERIVED_PPARG_KO_TCONV_CD4_TCELL_down"]], ranks)
+
+
+##Gene Ontology
+
+species <- "Mus musculus"  # or "Homo sapiens"
+# Get GO gene sets (C5) and pick a GO subcollection; C5 is MSigDB’s collection of Gene Ontology gene sets
+for (set in c("GO:BP", "GO:MF", "GO:CC")) {
+    print(set)
+    msig_go <- msigdbr(species = species, collection = "C5", subcollection = set)
+    # subcategory can be "GO:BP", "GO:MF", "GO:CC"
+    
+    # Build pathways list: names = GO term, values = gene symbols
+    pathways_go <- msig_go %>%
+        split(x = .$gene_symbol, f = .$gs_name)
+    
+    # OPTIONAL: filter pathways using stringr on GO term names
+    # keep_terms <- names(pathways_go)[
+    #   str_detect(names(pathways_go), regex("T_CELL|INTERFERON|CYTOKINE|RIBOSOM", ignore_case = TRUE))
+    # ]
+    # pathways_go_filt <- pathways_go[keep_terms]
+    pathways_go_filt = pathways_go
+    
+    # Run fgsea
+    fgseaRes <- fgseaMultilevel(pathways = pathways_go_filt, stats = ranks, scoreType = "pos", minSize = 5)
+    saveRDS(fgseaRes,file = sprintf("%s/GSEA_%s_MiniversevsAllinCD4.txt", out_dir, gsub(":", "", set)))
+    vplot = data.frame(SYMBOL = unlist(fgseaRes[,"pathway"]), fc = unlist(fgseaRes[,"NES"]), pval = unlist(fgseaRes[,"padj"]))
+    towrite = vplot
+    colnames(towrite) = c("SYMBOL", "NES", "padj")
+    towrite = towrite %>% filter(padj < 0.05) %>% arrange(desc(abs(log2(NES))))
+    write.table(x = towrite, file = sprintf("%s/GSEA_%s_MiniversevsAllinCD4.txt", out_dir, gsub(":", "", set)), sep = "\t", row.names = F, quote = F)
+    
+    pdf(sprintf("%s/Volcano_GSEA_%s__MiniversevsAllinCD4.pdf", out_dir, gsub(":", "", set)), 15, 15, useDingbats = F)
+    sig <- fgseaRes %>%
+        filter(padj < 0.05) %>%
+        mutate(log10FDR = -log10(padj))
+    
+    # label: top 15 by FDR (or by |NES|)
+    lab <- sig %>%
+        arrange(padj) %>%
+        slice_head(n = 15)
+    
+    p = ggplot(sig, aes(x = NES, y = log10FDR)) +
+        geom_point(alpha = 0.8, size = 1.8) +
+        geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.3) +
+        geom_hline(yintercept = -log10(0.05), linetype = "dashed", linewidth = 0.3) +
+        ggrepel::geom_text_repel(data = lab, aes(label = pathway), size = 3, max.overlaps = Inf) +
+        theme_classic() +
+        labs(x = "NES", y = "-log10(FDR)", title = sprintf("Significant pathways (fgsea) %s", gsub(":", "", set)))
+    print(p)
+    
+    topN <- 20
+    plot_df <- fgseaRes %>%
+        filter(padj < 0.05) %>%
+        arrange(desc(NES)) %>%
+        slice_head(n = topN) %>%
+        bind_rows(
+            fgseaRes %>%
+                filter(padj < 0.05) %>%
+                arrange(NES) %>%
+                slice_head(n = topN)
+        ) %>%
+        mutate(pathway = factor(pathway, levels = unique(pathway[order(NES)])))
+    
+    p = ggplot(plot_df, aes(x = NES, y = pathway)) +
+        geom_point(aes(size = -log10(padj)), alpha = 0.85) +
+        theme_classic() +
+        labs(x = "NES", y = NULL, size = "-log10(FDR)",
+             title = sprintf("Top %s up and down pathways (FDR < 0.05) %s", topN, gsub(":", "", set)))
+    print(p)
+    
+    dev.off()
+    
+}
+
+
+```
+
+

@@ -1428,7 +1428,7 @@ df1 = df0%>%
   as.data.frame()
 
 mat_clust <- df1 %>%
-  select(annotation_level2, organ_simplified0, count) %>%
+  dplyr::select(annotation_level2, organ_simplified0, count) %>%
   pivot_wider(
     names_from  = organ_simplified0,
     values_from = count,
@@ -1448,7 +1448,7 @@ df1 = df0%>%
   as.data.frame()
 
 mat_org <- df1 %>%
-  select(organ_simplified0, annotation_level2, count) %>%
+  dplyr::select(organ_simplified0, annotation_level2, count) %>%
   pivot_wider(
     names_from  = annotation_level2,
     values_from = count,
@@ -1467,7 +1467,7 @@ df2 = df0%>%
   summarize(count = n(), .groups = "drop") %>%  # Count the number of cells in each group
   as.data.frame()
 mat_cond <- df2 %>%
-  select(condition_detailed_simplified, annotation_level2, count) %>%
+  dplyr::select(condition_detailed_simplified, annotation_level2, count) %>%
   pivot_wider(
     names_from  = annotation_level2,
     values_from = count,
@@ -1687,7 +1687,7 @@ PlotAlluvialHighlight <- function(
     )
 }
 
-#df3 from previous block
+#df3 from previous block (Alluvial Pliot 3 ways)
 df3_plot <- df3 %>%
   mutate(
     # is this alluvium part of the highlighted condition?
@@ -1733,6 +1733,38 @@ pal_alluv <- c(other = "grey80", CD8_cl10 = "red")
 # pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
 df3_plot %>% count(is_highlight)
 PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+highlight <- "CD8_cl4"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+pal_alluv <- c(other = "grey80", CD8_cl4 = "red")  
+# pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
+df3_plot %>% count(is_highlight)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+
+highlight <- "CD8_cl15"
+df3_plot <- df3 %>%
+  mutate(
+    # is this alluvium part of the highlighted condition?
+    is_highlight = annotation_level2 %in% highlight,
+    # fill key: either "other" (grey) or the level2 cluster name
+    fill_key = ifelse(is_highlight, as.character(annotation_level2), "other"),
+    # alpha: low for background, high for highlight
+    alpha_val = ifelse(is_highlight, 1, 0.25)
+  )
+pal_alluv <- c(other = "grey80", CD8_cl15 = "red")  
+# pal_alluv <- setNames(mypal, unique(df3_plot$fill_key))
+df3_plot %>% count(is_highlight)
+pdf(sprintf("%s/Alluvial_CD8cl15.pdf", out_dir), 15,5, useDingbats = F)
+PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv)
+dev.off()
 
 highlight <- "CD8_cl11"
 df3_plot <- df3 %>%
@@ -1788,7 +1820,11 @@ df3_plot <- df3 %>%
 df3_plot %>% count(fill_key)
 pal_alluv <- c(other = "grey80", LCMVarm = "red")  
 df3_plot %>% count(is_highlight)
+pdf(sprintf("%s/Alluvial_CD8cl4.pdf", out_dir), 15,5, useDingbats = F)
 PlotAlluvialHighlight(df3_plot, mypal_alluv = pal_alluv )
+dev.off()
+
+
 
 df3_plot <- df3 %>%
   mutate(

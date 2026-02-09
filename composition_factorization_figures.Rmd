@@ -368,6 +368,7 @@ df_long$variable = gsub("\\.prop", "",df_long$variable)
 which(is.na(df_long$variable))
 unique(df_long$variable)[!unique(df_long$variable) %in% levels(so$annotation_level2)]
 df_long$variable = factor(df_long$variable, levels = levels(so_orig$annotation_level2))
+df_long$annotation_level2 = df_long$variable
 
 # p1 = ggplot(df_long) + geom_point(aes(variable, value, colour =variable )) + 
 #     facet_grid(. ~ annotation_level1,
@@ -509,6 +510,71 @@ print(p + NoLegend() + NoGrid())
 
 dev.off()
 
+
+```
+
+Boxplot with outliers - Summary scatterplot
+```{r}
+##Boxplot with outliers
+pdf(sprintf("%s/boxplot_sample_sl1.pdf",out_dir), width = 15, 5,useDingbats = F)
+p1 = ggplot(df_long, aes(x = variable, y = value, alpha = 0.5, fill = annotation_level1, color = annotation_level1)) +
+geom_boxplot(
+  fill = "grey90",
+  color = "grey50",
+  outlier.colour = "red",
+  outlier.size = 1.2
+) 
+p1+ facet_grid(. ~ annotation_level1,        # your small‐multiples layout
+             scales = "free_x",
+             space  = "free_x") +
+  theme_minimal() +
+  scale_color_manual(values = mypal_level2) +
+    scale_fill_manual(values = mypal_level1) +
+  theme(
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    axis.text.x       = element_text(angle = 45, hjust = 1),
+    legend.position   = "none"             # hide legend if you don't need it
+  ) +
+  labs(
+    x     = NULL,
+    y     = "Proportion",
+    fill  = "Population"
+  ) + NoGrid()
+
+dev.off()
+
+##Summary scatterplot
+library(dplyr)
+cluster_summary <- df_long %>%
+  group_by(annotation_level2) %>%
+  mutate(mean_prop = mean(value, na.rm = TRUE)) %>%
+  summarise(
+    mean_prop = first(mean_prop),
+    prop_samples_gt5x_mean = mean(value > 5 * mean_prop, na.rm = TRUE),
+    .groups = "drop"
+  )
+cluster_map <- df_long %>% distinct(annotation_level2, annotation_level1)
+cluster_summary <- cluster_summary %>%
+  left_join(cluster_map, by = "annotation_level2")
+
+pdf(sprintf("%s/scatterplot_meanprop_outlier.pdf",out_dir), width = 10, 10,useDingbats = F)
+p1 = ggplot(cluster_summary,
+       aes(mean_prop, prop_samples_gt5x_mean,
+           color = annotation_level1)) +
+  geom_point(size = 2, alpha = 0.8)  +
+  scale_color_manual(values = mypal_level1) +
+  # scale_x_continuous(trans = "log10") +
+  theme_bw() +
+  NoGrid()
+
+p1
+p1 +
+    ggrepel::geom_text_repel(
+    data = cluster_summary,
+    aes(label = annotation_level2),
+    size = 3
+  )
+dev.off()
 
 ```
 

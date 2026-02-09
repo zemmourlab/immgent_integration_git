@@ -470,4 +470,54 @@ dev.off()
 
 ```
 
+**QC ADT Leon**
+```{r}
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(RColorBrewer)
+
+# read the attached table
+qc <- readr::read_csv("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CITEseq_QC/citeseq_qc_20260108.csv")
+
+# --- define the same kind of x-axes used in your PDF-style plots ---
+# Protein_Scale: dynamic range proxy on protein side (works well in practice)
+qc <- qc %>%
+  mutate(
+    Protein_Scale = log10(protein_max - protein_min),
+    Protein_RNA_scale = log10(RNA_mean - protein_min)  # (often negative)
+  )
+
+# traffic-light colors
+pal_class <- c(good = "chartreuse3", intermediate = "orange2", poor = "grey")
+
+# 1) Correlation vs Protein_Scale (like page 1)
+p1 <- ggplot(qc, aes(x = Protein_Scale, y = spearman)) +
+  geom_point(aes(color = classification), size = 1, alpha = 0.9) +
+  ggrepel::geom_text_repel(
+    aes(label = protein, color = classification),
+    size = 2,
+    max.overlaps = 100,
+    box.padding = 0.35,
+    seed = 1
+  ) +
+  scale_color_manual(values = pal_class) +
+  labs(
+    title = "",
+    x = "log10(protein_max - protein_min)",
+    y = "RNA - protein spearman correlation"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+p1 + NoGrid()
+
+
+pdf("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CITEseq_QC/RNA_prot_cor.pdf", 8, 7, useDingbats = F)
+p1 + NoGrid()
+dev.off()
+
+
+```
+
 

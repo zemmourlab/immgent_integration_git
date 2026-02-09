@@ -103,6 +103,8 @@ https://willwerscheid.github.io/flashier/articles/flashier_intro.html
 so_orig = readRDS(file = "igt1_96_withtotalvi20250710_clean.Rds")
 so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 
+so_orig = readRDS(file = "igt1_96_withtotalvi20260107_clean.Rds")
+
 
 sampled_cellID = read.table("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_sampledcells200K.csv", header = F, as.is = T)[,1]
 # sampled_cellID %>% write.table("igt1_96_sampledcells200K.csv", quote = F, row.names = F, col.names = F, sep = ",")
@@ -279,6 +281,44 @@ mdata_orig = data.frame(so@meta.data,L1)
 ```{r}
 
 plot(L1[,1], L1[,162], pch = ".", log = "x"  )
+```
+
+Average topic per annotation_level2
+```{r}
+fit$pve > 10^-4
+mdata = data.frame(so@meta.data %>% select(annotation_level2),L1[,fit$pve > 10^-4])
+
+library(dplyr)
+library(tibble)
+library(pheatmap)
+
+# 1) Mean of each factor per cluster
+means_df <- mdata %>%
+  group_by(annotation_level2) %>%
+  summarise(across(starts_with("F"), ~mean(.x, na.rm = TRUE)), .groups = "drop")
+
+# 2) Convert to matrix: rows = factors, cols = clusters
+mat <- means_df %>%
+  column_to_rownames("annotation_level2") %>%  # now rows are clusters
+  as.matrix()
+
+mat <- t(mat)  # now rows = F1..Fn, cols = clusters
+
+# 3) Heatmap
+pheatmap(
+  mat,
+  scale = "row",
+  cluster_rows = F,
+  cluster_cols = F,
+  border_color = NA
+)
+
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+mat_centered <- sweep(mat, 1, rowMeans(mat, na.rm = TRUE), "-")
+pheatmap(mat_centered, cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = F, main = "fit2$coefficients fit_flash$pve > 10^-4 | rowSums(abs(fit2$coefficients) > 0.5) > 1")
+
+
+
 ```
 
 
@@ -1278,14 +1318,14 @@ MyDotPlot(
 
 **Limma with annotation level2**
 ~ 0 + annotation_level2 + IGT
-
 ```{r}
-prefix3 = "limma/20250323_level2_IGT"
+# prefix3 = "limma/20250323_level2_IGT"
+prefix3 = "limma/20260107_level2_IGT"
 ensure_directory(sprintf("%s/%s/%s", prefix, prefix2, prefix3))
 
 mdata = mdata_orig
-mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))])
-mdata$annotation_level2 =  factor(mdata$annotation_level2, levels = names(which(!table( mdata$annotation_level2)==0)))
+mdata$IGT = factor(mdata$IGT, levels = unique(mdata$IGT)[order(unique(mdata$igt_number))])  #unique(mdata$IGT)[order(extract_numeric(unique(mdata$IGT)))]
+mdata$annotation_level2 =  factor(mdata$annotation_level2, levels = intersect(levels(mdata$annotation_level2), unique(mdata$annotation_level2))) #names(which(!table( mdata$annotation_level2)==0))
 # mdata$annotation_level2 = factor(mdata$annotation_level2)
 
 # Create the design matrix for the linear model
@@ -1307,8 +1347,8 @@ contrasts = c()
 namescontrasts = c()
 for (cl in levels(metadata$annotation_level2)) {
     print(cl)
-    group1_filter <- expr(annotation_level2 == cl)
-    group2_filter <- expr(!(annotation_level2 %in% cl))
+    group1_filter <- metadata$annotation_level2 == cl #expr(annotation_level2 == cl)
+    group2_filter <- metadata$annotation_level2 != cl #expr(!(annotation_level2 %in% cl))
     groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2")
     nmecontrast = sprintf("%s_vs_All", cl)
     # nmecontrast = CreateComparisonName(group1_filter, group2_filter)
@@ -1331,8 +1371,8 @@ colnames(cont.matrix) = namescontrasts
 fit2 = contrasts.fit(fit, cont.matrix)
 message("eBayes...")
 fit2 = eBayes(fit2, trend = TRUE, robust = TRUE)
-saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
-# fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+# saveRDS(fit2, sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
+fit2 = readRDS(sprintf("%s/%s/%s/fit_contrast.Rds", prefix, prefix2, prefix3))
 
 #write coefficients
 results = topTable(fit2, number = Inf, sort.by = "none", adjust.method = "BH") #same as fit2$coefficients
@@ -1354,14 +1394,23 @@ pheatmap(fit2$coefficients, cluster_rows = F, cluster_cols = F, breaks = seq(-1,
 pheatmap(fit2$coefficients, cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix, main = "fit2$coefficients")
 dev.off()
 
-pdf(sprintf("%s/%s/%s/heatmap_filtered.pdf", prefix, prefix2, prefix3), 20,10, useDingbats = F)
-sub = fit_flash$pve > 10^-4 | rowSums(abs(fit2$coefficients) > 0.5) >= 1
-pheatmap(fit2$coefficients[sub,], cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix[sub,], main = "fit2$coefficients fit_flash$pve > 10^-4 | rowSums(abs(fit2$coefficients) > 0.5) > 1")
-pheatmap(fit2$coefficients[sub,], cluster_rows = T, cluster_cols = T, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, display_numbers = labels_matrix[sub,], main = "fit2$coefficients fit_flash$pve > 10^-4 | rowSums(abs(fit2$coefficients) > 0.5) > 1")
+pdf(sprintf("%s/%s/%s/heatmap_filtered2.pdf", prefix, prefix2, prefix3), 20,10, useDingbats = F)
+ann_cols_df = so_orig@meta.data %>% count(annotation_level2, annotation_level1, annotation_level2_group) 
+ann_cols_df$n = NULL
+ann_cols_df$annotation_level2 = NULL
+rownames(ann_cols_df) = colnames(fit2$coefficients)
+ann_palettes <- list(
+  annotation_level1 = mypal_level1,
+  annotation_level2_group = c(resting = "blue", activated = "red", other = "black", proliferating = "grey", miniverse = "white")
+)
+
+sub_col = !grepl("thymocyte", colnames(fit2$coefficients))
+# sub = fit_flash$pve > 10^-4 | rowSums(abs(fit2$coefficients[,sub_col]) > 1) >= 1
+sub = rowSums(abs(fit2$coefficients[,sub_col]) > 0.5) >= 1 | rownames(fit2$coefficients) == "F57"
+ColorRamp = rev(colorRampPalette(brewer.pal(11, "PuOr"))(101))
+pheatmap(fit2$coefficients[sub,sub_col], cluster_rows = F, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, main = "rowSums(abs(fit2$coefficients) > 0.5) > 1", annotation_col = ann_cols_df, annotation_colors = ann_palettes) #display_numbers = labels_matrix[sub,]
+pheatmap(fit2$coefficients[sub,sub_col], cluster_rows = T, cluster_cols = F, breaks = seq(-1,1,length.out = length(ColorRamp)+1), col = ColorRamp, main = "rowSums(abs(fit2$coefficients) > 0.5) > 1", annotation_col = ann_cols_df, annotation_colors = ann_palettes) #display_numbers = labels_matrix[sub,]
 dev.off()
-
-fit$pve
-
 
 #Write Tables and Volcanos
 tt_list = list()

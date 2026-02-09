@@ -1,0 +1,919 @@
+---
+title: "clustering_robustness"
+output: html_document
+date: "2026-01-13"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+R
+```
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/misc_plots" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/misc_plots"
+
+```
+
+
+**Most up-to-date data**
+on Midway
+```{r}
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+
+
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+# so_orig = readRDS("igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
+# so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
+# so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+so_orig = readRDS("igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+*S4A*
+Clusters by IGT
+```{r}
+library(dplyr)
+library(rlang)
+
+CompositionOfEachCluster <- function(meta = so@meta.data, cluster_col = "annotation_level2", sample_col  = "IGT") {
+    clust  <- sym(cluster_col)
+    sample <- sym(sample_col)
+    
+    # 1) counts per cluster × sample
+    comp <- meta %>%
+        filter(!is.na(!!clust), !is.na(!!sample)) %>%
+        count(!!clust, !!sample, name = "n") %>%
+        # 2) normalize within sample (like your tmp2)
+        group_by(!!sample) %>%
+        mutate(p_in_sample = n / sum(n)) %>%
+        ungroup() %>%
+        # 3) normalize within cluster (like your tmp3)
+        group_by(!!clust) %>%
+        mutate(p_weighted = p_in_sample / sum(p_in_sample)) %>%
+        ungroup()
+    
+    # 4) total n per cluster + label "cluster (n=XX)"
+    cluster_sizes <- comp %>%
+        group_by(!!clust) %>%
+        summarise(n_total = sum(n), .groups = "drop") %>%
+        mutate(
+            clust_chr = as.character(!!clust),
+            label = paste0(clust_chr, " (n=", n_total, ")")
+        ) %>%
+        select(-clust_chr)
+    
+    # 5) join labels back & make label a factor in a stable order
+    comp_labeled <- comp %>%
+        left_join(cluster_sizes, by = rlang::as_name(clust)) %>%
+        mutate(label = factor(label, levels = cluster_sizes$label))
+    
+    return(comp_labeled)
+}
+
+comp_df = CompositionOfEachCluster(so@meta.data,
+                                    cluster_col = "annotation_level2",
+                                    sample_col  = "IGT")
+
+head(comp_df)
+comp_df$annotation_level1 = so_orig$annotation_level1[match(comp_df$annotation_level2, so_orig$annotation_level2)]
+comp_df$annotation_level1 = factor(comp_df$annotation_level1, levels = levels(so$annotation_level1))
+
+p <- ggplot(comp_df) +
+    geom_bar(
+        aes(x = label, y = p_weighted, fill = IGT),
+        stat = "identity"
+    ) +
+    scale_fill_manual(values = mypal_igt) +
+    theme_bw() +
+    ggtitle("IGT composition in each cluster") +
+    theme(
+        axis.text.x = element_text(angle = 75, vjust = 0.5, size = 10),
+        axis.title.x = element_blank()
+    )
+
+
+pdf(sprintf("%s/Barplot_Level2ByIGT.pdf", out_dir), 15,5, useDingbats = F)
+p + facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    ) + NoGrid() + NoLegend()
+dev.off()
+```
+
+*S4B*
+Clusters distribution by IGT only in spleen standard --> see later in the code: "Boxplot_Level2ByIGT_spleencontrols.pdf"
+```{r}
+```
+
+*S3B: Conservation of level2 in each dataset - RNA space*
+classic silhouette, filter cells in each IGT with at least 10 cell per level2. 
+```{r}
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "RNA"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i) 
+    tmp = so[,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "LogNormalize", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 30, verbose = F) #%>% FindNeighbors(dims = 1:30, verbose = F) %>% RunUMAP(dims = 1:30, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        sil_post = silhouette(cl, dist = reduc.dist)
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+saveRDS(sil_summary_list, file = "RobustnessLevel2RNASpace_Silhouette_IGT.Rds")
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p_list = list()
+for(j in c("mean_sil_width", "median_sil_width", "percentage_positive")) {
+    p_list[[j]] = ggplot(sil_summary_merged) + #%>% filter(total > 10
+    aes(x = annotation_level2, y = !!sym(j)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(j) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+}
+
+pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+print(p_list[[1]])
+print(p_list[[1]] + NoLegend())
+print(p_list[[2]] + NoLegend())
+print(p_list[[3]] + NoLegend())
+dev.off()
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+
+*S3C: Conservation of level2 in each dataset - Protein/ADT space*
+classic silhouette, filter cells in each IGT with at least 10 cell per level2. 
+```{r}
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "ADT"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+#Select only good ADT markers
+markers = so[["ADT"]]@meta.features %>% filter(IGT1only == F & classification %in% c("good", "intermediate")) %>% row.names()
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i)
+    tmp = so[markers,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "CLR", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 50, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 10, verbose = F) #%>% FindNeighbors(dims = 1:10, verbose = F) %>% RunUMAP(dims = 1:10, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        sil_post = silhouette(cl, dist = reduc.dist)
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p_list = list()
+for(j in c("mean_sil_width", "median_sil_width", "percentage_positive")) {
+    p_list[[j]] = ggplot(sil_summary_merged) + #%>% filter(total > 10
+    aes(x = annotation_level2, y = !!sym(j)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(j) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+}
+
+pdf(sprintf("%s/Boxplot_Level2ProteinSpace.pdf", out_dir), 25,6, useDingbats = F)
+print(p_list[[1]])
+print(p_list[[1]] + NoLegend())
+print(p_list[[2]])
+print(p_list[[3]])
+dev.off()
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+colon IGT20, IGT24 and IGT27
+```{r}
+igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220812_exp_id_13_ColonSI/IGT20/dataset_clean.Rds')
+tmp = so_orig
+tmp$RNA_clusters = NA
+tmp$RNA_clusters = as.character(igt$RNA_clusters[match(colnames(tmp), colnames(igt))])
+pdf(sprintf("%s/IGT20_MDE_immgenTclusters.pdf", out_dir), 5,5, useDingbats = F)
+mypal_batch = setNames(mypal, unique(igt$RNA_clusters))
+mypal_batch = mypal_batch[!is.na(names(mypal_batch))]
+igt@meta.data$annotation_level2 = so_orig$annotation_level2[match(colnames(igt), colnames(so_orig))]
+igt@meta.data$annotation_level1 = so_orig$annotation_level1[match(colnames(igt), colnames(so_orig))]
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("Colon", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 50))
+p = DimPlot(igt_colon, reduction = "umap_rna", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("Colon", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("Colon", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 50))
+p = DimPlot(igt_colon, reduction = "umap_adt", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+# tmp2 = data.frame(dim1 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 1], dim2 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 2])
+# bkrg = ggplot(tmp2) + scattermore::geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = c(512,512))
+p = DimPlot(tmp[,colnames(igt_colon)], reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+MyDimPlotHighlight(tmp, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(igt)[grepl("Colon", igt$sample_name)], highlight_column_name = "annotation_level2",mycols = mypal_level2, print_plot1 = F, print_plot2 = T, labelclusters = T )
+dev.off()
+
+igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20221019_exp_id_21_Iliev/IGT27/dataset_clean.Rds')
+tmp = so_orig
+tmp$RNA_clusters = NA
+tmp$RNA_clusters = as.character(igt$RNA_clusters[match(colnames(tmp), colnames(igt))])
+pdf(sprintf("%s/IGT27_MDE_immgenTclusters.pdf", out_dir), 5,5, useDingbats = F)
+mypal_batch = setNames(mypal, unique(igt$RNA_clusters))
+mypal_batch = mypal_batch[!is.na(names(mypal_batch))]
+igt@meta.data$annotation_level2 = so_orig$annotation_level2[match(colnames(igt), colnames(so_orig))]
+igt@meta.data$annotation_level1 = so_orig$annotation_level1[match(colnames(igt), colnames(so_orig))]
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_rna", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("No_colon_M", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 10))
+p = DimPlot(igt_colon, reduction = "umap_rna", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "RNA_clusters") + scale_color_manual(values = mypal_batch) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level1") + scale_color_manual(values = mypal_level1) + NoGrid()
+DimPlot(igt[,grepl("No_colon_M", igt$sample_name)], reduction = "umap_adt", group.by = "annotation_level2") + scale_color_manual(values = mypal_level2) + NoGrid()
+igt_colon = igt[,grepl("No_colon_M", igt$sample_name)]
+big_clusters = names(which(table(igt_colon$annotation_level2) >= 10))
+p = DimPlot(igt_colon, reduction = "umap_adt", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+# tmp2 = data.frame(dim1 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 1], dim2 = tmp[["mde2_totalvi_20241006"]]@cell.embeddings[, 2])
+# bkrg = ggplot(tmp2) + scattermore::geom_scattermore(aes(dim1, dim2), color = "grey50", pointsize = 0.5, alpha = 0.5, pixels = c(512,512))
+p = DimPlot(tmp[,colnames(igt_colon)], reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", label = FALSE) + scale_color_manual(values = mypal_level2) + NoGrid()
+p + NoLegend()
+LabelClusters(p, id = "annotation_level2", clusters = big_clusters, size = 3, repel = TRUE, box = T) + NoLegend()
+
+MyDimPlotHighlight(tmp, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = colnames(igt)[grepl("No_colon_M", igt$sample_name)], highlight_column_name = "annotation_level2",mycols = mypal_level2, print_plot1 = F, print_plot2 = T, labelclusters = T )
+dev.off()
+
+```
+
+(silhouette_width where the distance of each cell to its cluster medoid is compared to the closest medioid of cluysters it doesn't belong to. Pretty much the same as normal silhouette, because similar definition... SO STICK TO THE SILHOUETTE!)
+only focused on cells in an IGT with at least 10 cells in a level2 cluster
+```{r}
+silhouette_medoid_from_dist <- function(d, clusters) {
+  # d: distance matrix (n x n) or 'dist' object
+  # clusters: factor/character vector of cluster labels (length n)
+  
+  if (inherits(d, "dist")) {
+    d <- as.matrix(d)
+  } else {
+    d <- as.matrix(d)
+  }
+  n <- nrow(d)
+  if (n != ncol(d)) stop("d must be a square distance matrix")
+  
+  if (length(clusters) != n) stop("length(clusters) must match nrow(d)")
+  clusters <- as.factor(clusters)
+  k_levels <- levels(clusters)
+  
+  # 1. Find medoid index for each cluster
+  medoids <- setNames(integer(length(k_levels)), k_levels)
+  for (cl in k_levels) {
+    idx <- which(clusters == cl)
+    if (length(idx) == 1L) {
+      medoids[cl] <- idx
+    } else {
+      # medoid = argmin_j sum_k d[j,k] within cluster
+      subD <- d[idx, idx, drop = FALSE]
+      tot <- rowSums(subD)
+      medoids[cl] <- idx[which.min(tot)]
+    }
+  }
+  
+  a <- numeric(n)
+  b <- numeric(n)
+  s <- numeric(n)
+  
+  for (i in seq_len(n)) {
+    ci <- clusters[i]
+    # a(i): distance to own cluster medoid
+    a[i] <- d[i, medoids[as.character(ci)]]
+    
+    # b(i): min distance to medoids of other clusters
+    other_cls <- k_levels[k_levels != ci]
+    if (length(other_cls) == 0L) {
+      b[i] <- NA
+      s[i] <- 0
+      next
+    }
+    b[i] <- min(d[i, medoids[other_cls]])
+    
+    denom <- max(a[i], b[i])
+    if (is.na(denom) || denom == 0) {
+      s[i] <- 0
+    } else {
+      s[i] <- (b[i] - a[i]) / denom
+    }
+  }
+  
+  out <- data.frame(
+    cluster = clusters,
+    a = a,
+    b = b,
+    s = s,
+    stringsAsFactors = FALSE
+  )
+  rownames(out) <- rownames(d)
+  out
+}
+
+
+# set.seed(1)
+# X <- rbind(
+#   matrix(rnorm(50, mean = 0),  ncol = 2),
+#   matrix(rnorm(50, mean = 3),  ncol = 2),
+#   matrix(rnorm(50, mean = -3), ncol = 2)
+# )
+# colnames(X) <- c("x1", "x2")
+# cl <- factor(rep(c("A", "B", "C"), each = 25))
+# text(X[,1], X[,2], labels =  cl)
+# sc <- silhouette_centroid(X, cl)
+# head(sc)
+# sc %>% group_by(cluster) %>% summarize(mean(s))
+
+
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "ADT"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+#Select only good ADT markers
+markers = so[["ADT"]]@meta.features %>% filter(IGT1only == F & classification %in% c("good", "intermediate")) %>% row.names()
+
+sil_summary_list = list()
+for (i in unique(so$IGT)) {
+    print(i)
+    tmp = so[markers,so$IGT == i]
+    subcl = tmp@meta.data %>% count(annotation_level2) %>% filter(n>10) %>% pull(annotation_level2) %>% as.character()
+    if (length(subcl) > 1) {
+        tmp = tmp[,tmp$annotation_level2 %in% subcl]
+        tmp = tmp %>% 
+            NormalizeData(normalization.method = "CLR", verbose = F) %>%
+            FindVariableFeatures(selection.method = "vst", nfeatures = 50, verbose = F) %>%
+            ScaleData(features = VariableFeatures(.), verbose = F) %>%    
+            RunPCA(features = VariableFeatures(.), npcs = 10, verbose = F) #%>% FindNeighbors(dims = 1:10, verbose = F) %>% RunUMAP(dims = 1:10, seed.use = 123, verbose = T)
+        # DimPlot(tmp, reduction = "umap", group.by = "annotation_level2", label = T) + scale_color_manual(values = mypal_level2) + NoLegend()
+        
+        # message("Calculating silhouette post integration...")
+        reduc.dist = dist(tmp[["pca"]]@cell.embeddings)
+        cl = as.integer(tmp[["level2_int"]][,1])
+        # sil_post = silhouette(cl, dist = reduc.dist)
+        sil_post = silhouette_medoid_from_dist(d = reduc.dist, clusters = cl)
+        sil_post$sil_width = sil_post$s
+        sil_summary = as.data.frame(sil_post) %>% 
+            group_by(cluster) %>% 
+            summarise(mean_sil_width = mean(sil_width),
+                      median_sil_width = median(sil_width),
+                      total = n(),  # Count total observations in each cluster
+                      positive_count = sum(sil_width > 0),  # Count negative silhouette widths
+                      percentage_positive = (positive_count / total) * 100)     %>%  # Calculate percentage) 
+            as.data.frame()
+        # sil_summary$cluster == dict_l2$level2_int[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$annotation_level2 = dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+        sil_summary$IGT = i
+        sil_summary_list[[i]] = sil_summary 
+    }
+    
+}
+
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p = ggplot(sil_summary_merged %>% filter(total > 10),
+       aes(x = annotation_level2, y = median_sil_width)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+p
+# pdf(sprintf("%s/Boxplot_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+
+```
+
+Cluster Separability in RNA Space
+```{r}
+cluster_separability_centroid <- function(emb, clusters, b_mode = c("mean", "min")) {
+  # emb: matrix (n_cells x n_dims), e.g. PCA embeddings
+  # clusters: vector length n_cells (cluster labels, numeric or character)
+  # b_mode: "mean" compares to all other clusters (recommended)
+  #         "min" compares to nearest other cluster (classic silhouette-like)
+  b_mode <- match.arg(b_mode)
+
+  emb <- as.matrix(emb)
+  if (nrow(emb) != length(clusters)) stop("length(clusters) must match nrow(emb)")
+  clusters <- as.factor(clusters)
+  levs <- levels(clusters)
+
+  # centroids per cluster
+  centroids <- vapply(levs, function(cl) {
+    colMeans(emb[clusters == cl, , drop = FALSE])
+  }, FUN.VALUE = numeric(ncol(emb)))
+  centroids <- t(centroids)  # K x D
+  rownames(centroids) <- levs
+
+  # a(C): mean distance of member cells to own centroid
+  a <- vapply(levs, function(cl) {
+    X <- emb[clusters == cl, , drop = FALSE]
+    mu <- centroids[cl, , drop = FALSE]
+    # d <- sqrt(rowSums((X - mu)^2))
+    d <- sqrt(rowSums((t(apply(X, 1, function(r) {r - mu})))^2)) 
+    mean(d)
+  }, FUN.VALUE = numeric(1))
+  names(a) <- levs
+
+  # centroid-to-centroid distances
+  Dcc <- as.matrix(dist(centroids))
+
+  # b(C): mean (or min) distance from centroid to other centroids
+  b <- vapply(levs, function(cl) {
+    others <- setdiff(levs, cl)
+    if (length(others) == 0) return(NA_real_)
+    if (b_mode == "mean") mean(Dcc[cl, others])
+    else min(Dcc[cl, others])
+  }, FUN.VALUE = numeric(1))
+  names(b) <- levs
+
+  s <- (b - a) / pmax(a, b)
+  data.frame(
+    cluster = levs,
+    a = unname(a),
+    b = unname(b),
+    s = unname(s),
+    stringsAsFactors = FALSE
+  )
+}
+
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "RNA"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+
+sil_summary_list <- list()
+
+for (i in unique(so$IGT)) {
+  message(i)
+  tmp <- so[, so$IGT == i]
+
+  subcl <- tmp@meta.data %>%
+    dplyr::count(annotation_level2) %>%
+    dplyr::filter(n > 10) %>%
+    dplyr::pull(annotation_level2) %>%
+    as.character()
+
+  if (length(subcl) > 1) {
+    tmp <- tmp[, tmp$annotation_level2 %in% subcl]
+
+    tmp <- tmp %>%
+        NormalizeData(normalization.method = "LogNormalize", scale.factor = 1e4, verbose = F) %>%
+        FindVariableFeatures(selection.method = "vst", nfeatures = 2000, verbose = F) %>%
+        ScaleData(features = VariableFeatures(.), verbose = F) %>%     # note the "."
+        RunPCA(features = VariableFeatures(.), npcs = 50, verbose = F, reduction.name = "pca")
+
+    # --- NEW: cluster-level separability on PCA embeddings ---
+    emb <- Embeddings(tmp, "pca")[, 1:10, drop = FALSE]
+    cl  <- as.integer(tmp[["level2_int"]][, 1])
+
+    cl_sep <- cluster_separability_centroid(emb = emb, clusters = cl, b_mode = "mean")
+    # cl_sep has one row per cluster, with s = cluster separability score
+
+    sil_summary <- cl_sep %>% as.data.frame()
+
+    sil_summary$annotation_level2 <- dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+    sil_summary$IGT <- i
+    sil_summary_list[[i]] <- sil_summary
+  }
+}
+
+# saveRDS(sil_summary_list, file = "ClusterSeparation_RNA_IGT.Rds")
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p = ggplot(sil_summary_merged,
+       aes(x = annotation_level2, y = s)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.3) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+
+pdf(sprintf("%s/Boxplot_ClusterSeparability_Level2RNASpace.pdf", out_dir), 25,6, useDingbats = F)
+p
+dev.off()
+
+mean(sil_summary_merged$s <0)
+
+
+```
+
+
+Cluster Separability in Protein Space
+```{r}
+library(cluster)
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus", cite_seq == T) %>% row.names()]
+so$level2_int = as.integer(so[["annotation_level2"]][,1])
+DefaultAssay(so) = "ADT"
+
+dict_l2 = so@meta.data %>% count(annotation_level2, level2_int)
+#Select only good ADT markers
+markers = so[["ADT"]]@meta.features %>% filter(IGT1only == F & classification %in% c("good", "intermediate")) %>% row.names()
+
+sil_summary_list <- list()
+
+for (i in unique(so$IGT)) {
+  message(i)
+  tmp <- so[markers, so$IGT == i]
+
+  subcl <- tmp@meta.data %>%
+    dplyr::count(annotation_level2) %>%
+    dplyr::filter(n > 10) %>%
+    dplyr::pull(annotation_level2) %>%
+    as.character()
+
+  if (length(subcl) > 1) {
+    tmp <- tmp[, tmp$annotation_level2 %in% subcl]
+
+    tmp <- tmp %>%
+      NormalizeData(normalization.method = "CLR", verbose = FALSE) %>%
+      FindVariableFeatures(selection.method = "vst", nfeatures = 50, verbose = FALSE) %>%
+      ScaleData(features = VariableFeatures(.), verbose = FALSE) %>%
+      RunPCA(features = VariableFeatures(.), npcs = 10, verbose = FALSE)
+
+    # --- NEW: cluster-level separability on PCA embeddings ---
+    emb <- Embeddings(tmp, "pca")[, 1:10, drop = FALSE]
+    cl  <- as.integer(tmp[["level2_int"]][, 1])
+
+    cl_sep <- cluster_separability_centroid(emb = emb, clusters = cl, b_mode = "mean")
+    # cl_sep has one row per cluster, with s = cluster separability score
+
+    sil_summary <- cl_sep %>% as.data.frame()
+    # sil_summary <- cl_sep %>%
+    #   dplyr::mutate(
+    #     mean_sil_width = s,          # keep your naming convention
+    #     median_sil_width = s,        # same value at cluster level
+    #     total = as.integer(table(clusters = cl)[as.character(cluster)]), # cluster size
+    #     positive_count = ifelse(s > 0, total, 0),
+    #     percentage_positive = ifelse(total > 0, 100 * positive_count / total, NA_real_)
+    #   ) %>%
+    #   dplyr::select(cluster, mean_sil_width, median_sil_width, total, positive_count, percentage_positive) %>%
+    #   as.data.frame()
+
+    sil_summary$annotation_level2 <- dict_l2$annotation_level2[match(sil_summary$cluster, dict_l2$level2_int)]
+    sil_summary$IGT <- i
+    sil_summary_list[[i]] <- sil_summary
+  }
+}
+
+# saveRDS(sil_summary_list, file = "ClusterSeparation_ADT_IGT.Rds")
+
+sil_summary_merged = Reduce(rbind, sil_summary_list)
+
+dict_l1 = so@meta.data %>% count(annotation_level1, annotation_level2)
+sil_summary_merged$annotation_level1 = dict_l1$annotation_level1[match(sil_summary_merged$annotation_level2, dict_l1$annotation_level2)]
+    
+
+sil_summary_merged$annotation_level2 <- factor(
+    sil_summary_merged$annotation_level2,
+    levels = levels(so$annotation_level2)
+)
+
+p = ggplot(sil_summary_merged,
+       aes(x = annotation_level2, y = s)) +
+    geom_jitter(aes(color = IGT),
+                width = 0.15, height = 0,
+                size = 1.8, alpha = 0.9) +
+    geom_boxplot(outlier.shape = NA,
+                 fill = "grey90",
+                 colour = "black",
+                 width = 0.6) +
+    scale_color_manual(values = mypal_igt) +
+    theme_bw() +
+    # labs(
+    #     x = "Cluster (annotation_level2)",
+    #     y = "Median silhouette width",
+    #     color = "IGT"
+    # ) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.3) +
+    facet_grid(
+        . ~ annotation_level1,
+        scales = "free_x",
+        space  = "free_x"
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        panel.grid = element_blank(),
+        strip.text = element_text(face = "bold")
+    )
+
+pdf(sprintf("%s/Boxplot_ClusterSeparability_Level2ADTSpace.pdf", out_dir), 25,6, useDingbats = F)
+p
+dev.off()
+
+mean(sil_summary_merged$s <0)
+
+
+
+```
+
+
+
+
