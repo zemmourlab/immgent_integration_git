@@ -2490,9 +2490,14 @@ write.table(x = annot_summary, file = "/Users/david/Library/CloudStorage/GoogleD
 
 Write GSE297097 annotation table for IGT 1-104
 ```{r}
-
 annot = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/GSE297097_annotation_table_20260101_IGT1_104_cleaned.csv', header = T, sep = ",")
 
+#Fix unclear and thymocytes
+annot %>% filter(level1 %in% c("thymocyte", "unclear")) %>% count(level1, level2)
+annot$level2[annot$level1 == "unclear" & annot$level2 == "thymocyte"] = "unclear_thymocyte"
+annot %>% filter(level1 %in% c("thymocyte", "unclear")) %>% count(level1, level2)
+
+#update annotation
 annot_updated = annot
 annot_updated$level2.v1 = annot_updated$level2
 m = match(annot_updated$level2.v1, key$old)
@@ -2502,7 +2507,9 @@ annot_updated$level2[!is.na(m)] = key$new[m[!is.na(m)]]
 annot_updated %>% count(level2.v1, level2) %>% arrange(level2)
 any(is.na(annot_updated$level2))
 
-write.table(annot_updated, file = 'GSE297097_annotation_table_20260206_IGT1_104_cleaned.csv', sep = ",", quote = F, row.names = F, col.names = T)
+annot_updated %>% count(level1, level2)
+
+write.table(annot_updated, file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/GSE297097_annotation_table_20260206_IGT1_104_cleaned.csv', sep = ",", quote = F, row.names = F, col.names = T)
 
 
 ```

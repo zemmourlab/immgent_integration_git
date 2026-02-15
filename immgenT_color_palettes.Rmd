@@ -346,14 +346,32 @@ prefix = "20260206"
 
 mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20260109", "20260109"))
 mypal_list_orig = mypal_list
+mypal_list_orig[["level2"]]
+
+# mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20250714", "20250714"))
+# mypal_list_orig2 = mypal_list
+# mypal_list_orig2[["level2"]]
+# mypal_list_orig[["level2"]][grepl("CD4", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("CD4", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("CD8", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("CD8", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("CD8aa", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("CD8aa", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("gdT", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("gdT", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("Tz", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("nonconv", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("DN", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("DN", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][grepl("Treg", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("Treg", names(mypal_list_orig2[["level2"]]) )]
+# mypal_list_orig[["level2"]][mypal_list_orig[["level2"]] == "Treg_cl8"] = "chartreuse2"
 
 annotation_table_conversion = read.table('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/annotation_table_20260201_conversion.csv', header = T, sep = ",")
 key = annotation_table_conversion[,c(1,2)] %>% distinct()
 colnames(key) = c("old", "new")
 
 names(mypal_list[["level2"]]) = key$new[match(names(mypal_list[["level2"]]), key$old)]
+mypal_list[["level2"]] = mypal_list[["level2"]][na.omit(names(mypal_list[["level2"]]))]
+mypal_list[["level2"]]  = mypal_list[["level2"]][unique(names(mypal_list[["level2"]]))]
 mypal_list[["level2"]][grepl("\\.P", names(mypal_list[["level2"]]))] = "black"
 mypal_list[["level2"]][grepl("\\.wM", names(mypal_list[["level2"]]))] = "grey"
+mypal_list[["level2"]][names(mypal_list[["level2"]]) == "Treg.E"] = "chartreuse2"
+mypal_list[["level2"]][names(mypal_list[["level2"]]) == "CD4.H"] = "darkseagreen2"
+mypal_list[["level2"]][names(mypal_list[["level2"]])== "CD4.Q"] = "darkorange"
 
 mypal_list[["CD8"]] = NULL
 mypal_list[["CD4"]] = NULL

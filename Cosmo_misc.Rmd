@@ -90,8 +90,9 @@ on Midway
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250710_clean.Rds") 
 # so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 # so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -105,7 +106,9 @@ setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
 # so_orig = readRDS("igt1_96_withtotalvi20250710_clean_ADTonly.Rds")
 # so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 # so_orig$annotation_level1 = factor(so_orig$annotation_level1, levels = c("CD8", "CD4", "Treg", "gdT", "CD8aa", "nonconv", "DN", "DP", "thymocyte"))
-so_orig = readRDS("igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+# so_orig = readRDS("igt1_96_withtotalvi20260107_clean_ADTonly.Rds")
+
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
 
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 # so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -123,7 +126,7 @@ fit_flash = readRDS(sprintf("/project/zemmour/david/ImmgenT/analysis/data_integr
 fit = fit_flash
 
 res = ldf(fit, type = "i")
-L1 = with(res, L %*% diag(D)  ) #same as res$L %*% diag(res$D)
+L1 = with(res, L %*% diag(D)  ) #same as L+
 L1 = L1[colnames(so),]
 all(colnames(so) == rownames(L1))
 any(is.na(L1))
@@ -135,6 +138,9 @@ colnames(L1) = sprintf("F%s", 1:ncol(L1))
 
 F1 = with(ldf(fit, type = "i"), F)
 colnames(F1) = paste("F", 1:ncol(F1), sep = "")
+
+# saveRDS(L1, sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/%s/%s/L1.Rds", prefix,prefix2))
+# saveRDS(F1, sprintf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/%s/%s/F1.Rds", prefix,prefix2))
 
 
 # mdata_orig = read.table("metadata_20250513_mde.txt", header = T, sep = "\t")
@@ -300,7 +306,7 @@ dev.off()
 
 ```
 
-**Figure 2 - Integration**
+**Figure 2/S3 - Integration**
 
 MDE plots level1
 ```{r}
@@ -332,7 +338,7 @@ dev.off()
 
 ```
 
-MDE plots organ (2F and S2B?)
+*MDE plots organ (Fig S6)*
 ```{r}
 tmp = so[,so@meta.data %>% filter(condition_broad == "healthy" & organ_simplified0 != "thymus") %>% row.names()]
 
@@ -423,7 +429,7 @@ dev.off()
 
 ```
 
-Spleen standard (S3A)
+*Spleen standard (S3A)*
 ```{r}
 pdf(sprintf("%s/MDE_spleenstandard.pdf", out_dir), 5,5, useDingbats = F)
 p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", cells_to_highlight = names(which(so$spleen_standard == T)), highlight_column_name = "IGT", pixels = c(1024, 1024), mycols = mypal_igt, title = "", highlight_size = 0.1, highlight_alpha = 0.5, print_plot1 = T, print_plot2 = T, labelclusters = F)
@@ -433,7 +439,7 @@ p
 dev.off()
 ```
 
-FeatureScatter ADT (2B?)
+*FeatureScatter ADT (Fig 2 / S3)*
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(cite_seq == T, organ_simplified != "thymus") %>% row.names()]
 so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
@@ -469,7 +475,7 @@ dev.off()
 
 ```
 
-FeaturePlot (Midway3) (2C)
+*FeaturePlot (Midway3) (Fig 2)*
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
@@ -483,7 +489,7 @@ dev.off()
 
 ```
 
-iNKT - MAIT
+*iNKT - MAIT (Fig S3)*
 ```{r}
 # DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "iNKT", order = T, raster = T) + scale_color_manual(values = c("grey", "red")) + ggplot2::xlim(-2.5,2.5) + ggplot2::ylim(-2.5,2.5)#Trgc1
 
@@ -494,10 +500,7 @@ MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde2_totalvi_20241006", c
 dev.off()
 ```
 
-**Figure 2-3 - universal UMAP  / Biological conservation analysis: clustering in each batch**
-
-2H, 
-colon IGT20, IGT24 and IGT27
+**Colon in IGT20, IGT24 and IGT27  (Fig 2)**
 ```{r}
 igt = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/exp_id/20220812_exp_id_13_ColonSI/IGT20/dataset_clean.Rds')
 igt$annotation_level1 = as.character(so_orig$annotation_level1[match(colnames(igt), colnames(so_orig))])
@@ -546,7 +549,7 @@ dev.off()
 
 ```
 
-Cluster structure conservation with silhouette analysis
+**Biological conservation analysis: Cluster structure conservation with silhouette analysis - Fig 4**
 ```{r}
 library(cluster)
 # so_list = Seurat::SplitObject(so_orig[,so_orig$IGT %in% c("IGT1", "IGT5")], split.by = "IGT")
@@ -696,16 +699,14 @@ cor(sil_summary_merged$median_sil_width.pre, sil_summary_merged$median_sil_width
 
 ```
 
-
-**Figure 3 - Level2 and clustering cluster distribution across organs and conditions**
-*3A*
+**MDE level1 Figure 2**
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 # so@meta.data %>% count(organ_simplified)
 # so@meta.data %>% count(IGT)
 # so@meta.data %>% filter(IGT == "IGT70") %>% select(exp_name) %>% unique()
 
-pdf(sprintf("%s/MDE_level2.pdf", out_dir), 5,5, useDingbats = F)
+pdf(sprintf("%s/MDE_level2_newann.pdf", out_dir), 5,5, useDingbats = F)
 p = DimPlot(object = so, reduction = "mde2_totalvi_20241006", group.by = "annotation_level2", raster = T, raster.dpi = c(1024,1024)) + scale_color_manual(values = mypal_level2) + NoGrid()
 p
 p + NoLegend()
@@ -736,12 +737,12 @@ dev.off()
 
 ```
 
-*3E: level2 in level1 MDE*
+**Level2 in lineage-specific MDE - Figure 3**
 ```{r}
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
 so_list = SplitObject(so, split.by = "annotation_level1")
 
-pdf(sprintf("%s/MDE_level2_subsetMDEs.pdf", out_dir), 5,5, useDingbats = F)
+pdf(sprintf("%s/MDE_level2_subsetMDEs_newAnn.pdf", out_dir), 5,5, useDingbats = F)
 p = DimPlot(so_list[["CD8"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1)
 p
 p + NoLegend()
@@ -757,7 +758,7 @@ p + NoLegend()
 p = DimPlot(so_list[["CD8aa"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
-p = DimPlot(so_list[["nonconv"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
+p = DimPlot(so_list[["Tz"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
 p = DimPlot(so_list[["DN"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1)
@@ -780,6 +781,7 @@ dev.off()
 
 ```
 
+TO CONTINUE
 
 *3B/C* Proportion of level2 (denominator is level1) in each organ
 annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds in composition_anbalysis_igt1_96.Rmd
