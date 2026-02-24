@@ -53,18 +53,30 @@ length(polychrome())
 mypal = c(glasbey(), polychrome(), mypal1)
 names(mypal) = NULL
 
-mypal_organ = setNames(mypal, unique(so$organ_simplified))
-mypal_organ["other"] = "grey"
-mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
-mypal_organ = setNames(mypal, unique(mdata_orig$organ_simplified))
-mypal_organ["other"] = "grey"
-mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+mypal_level2 = immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
 
-mypal_level1 = setNames(mypal, unique(so$annotation_level1))
-mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
 
-mypal_level2 = setNames(mypal, unique(so$annotation_level2))
-mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ["other"] = "grey"
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_organ = setNames(mypal, unique(mdata_orig$organ_simplified))
+# mypal_organ["other"] = "grey"
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# 
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# 
+# mypal_level2 = setNames(mypal, unique(so$annotation_level2))
+# mypal_level2 = mypal_level1[!is.na(names(mypal_level2))]
 
 mypal_condition_broad = setNames(mypal, unique(so$condition_broad))
 mypal_condition_broad = mypal_condition_broad[!is.na(names(mypal_condition_broad))]

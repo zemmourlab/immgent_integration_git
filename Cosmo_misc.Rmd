@@ -743,32 +743,46 @@ so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row
 so_list = SplitObject(so, split.by = "annotation_level1")
 
 pdf(sprintf("%s/MDE_level2_subsetMDEs_newAnn.pdf", out_dir), 5,5, useDingbats = F)
+DimPlot(so_list[["CD8"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["CD8"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["CD4"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["CD4"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["Treg"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["Treg"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["gdT"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["gdT"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["CD8aa"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["CD8aa"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["Tz"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["Tz"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 2, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["DN"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["DN"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1)
 p
 p + NoLegend()
+
+DimPlot(so_list[["DP"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
 p = DimPlot(so_list[["DP"]], reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 3, alpha = 1)
 p
 p + NoLegend()
 dev.off()
-
 
 for (o in unique(so$annotation_level1)) {
     print(o)

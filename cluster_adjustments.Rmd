@@ -2595,11 +2595,19 @@ for (i in unique(so2$annotation_level2_group)) {
 }
 dev.off()
 
+```
 
+```{r}
+
+for (i in levels(so_orig$annotation_level1)) {
+    print(i)
+    write.table(so_orig[["mde_incremental"]]@cell.embeddings[so_orig@meta.data %>% filter(annotation_level1 == i) %>% row.names(),], sprintf("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/export_data/mde_incremental_%s.csv",i), sep = ",", quote = F, row.names = T, col.names = T)
+}
 
 
 ```
 
+ 
 
 
 
