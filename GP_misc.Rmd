@@ -1,0 +1,257 @@
+---
+title: "misc"
+output: html_document
+date: "2025-11-13"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96
+R
+```
+
+
+```{r}
+# setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+libs = c("ZemmourLib","fgsea","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/misc_plots" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/topic/misc_plots"
+
+```
+
+
+**Most up-to-date data**
+on Midway
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+
+
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+
+Load GP: L1 and F1
+```{r}
+L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
+F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
+
+write.table(L1[,"F27"], file = "~/Desktop/GP27_TregActGP.txt", sep = "\t", quote = F, col.names = F, row.names = T)
+
+```
+
+```{r}
+group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2_group %in% c("activated")) %>% pull(cellID)
+group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2_group %in% c("resting")) %>% pull(cellID)
+group3 = mdata_orig %>% filter(annotation_level1 %in% c("CD8") & annotation_level2_group %in% c("activated")) %>% pull(cellID)
+group4 = mdata_orig %>% filter(annotation_level1 %in% c("CD8") & annotation_level2_group %in% c("resting")) %>% pull(cellID)
+
+
+# Call the function with F1, L1, and group data
+results_CD4 = FlashierDGE(F1, L1, group1, group2, title_plot = "Activated vs resting CD4")
+results_CD8 = FlashierDGE(F1, L1, group3, group4, title_plot = "Activated vs resting CD8")
+
+
+# Access the plots and data
+results_CD4$p1  # First plot (MA plot of factors)
+results_CD4$p2  # Second plot (MA plot of genes)
+
+results_CD8$p1  # First plot (MA plot of factors)
+results_CD8$p2  # Second plot (MA plot of genes)
+
+plot(results_CD4$diff_genes$log2FC, results_CD8$diff_genes$log2FC)
+
+plot(results_CD4$diff_factors$log2FC, results_CD8$diff_factors$log2FC)
+text(results_CD4$diff_factors$log2FC, results_CD8$diff_factors$log2FC, labels = rownames(results_CD4$diff_factors), cex = 0.5, )
+
+plot( results_CD4$diff_factors$log2FC - results_CD8$diff_factors$log2FC, rowMeans(cbind(results_CD4$diff_factors$log2FC, results_CD8$diff_factors$log2FC)))
+text(results_CD4$diff_factors$log2FC - results_CD8$diff_factors$log2FC, rowMeans(cbind(results_CD4$diff_factors$log2FC, results_CD8$diff_factors$log2FC)))
+
+```
+
+**GSEA GP**
+```{r}
+out_dir2 = "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/GSEA/"
+df = read.table("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/GSEA/gsea_results_subset.xlsx", header = F, row.names = 1)
+
+message("Loading signatures")
+# load("/project/zemmour/david/signatures/mouse/signaturelist20171024.Rda")
+load("/Users/david/Library/CloudStorage/Dropbox/datasets/signaturelist20171024.Rda")
+signaturelist1 = signaturelist
+
+# load("/project/zemmour/david/signatures/mouse/signaturelistGSEA.Rda")
+load("/Users/david/Library/CloudStorage/Dropbox/datasets/GSEA_mysigdb/signaturelistGSEA.Rda")
+signaturelist2 = signaturelist
+
+signaturelist = c(signaturelist1, signaturelist2)
+names(signaturelist)
+
+names(signaturelist)[grepl("Treg|treg|TREG|TCELL|CD4|CD8|GD|GAMMA|TCONV|TEFF|TH1|TH2|TH17|MEM|EXH|NKT|MAIT", names(signaturelist))]
+# names(signaturelist)[grepl("TH", names(signaturelist))]
+
+signaturelist = signaturelist[grepl("Treg|treg|TREG|TCELL|CD4|CD8|GD|GAMMA|TCONV|TEFF|TH1|TH2|TH17|MEM|EXH|NKT|MAIT", names(signaturelist))]
+#names(signaturelist)[grepl("Treg|treg|Foxp3", names(signaturelist))]
+#names(signaturelist)[grepl("IPEX", names(signaturelist))]
+
+message("Calculating GSEA enrichement of Kait topic genes in each of David's factors")
+pvalsig = list()
+pvalcol = list()
+fgseaRes_list = list()
+for (f in 1:ncol(F1)) {
+    print(f)
+    # vplot = data.frame(SYMBOL = names(mean_shifted_log_counts), fc = factors[,f], pval = exp(mean_shifted_log_counts))
+    # ranks = vplot$fc
+    ranks = F1[,f]
+    names(ranks) = rownames(F1)
+    fgseaRes = fgseaMultilevel(signaturelist, ranks, scoreType = "pos", minSize = 5)
+    fgseaRes_list[[as.character(f)]] = fgseaRes
+    pvalsig[[as.character(f)]] = fgseaRes$pval
+    pvalcol[[as.character(f)]] = fgseaRes$NES
+    #head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+    #plotEnrichment(signaturelist[["kait_topic_14"]], ranks)
+}
+names(fgseaRes_list) = colnames(F1)
+# saveRDS(fgseaRes_list,file = sprintf("%s/GSEA_signatures.Rds",out_dir2))
+fgseaRes_list = readRDS(sprintf("%s/GSEA_signatures.Rds", out_dir2))
+
+fgseaRes_melt = fgseaRes_list
+for (i in names(fgseaRes_melt)) {
+    fgseaRes_melt[[i]][,"factor"] = i
+}
+fgseaRes_melt = do.call(rbind, fgseaRes_melt)
+
+pdf(sprintf("%s/GSEA_volcano_by_factor.pdf",out_dir2), 20,20, useDingbats = F)
+for (i in 1:ncol(F1)) {
+    print(i)
+    vplot = data.frame(SYMBOL = unlist(fgseaRes_list[[i]][,"pathway"]), fc = unlist(fgseaRes_list[[i]][,"NES"]), pval = unlist(fgseaRes_list[[i]][,"padj"]))
+    p = Vplot(vplot = vplot, xlab = "NES", ylimits = NULL) + ggtitle(colnames(F1)[i])
+    #sub = vplot$pval < 0.05
+    sub = vplot %>% filter(pval < 0.05) %>% arrange(desc(abs(log2(fc)))) %>% slice_head(n = 10) %>% rownames() #select(SYMBOL) %>% as.vector()
+    #sub = vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:10]
+    q = p + geom_text_repel(data = vplot[sub,], aes(x = fc, y = pval, label = SYMBOL, size = 1))
+    print(q)
+}
+dev.off()
+
+
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, padj, NES, size, factor) %>% slice_head(n = 2)
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, factor, padj) %>% slice_head(n = 5) %>% as.data.frame() 
+
+fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05, factor %in% c("F10", "F25", "F26", "F35","F9","F12","F79","F152","F171","F56","F162","F161","F36","F72","F177",'F43',"F58")) %>% arrange(padj, NES) %>% select(pathway, factor, NES, padj)  %>% as.data.frame()  %>% write.table(sprintf("%s/GSEA_signatures_select.tsv", out_dir2), quote = F, row.names = F, col.names = T, sep = "\t")
+
+
+#Dotplot
+df_sig = read.table(sprintf("%s/GSEA_signatures_select_toplot.csv", out_dir2), header = T, sep = ",")
+
+library(ggplot2)
+library(dplyr)
+df_plot <- df_sig %>%
+  mutate(
+    pathway = factor(pathway, levels = unique(pathway)),
+    factor  = factor(factor,  levels = unique(factor)),
+    log10padj = -log10(padj)
+  )
+
+ggplot(df_plot, aes(x = pathway, y = factor)) +
+  geom_point(aes(size = NES, color = log10padj)) +
+  scale_color_viridis_c(name = "-log10(padj)") +
+  scale_size(range = c(3, 10)) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 60, hjust = 1)
+  ) +
+  labs(size = "NES") + NoGrid()
+
+# fgseaRes_melt %>% group_by(factor) %>% filter(padj < 0.05) %>% arrange(padj, NES) %>% select(pathway, factor, padj) %>% as.data.frame()
+# pvalcol_df = do.call(rbind, pvalcol)
+# pvalsig_df = do.call(rbind, pvalsig)
+# colnames(pvalsig_df) = names(signaturelist)
+# rownames(pvalsig_df) = colnames(factors)
+# tmp = log10(pvalsig_df)
+# tmp[tmp > log10(0.05)] = log10(1)
+# tmp[!pvalcol_df] = log10(1)
+# pdf(sprintf("%s/%s/KaitTopic_DavidFactorsEnrichement_heatmap_GSEA.pdf",prefix, prefix2), 10,10, useDingbats = F)
+# pheatmap(t(tmp), color = magma(100), main = "GSEA enrichement of Kait topic genes in each of David's factors")
+# dev.off()
+
+
+```
+
+
+
+
+
