@@ -50,6 +50,7 @@ if (!all(rownames(design) == colnames(so))) {
 }
 design = model.matrix(~ 0 + annotation_level2.IGTHT, data=design) 
 colnames(design) = gsub("annotation_level2.IGTHT", "", colnames(design))
-fit = limma::lmFit(tmm, design = design, method="bigqr")
+# fit = limma::lmFit(tmm, design = design, method="bigqr")
+fit = limma::lmFit(tmm, design = design, method="ls")
 saveRDS(fit, file = sprintf("%s/%s",output_dir,fit_file_name))
 message("Fit object saved to: ", sprintf("%s/%s",output_dir,fit_file_name))

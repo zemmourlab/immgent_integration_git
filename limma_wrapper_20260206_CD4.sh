@@ -37,7 +37,7 @@ tmm_file_name=igt1_96_CD4_20260206_tmm.Rds
 echo "Fitting"
 path_to_tmm_object=$output_dir/$tmm_file_name
 fit_file_name=igt1_96_CD4_20260206_fit.Rds
-Rscript $SCRIPT_DIR/limma_fit_20241217_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
+Rscript $SCRIPT_DIR/limma_fit_20260223_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 echo "Contrasts in Resting"
 path_to_fit_object=$output_dir/$fit_file_name
