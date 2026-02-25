@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/limma_wrapper_20260206_DN.sh
+#run as: sbatch $SCRIPT_DIR/limma_wrapper_20260206_DP.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -19,24 +19,24 @@ conda activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
 
 SCRIPT_DIR=/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git
-path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DN
+path_to_wd=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP
 
 cd $path_to_wd
 
 echo "Sampling seurat object"
-path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DN_igt1_96_withtotalvi20260206_clean.Rds
+path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/DP_igt1_96_withtotalvi20260206_clean.Rds
 output_dir=DGE_limma/20260206
-so_file_name=DN_igt1_96_withtotalvi20260206_clean_sampled.Rds
+so_file_name=DP_igt1_96_withtotalvi20260206_clean_sampled.Rds
 Rscript $SCRIPT_DIR/limma_sample_seuratobject_20260223.R $path_to_seurat_object $output_dir $so_file_name
 
 echo "Making tmm file"
 path_to_seurat_object=$output_dir/$so_file_name
-tmm_file_name=igt1_96_DN_20260206_tmm.Rds
+tmm_file_name=igt1_96_DP_20260206_tmm.Rds
 Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 echo "Fitting"
 path_to_tmm_object=$output_dir/$tmm_file_name
-fit_file_name=igt1_96_DN_20260206_fit.Rds
+fit_file_name=igt1_96_DP_20260206_fit.Rds
 Rscript $SCRIPT_DIR/limma_fit_20260223_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 echo "OneVsAll"
