@@ -27,12 +27,12 @@ echo "Sampling seurat object"
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD8aa_igt1_96_withtotalvi20260206_clean.Rds
 output_dir=DGE_limma/20260206
 so_file_name=CD8aa_igt1_96_withtotalvi20260206_clean_sampled.Rds
-# Rscript $SCRIPT_DIR/limma_sample_seuratobject_20260223.R $path_to_seurat_object $output_dir $so_file_name
+Rscript $SCRIPT_DIR/limma_sample_seuratobject_20260223.R $path_to_seurat_object $output_dir $so_file_name
 
 echo "Making tmm file"
 path_to_seurat_object=$output_dir/$so_file_name
 tmm_file_name=igt1_96_CD8aa_20260206_tmm.Rds
-# Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
+Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 echo "Fitting"
 path_to_tmm_object=$output_dir/$tmm_file_name
