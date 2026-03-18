@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -A pi-zemmour ##SBATCH -q jfkfloor2 --exclusive 
-#SBATCH --partition=caslake 
+#SBATCH --partition=beagle3-bigmem 
 #SBATCH --nodes=1 
 #SBATCH --mem=96GB
 #SBATCH -J limma_%j            
