@@ -1,0 +1,56 @@
+---
+title: "misc"
+output: html_document
+date: "2026-03-06"
+---
+
+```{r}
+bg_cd4_mde <- data.frame(
+  cell = colnames(so_orig)[so_orig$annotation_level1 == "CD4"],
+  Embeddings(so_orig[["mde_incremental_level2"]])[so_orig$annotation_level1 == "CD4", 1:2]
+)
+
+colnames(bg_cd4_mde) <- c("cell", "MDE_1", "MDE_2")
+
+saveRDS(bg_cd4_mde, "inst/extdata/immgenT_CD4_MDE_background.rds")
+
+immgenTCD4MDE <- function(data = NULL,
+                          alpha = 0.25,
+                          size = 0.15,
+                          color = "grey70",
+                          raster = TRUE) {
+  
+  if (is.null(data)) {
+    data <- readRDS(system.file(
+      "extdata",
+      "immgenT_CD4_MDE_background.rds",
+      package = "ZemmourLib"
+    ))
+  }
+  
+  if (raster && requireNamespace("ggrastr", quietly = TRUE)) {
+    ggrastr::geom_point_rast(
+      data = data,
+      mapping = ggplot2::aes(x = MDE_1, y = MDE_2),
+      inherit.aes = FALSE,
+      color = color,
+      alpha = alpha,
+      size = size
+    )
+  } else {
+    ggplot2::geom_point(
+      data = data,
+      mapping = ggplot2::aes(x = MDE_1, y = MDE_2),
+      inherit.aes = FALSE,
+      color = color,
+      alpha = alpha,
+      size = size
+    )
+  }
+}
+
+ggplot() +
+  immgenTCD4MDE() +
+  geom_point(data = query_df, aes(x = MDE_1, y = MDE_2, color = level2_final))
+```
+

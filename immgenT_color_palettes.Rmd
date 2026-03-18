@@ -348,8 +348,8 @@ mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20260109"
 mypal_list_orig = mypal_list
 mypal_list_orig[["level2"]]
 
-# mypal_list = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20250714", "20250714"))
-# mypal_list_orig2 = mypal_list
+# mypal_list2 = readRDS(sprintf("%s/immgent_color_palettes_list_%s.Rds", "20250714", "20250714"))
+# mypal_list_orig2 = mypal_list2
 # mypal_list_orig2[["level2"]]
 # mypal_list_orig[["level2"]][grepl("CD4", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("CD4", names(mypal_list_orig2[["level2"]]) )]
 # mypal_list_orig[["level2"]][grepl("CD8", names(mypal_list_orig[["level2"]]) )] == mypal_list_orig2[["level2"]][grepl("CD8", names(mypal_list_orig2[["level2"]]) )]
@@ -372,6 +372,8 @@ mypal_list[["level2"]][grepl("\\.wM", names(mypal_list[["level2"]]))] = "grey"
 mypal_list[["level2"]][names(mypal_list[["level2"]]) == "Treg.E"] = "chartreuse2"
 mypal_list[["level2"]][names(mypal_list[["level2"]]) == "CD4.H"] = "darkseagreen2"
 mypal_list[["level2"]][names(mypal_list[["level2"]])== "CD4.Q"] = "darkorange"
+mypal_list[["level2"]][names(mypal_list[["level2"]])== "Tz.A"] = "darkorchid2"
+mypal_list[["level2"]][names(mypal_list[["level2"]])== "Tz.B"] = "deepskyblue2"
 
 mypal_list[["CD8"]] = NULL
 mypal_list[["CD4"]] = NULL
