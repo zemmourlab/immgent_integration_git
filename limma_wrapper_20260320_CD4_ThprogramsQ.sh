@@ -33,12 +33,12 @@ echo "Making tmm file"
 # path_to_seurat_object=$output_dir/$so_file_name
 path_to_seurat_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds
 tmm_file_name=tmm.Rds
-# Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
+Rscript $SCRIPT_DIR/limma_make_tmm_20241217.R $path_to_seurat_object $output_dir $tmm_file_name
 
 echo "Fitting"
 path_to_tmm_object=$output_dir/$tmm_file_name
 fit_file_name=fit.Rds
-# Rscript $SCRIPT_DIR/limma_fit_20260320_level2program.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
+Rscript $SCRIPT_DIR/limma_fit_20260320_level2program.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 echo "Contrasts"
 path_to_fit_object=$output_dir/$fit_file_name
