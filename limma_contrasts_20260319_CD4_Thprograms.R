@@ -17,11 +17,11 @@ path_to_fit_object = args[3]
 output_dir = args[4]
 prefix_file_name = args[5]
 
-path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds"
-path_to_tmm_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_tmm.Rds"
-path_to_fit_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_fit.Rds"
-output_dir = "DGE_limma/20260319_CD4_MidlandvsTips"
-prefix_file_name = "Midland_vs_Tips"
+# path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds"
+# path_to_tmm_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_tmm.Rds"
+# path_to_fit_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_fit.Rds"
+# output_dir = "DGE_limma/20260319_CD4_MidlandvsTips"
+# prefix_file_name = "Midland_vs_Tips"
 
 # Validate inputs
 if (!dir.exists(output_dir)) {
