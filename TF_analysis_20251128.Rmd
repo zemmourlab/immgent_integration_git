@@ -98,6 +98,9 @@ out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_a
 out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107" 
 out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107"
 
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260319" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260319"
+
 ```
 
 
@@ -107,9 +110,10 @@ on Midway
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20250513_clean.Rds") 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds")
 
-so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+so_orig = NormalizeData(so_orig, assay = "RNA", normalization.method = "LogNormalize")
 
 #for the TF analysis
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
@@ -337,16 +341,17 @@ Gene_AUC <- function(
 
 ```{r}
 # so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
-so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+so_orig = readRDS("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds")
 ```
 
 
-Calculate pseudobulk (on Midway)
+**Calculate pseudobulk (on Midway)**
 remove prolif and miniverse since many level2 converge there. thymocyte and thymus
 ```{r}
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251128_clean.Rds") 
 # so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20251218_clean.Rds") 
-so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+# so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260107_clean.Rds") 
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds")
 so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus" & !(annotation_level2_group %in% c("proliferating", "miniverse")) & (annotation_level2 != "thymocyte")) %>% row.names()]
 
 pseudobulk = AggregateExpression(
@@ -359,8 +364,8 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir)) 
+write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.tsv", out_dir),sep = "\t", quote = F)
+saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel1_log1pCP10K.Rds", out_dir))
 
 pseudobulk = AggregateExpression(
     object = so,
@@ -372,8 +377,8 @@ pseudobulk = AggregateExpression(
     verbose = T,
     return.seurat = TRUE
 )
-# write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F) 
-# saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir)) 
+write.table(pseudobulk[["RNA"]]$data, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.tsv", out_dir),sep = "\t", quote = F)
+saveRDS(pseudobulk, file = sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", out_dir))
 
 pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260107"))
 ```

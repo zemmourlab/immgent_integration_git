@@ -40,7 +40,9 @@ fit_file_name=igt1_96_CD4_20260206_fit.Rds
 # Rscript $SCRIPT_DIR/limma_fit_20260223_level2.IGTHT.R $path_to_seurat_object $path_to_tmm_object $output_dir $fit_file_name
 
 echo "Contrasts in Resting"
-path_to_fit_object=$output_dir/$fit_file_name
+# path_to_fit_object=$output_dir/$fit_file_name
+path_to_tmm_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/igt1_96_CD4_20260206_tmm.Rds
+path_to_fit_object=/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/igt1_96_CD4_20260206_fit.Rds
 prefix_file_name=tips
 Rscript $SCRIPT_DIR/limma_contrasts_20260318_CD4_tips.R $path_to_seurat_object $path_to_tmm_object $path_to_fit_object $output_dir $prefix_file_name
 

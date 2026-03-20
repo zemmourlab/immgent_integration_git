@@ -108,6 +108,9 @@ so$annotation_level2
 
 ```
 
+trbi_8studies_20260311_merged_diet.Rds
+trbi_8studies_20260311_merged.Rds
+
 **T-RBI Inspecting individual query studies**
 see here for https://docs.google.com/spreadsheets/d/10icsN1kaUNOgMYi-oVTFx8AH9CI_52SlQb3p798MfQY/edit?usp=sharing
 
@@ -1489,7 +1492,7 @@ LCMV Smarta in SLO: GSE175742_Shaw_LCMV, GSE184259_Nguyen_LCMV
 # so_merged_orig$cellID = colnames(so_merged_orig)
 # so_merged = so_merged_orig
 
-so_merged@meta.data %>% count(dataset, sample_type, Ag_spe, infection_agent)
+so_merged@meta.data %>% count(dataset, sample_type, Ag_spe, infection_agent, sample_name)
 so_merged@meta.data %>% filter(dataset %in% c("GSE175742_Shaw_LCMV", "GSE184259_Nguyen_LCMV"), infection_agent == "LCMV Armstrong") %>% count(sample_type, organ_simplified)
 sub = so_merged@meta.data %>% filter(dataset %in% c("GSE175742_Shaw_LCMV", "GSE184259_Nguyen_LCMV"), infection_agent == "LCMV Armstrong", organ_simplified == "SLO", !(sample_name %in% c("Arm_d7_SLO_Bcl6KO_GSE184259"))) %>% group_by(sample_type) %>% slice_sample(n = 2900) %>% ungroup() %>% pull(cellID)
 tmp = so_merged[,sub]
