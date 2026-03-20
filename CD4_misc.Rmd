@@ -24,6 +24,7 @@ source activate /project/zemmour/david/envs/scvi_20240315
 module load openblas/0.3.13
 
 cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+R
 ```
 
 
@@ -668,8 +669,23 @@ so2@meta.data %>% count(annotation_level2, annotation_level2_program)
 # saveRDS(so2, file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
 
 so = readRDS(file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.H")] = "CD4.H"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.I")] = "CD4.I"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.R")] = "CD4.R"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.S")] = "CD4.S"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.T")] = "CD4.T"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.U")] = "CD4.U"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.X")] = "CD4.X"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.Y")] = "CD4.Y"
+
 
 so@meta.data %>% count(annotation_level2, annotation_level2_program)
+so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% count(annotation_level2, annotation_level2_program)
+so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% rownames()]
+
+so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")
+
+saveRDS(so2, file = sprintf("%s/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
 
 ```
 
