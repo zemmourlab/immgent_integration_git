@@ -527,7 +527,7 @@ th_scores$program = cell_class
 th_scores_bin %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
 th_scores %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
 
-saveRDS(th_scores, sprintf("%s/th_modulescores_withannot.Rds", out_dir))
+saveRDS(th_scores, sprintf("../%s/th_modulescores_withannot.Rds", out_dir))
 
 ```
 
@@ -635,11 +635,6 @@ p
 dev.off()
 
 
-
-
-
-
-
 ###########
 
 so@meta.data %>% count(annotation_level2, annotation_level2_group)
@@ -661,6 +656,8 @@ so@meta.data %>% filter(annotation_level2 %in% c("CD4.G", "CD4.Q")) %>% count(an
 
 Make seurat for DGE limma with program annotation
 ```{r}
+th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", out_dir))
+
 so
 so2 = so[,rownames(th_scores)]
 so2@meta.data = data.frame(so2@meta.data, th_scores)
@@ -668,7 +665,12 @@ so2@meta.data %>% count(annotation_level2, program)
 so2$annotation_level2_program = paste(so2$annotation_level2, so2$program, sep = ".")
 so2@meta.data %>% count(annotation_level2, annotation_level2_program)
 
-saveRDS(so2, file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+# saveRDS(so2, file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so = readRDS(file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so@meta.data %>% count(annotation_level2, annotation_level2_program)
+
 ```
 
 

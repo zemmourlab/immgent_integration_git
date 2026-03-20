@@ -182,7 +182,7 @@ fit = readRDS(path_to_fit_object)
 design = fit$design
 
 message("loading metadata") ##EDIT
-metadata = data.frame(so@meta.data[,c("annotation_level2", "annotation_level2.IGTHT", "IGTHT","organ_simplified","condition_broad", "condition_detailed")])
+metadata = data.frame(so@meta.data[,c("annotation_level2", "annotation_level2_program", "annotation_level2.IGTHT", "IGTHT","organ_simplified","condition_broad", "condition_detailed")])
 metadata = metadata %>% unique()
 dim(metadata)
 rownames(metadata) = metadata$annotation_level2.IGTHT
@@ -196,44 +196,10 @@ namescontrasts = c()
 # group1_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) ##EDIT
 # group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) #& level2_parent1 == "resting" ##EDIT
 
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) #& level2_parent1 == "resting" ##EDIT
+group1_filter <- expr(annotation_level2 %in% c("CD4.Q")) ##EDIT
+group2_filter <- expr(annotation_level2 %in% c("CD4.G")) #& level2_parent1 == "resting" ##EDIT
 groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "RS_vs_TUXYHI" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.T", "CD4.U")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "TU_vs_RSXYHI" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.X", "CD4.Y")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.H", "CD4.I")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "XY_vs_RSTUHI" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.H", "CD4.I")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "HI_vs_RSTUXY" ##EDIT
+nmecontrast = "Q_vs_G" ##EDIT
 group1 = groups[[1]]
 group2 = groups[[2]]
 contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
@@ -242,9 +208,9 @@ namescontrasts[nmecontrast] = nmecontrast
 gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 
 group1_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y")) #& level2_parent1 == "resting" ##EDIT
+group2_filter <- expr(annotation_level2_program %in% c("CD4.Q.Th1")) #& level2_parent1 == "resting" ##EDIT
 groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "RS_vs_TUXY" ##EDIT
+nmecontrast = "RS_vs_Qth1" ##EDIT
 group1 = groups[[1]]
 group2 = groups[[2]]
 contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
@@ -253,9 +219,9 @@ namescontrasts[nmecontrast] = nmecontrast
 gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 
 group1_filter <- expr(annotation_level2 %in% c("CD4.T", "CD4.U")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y")) #& level2_parent1 == "resting" ##EDIT
+group2_filter <- expr(annotation_level2_program %in% c("CD4.Q.Th2")) #& level2_parent1 == "resting" ##EDIT
 groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "TU_vs_RSXY" ##EDIT
+nmecontrast = "TU_vs_Qth2" ##EDIT
 group1 = groups[[1]]
 group2 = groups[[2]]
 contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
@@ -264,9 +230,9 @@ namescontrasts[nmecontrast] = nmecontrast
 gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 
 group1_filter <- expr(annotation_level2 %in% c("CD4.X", "CD4.Y")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U")) #& level2_parent1 == "resting" ##EDIT
+group2_filter <- expr(annotation_level2_program %in% c("CD4.Q.Th17")) #& level2_parent1 == "resting" ##EDIT
 groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "XY_vs_RSTU" ##EDIT
+nmecontrast = "XY_vs_Qth17" ##EDIT
 group1 = groups[[1]]
 group2 = groups[[2]]
 contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
@@ -274,49 +240,6 @@ namescontrasts[nmecontrast] = nmecontrast
 # names(contrasts) = namescontrasts
 gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 
-group1_filter <- expr(annotation_level2 %in% c("CD4.R")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.S")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "R_vs_S" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.T")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.U")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "T_vs_U" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.X")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.Y")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "X_vs_Y" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
-
-group1_filter <- expr(annotation_level2 %in% c("CD4.H")) ##EDIT
-group2_filter <- expr(annotation_level2 %in% c("CD4.I")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2.IGTHT")
-nmecontrast = "H_vs_I" ##EDIT
-group1 = groups[[1]]
-group2 = groups[[2]]
-contrasts[nmecontrast] = sprintf("(%s)/%s-(%s)/%s", paste(group1, collapse = "+"), length(group1), paste(group2, collapse = "+"), length(group2))
-namescontrasts[nmecontrast] = nmecontrast
-# names(contrasts) = namescontrasts
-gene_symbol = rownames(tmm$E)#rownames(so[["RNA"]]$counts)
 
 # contrasts = c()
 # namescontrasts = c()
