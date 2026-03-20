@@ -188,7 +188,7 @@ dim(metadata)
 rownames(metadata) = metadata$annotation_level2_program.IGTHT
 
 message("creating constrats") ##EDIT
-metadata$annotation_level2_program = factor(metadata$annotation_level2_program, levels = levels(metadata$annotation_level2_program)[levels(metadata$annotation_level2_program) %in% metadata$annotation_level2_program])
+metadata$annotation_level2_program = factor(metadata$annotation_level2_program)
 
 contrasts = c()
 namescontrasts = c()

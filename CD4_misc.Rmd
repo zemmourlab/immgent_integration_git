@@ -678,13 +678,14 @@ so$annotation_level2_program[so$annotation_level2 %in% c("CD4.U")] = "CD4.U"
 so$annotation_level2_program[so$annotation_level2 %in% c("CD4.X")] = "CD4.X"
 so$annotation_level2_program[so$annotation_level2 %in% c("CD4.Y")] = "CD4.Y"
 
-
+#For Q programs vs tips
 so@meta.data %>% count(annotation_level2, annotation_level2_program)
 so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% count(annotation_level2, annotation_level2_program)
 so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% rownames()]
 so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")
 saveRDS(so2, file = sprintf("%s/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
 
+#For G programs vs tips
 so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I", "CD4.G.Th1", "CD4.G.Th2", "CD4.G.Th17", "CD4.G.Tfhchron")) %>% rownames()]
 so2@meta.data %>% count(annotation_level2, annotation_level2_program)
 so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")

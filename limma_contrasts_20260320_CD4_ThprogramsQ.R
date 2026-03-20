@@ -17,11 +17,11 @@ path_to_fit_object = args[3]
 output_dir = args[4]
 prefix_file_name = args[5]
 
-# path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds"
-# path_to_tmm_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_tmm.Rds"
-# path_to_fit_object = "DGE_limma/20260319_CD4_MidlandvsTips/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms_fit.Rds"
-# output_dir = "DGE_limma/20260319_CD4_MidlandvsTips"
-# prefix_file_name = "Midland_vs_Tips"
+path_to_seurat_object = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds"
+path_to_tmm_object = "DGE_limma/20260320_CD4_QprogramsvsTips/tmm.Rds"
+path_to_fit_object = "DGE_limma/20260320_CD4_QprogramsvsTips/fit.Rds"
+output_dir = "DGE_limma/20260320_CD4_QprogramsvsTips"
+prefix_file_name = "QprogramsvsTips"
 
 # Validate inputs
 if (!dir.exists(output_dir)) {
@@ -188,7 +188,8 @@ dim(metadata)
 rownames(metadata) = metadata$annotation_level2_program.IGTHT
 
 message("creating constrats") ##EDIT
-metadata$annotation_level2_program = factor(metadata$annotation_level2_program, levels = levels(metadata$annotation_level2_program)[levels(metadata$annotation_level2_program) %in% metadata$annotation_level2_program])
+# metadata$annotation_level2_program = factor(metadata$annotation_level2_program, levels = levels(metadata$annotation_level2_program)[levels(metadata$annotation_level2_program) %in% metadata$annotation_level2_program])
+metadata$annotation_level2_program = factor(metadata$annotation_level2_program)
 
 contrasts = c()
 namescontrasts = c()
@@ -209,7 +210,7 @@ namescontrasts = c()
 
 group1_filter <- expr(annotation_level2_program %in% c("CD4.R", "CD4.S")) ##EDIT
 group2_filter <- expr(annotation_level2_program %in% c("CD4.Q.Th1")) #& level2_parent1 == "resting" ##EDIT
-groups = GetGroups(metadata, group1_filter,group2_filter, "annotation_level2_program.IGTHT")
+groups = GetGroups(metadata, group1_filter,group2_filter, id_column = "annotation_level2_program.IGTHT")
 nmecontrast = "RS_vs_Qth1" ##EDIT
 group1 = groups[[1]]
 group2 = groups[[2]]
