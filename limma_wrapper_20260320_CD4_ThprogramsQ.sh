@@ -9,7 +9,7 @@
 #SBATCH --mail-type=ALL         # Type of email notification- BEGIN,END,FAIL,ALL ; 
 #SBATCH --mail-user=zemmour@rcc.uchicago.edu   # Email to which notifications will be sent
 
-#run as: sbatch $SCRIPT_DIR/limma_wrapper_20260319_CD4_Thprograms.sh
+#run as: sbatch $SCRIPT_DIR/limma_wrapper_20260320_CD4_ThprogramsQ.sh
 
 module load python/anaconda-2022.05 
 source $(conda info --base)/etc/profile.d/conda.sh
