@@ -100,8 +100,11 @@ on Desktop
 #source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R') -->
 # tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/Treg/DGE_limma/20250109/ttlist_OneVsAll.Rds')
 
-so_orig = readRDS("../igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
-so = so_orig[,so_orig$annotation_level1 == "Treg"]
+
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so_orig = readRDS("../igt1_96_withtotalvi20251128_clean_ADTonly.Rds")
+so_orig = readRDS("../igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "Treg" & organ_simplified != "thymus") %>% row.names()]
 # so_orig$annotation_level2[so_orig$annotation_level2 == "Treg_cl7"] = "Treg_cl1"
 # so$annotation_level2 = factor(so$annotation_level2, levels = c("Treg_cl1", "Treg_cl3", "Treg_cl6", "Treg_cl2","Treg_cl8","Treg_cl4", "Treg_prolif", "Treg_miniverse"))
 
@@ -215,6 +218,9 @@ pdf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/Treg/MDE_o
 p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = "organ_simplified", raster = F, raster.dpi = c(512,512), label = F, pt.size = 0.2, ncol = 3) + scale_color_manual(values = mypal_level2)
 p + NoLegend()
 dev.off()
+
+    p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$condition_broad == "healthy" & so$organ_simplified %in% "blood")], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "blood", highlight_size = 3, highlight_alpha = 1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+    print(p)
 
 ```
 

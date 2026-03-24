@@ -1381,6 +1381,7 @@ Table with query datasets and cell counts:
 ```{r}
 # so_merged_orig = readRDS("trbi_6studies_20260306_merged_diet.Rds")
 so_merged_orig = readRDS(sprintf("%s/trbi_8studies_20260311_merged_diet.Rds",out_dir))
+so_merged_orig$cellID = colnames(so_merged_orig)
 
 # so_merged_orig@meta.data %>% count(dataset,sample_name, name = "n_cells") %>% write.table(file = "trbi_6studies_20260306_table.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 so_merged_orig@meta.data %>% count(dataset,sample_name, name = "n_cells") %>% write.table(file = saveRDS(queries, file = sprintf("%s/trbi_8studies_20260311_table.tsv",out_dir)), row.names = F, col.names = T, sep = "\t", quote = F)
@@ -1513,7 +1514,34 @@ dev.off()
 
 ```
 
-**T-RBI Plot % cluster by sample, infection phase etc**
+LCMV GP tet+ in Arm d21, cl13 d21 in SLO and MC38GP
+```{r}
+# so_merged_orig = readRDS(sprintf("%s/trbi_8studies_20260311_merged.Rds",out_dir))
+# so_merged_orig$cellID = colnames(so_merged_orig)
+# so_merged = so_merged_orig
+
+so_merged@meta.data %>% count(dataset, sample_type, Ag_spe, infection_agent, sample_name, sample_type)
+so_merged@meta.data %>% filter(dataset %in% c("GSE182320_Andreatta_LCMVArmCl13", "GSE200635_Andreatta_Tumor"), sample_type %in% c("Arm_d21_SLO", "Cl13_d21_SLO", "MC38GP_Tumor")) %>% count(sample_type)
+sub = so_merged@meta.data %>%  filter(dataset %in% c("GSE182320_Andreatta_LCMVArmCl13", "GSE200635_Andreatta_Tumor"), sample_type %in% c("Arm_d21_SLO", "Cl13_d21_SLO", "MC38GP_Tumor")) %>% group_by(sample_type) %>% slice_sample(n = 600) %>% ungroup() %>% pull(cellID)
+tmp = so_merged[,sub]
+tmp@meta.data %>% count(sample_name)
+    
+pdf(sprintf("%s/TRBI_MDE_LCMVarm_cl13_MC38GP_SLO_tet.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp$sample_type)) {
+    print(i)
+    tmp2 = tmp[,tmp@meta.data %>% filter(sample_type == i) %>% rownames()]
+    
+    p = DimPlot(tmp2, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, size = 3) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+```
+
+**T-RBI calculate % cluster by sample, infection phase etc**
 
 Calculate proportions, LCMV and Listeria, SLO only
 ```{r}
@@ -1725,6 +1753,212 @@ p3 + NoGrid()
 dev.off()
 
 ```
+
+LCMV GP tet+ in Arm d21, cl13 d21 in SLO and MC38GP
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(scales)
+library(stringr)
+
+cluster_col <- "annotation_level2"   # change if needed
+
+so_merged@meta.data %>% filter(dataset %in% c("GSE182320_Andreatta_LCMVArmCl13", "GSE200635_Andreatta_Tumor"), sample_type %in% c("Arm_d21_SLO", "Cl13_d21_SLO", "MC38GP_Tumor")) %>% count(dataset, sample_name, infection_agent, infection_phase, organ_simplified, Ag_spe)
+
+df_plot <- so_merged@meta.data %>%
+    filter(dataset %in% c("GSE182320_Andreatta_LCMVArmCl13", "GSE200635_Andreatta_Tumor"), sample_type %in% c("Arm_d21_SLO", "Cl13_d21_SLO", "MC38GP_Tumor")) %>%
+    count(dataset, sample_type, sample_name, .data[[cluster_col]], name = "n") %>%
+    group_by(dataset, sample_name, sample_type) %>%
+    mutate(
+        sample_total = sum(n),
+        pct = 100 * n / sample_total
+    ) %>%
+    ungroup() %>%
+    rename(cluster = all_of(cluster_col))
+df_plot$cluster = factor(df_plot$cluster, levels = levels(so$annotation_level2))
+
+df_plot2 <- df_plot %>%
+  mutate(
+    cluster_phase = paste(cluster, sample_type)
+  )
+clusters <- levels(so$annotation_level2)[grepl("^CD4", levels(so$annotation_level2))]
+x_levels <- as.vector(
+    rbind(
+        paste(clusters, "Arm_d21_SLO"),
+        paste(clusters, "Cl13_d21_SLO"),
+        paste(clusters, "MC38GP_Tumor")
+    )
+)
+df_plot2$cluster_phase <- factor(df_plot2$cluster_phase, levels = x_levels)
+
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")))
+df_plot3$cluster = factor(df_plot3$cluster, levels = levels(so$annotation_level2))
+
+df_plot3 %>% filter(cluster %in% c("CD4.H", "CD4.I" ))
+df_plot3 %>% filter(cluster %in% c("CD4.H", "CD4.I" )) %>% group_by(cluster_phase) %>% summarize(mean(pct))
+
+
+p = ggplot(df_plot3, aes(cluster_phase, pct)) +
+    # geom_point(
+    #     aes(color = dataset),
+    #     size = 1,
+    #     alpha = 1
+    # ) +
+    geom_jitter(
+        aes(color = dataset),
+        width = 0.15,
+        size = 1
+    )+
+    stat_summary(
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        color = "black"
+    )+
+    facet_wrap(~ sample_type, scales = "free_x") +
+    scale_color_manual(values = mypal) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster / infection phase",
+        y = "% cells"
+    )
+p
+
+# p2 = ggplot(df_plot3, aes(cluster_phase, pct)) +
+#     # geom_point(
+#     #     aes(color = infection_phase),
+#     #     size = 1,
+#     #     alpha = 1
+#     # ) +
+#     geom_jitter(
+#         aes(color = infection_phase),
+#         width = 0.15,
+#         size = 1
+#     )+
+#     stat_summary(
+#         fun = mean,
+#         geom = "crossbar",
+#         width = 0.5,
+#         color = "black"
+#     )+
+#     facet_wrap(~ dataset, scales = "free_x") +
+#     scale_color_manual(values = c("acute" = "blue", "memory" = "red")) +
+#     theme_bw() +
+#     theme(
+#         axis.text.x = element_text(angle = 60, hjust = 1),
+#         panel.grid.major.x = element_blank()
+#     ) +
+#     labs(
+#         x = "Cluster / infection phase",
+#         y = "% cells"
+#     )
+# p2
+
+p2 = ggplot(df_plot3, aes(cluster, pct, color = sample_type, shape = dataset)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = sample_type),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    facet_wrap(~ dataset, scales = "free_x") +
+    scale_color_manual(values = c("Arm_d21_SLO" = "blue", "Cl13_d21_SLO" = "red","MC38GP_Tumor" = "darkgreen" )) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p2
+
+p3 = ggplot(df_plot3, aes(cluster, pct, color = sample_type, shape = dataset)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = sample_type),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("Arm_d21_SLO" = "blue", "Cl13_d21_SLO" = "red","MC38GP_Tumor" = "darkgreen" )) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3
+
+p4 = ggplot(df_plot3 %>% filter(cluster %in% c("CD4.H", "CD4.I")), aes(cluster, pct, color = sample_type, shape = dataset)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = sample_type),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("Arm_d21_SLO" = "blue", "Cl13_d21_SLO" = "red","MC38GP_Tumor" = "darkgreen" )) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3
+
+pdf(sprintf("%s/ClusterProp_LCMVarm_cl13_MC38GP2.pdf", out_dir), 10,5, useDingbats = F)
+p + NoGrid()
+p2 + NoGrid()
+p3 + NoGrid()
+dev.off()
+
+pdf(sprintf("%s/ClusterProp_LCMVarm_cl13_MC38GP_HIonly.pdf", out_dir), 7,5, useDingbats = F)
+p4 + NoGrid()
+dev.off()
+
+
+
+
+```
+
 
 **Pseudobulk of T-RBI studies**
 ```{r}

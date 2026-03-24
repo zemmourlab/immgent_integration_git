@@ -655,9 +655,89 @@ so@meta.data %>% filter(annotation_level2 %in% c("CD4.G", "CD4.Q")) %>% count(an
 
 ```
 
-Make seurat for DGE limma with program annotation
+Barplot polyfunctional 2
 ```{r}
-th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", out_dir))
+so <- readRDS(sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so@meta.data %>% count(program)
+so$is_polyfunctional <- !so@meta.data$program %in% c("None", "Tfhchron", "Th1", "Th17", "Th2")
+
+pf <- so@meta.data %>%
+  as.data.frame() %>%
+  mutate(
+    cluster_group = case_when(
+      annotation_level2 == "CD4.G" ~ "G",
+      annotation_level2 == "CD4.H" ~ "HI",
+      annotation_level2 == "CD4.I" ~ "HI",
+      annotation_level2 == "CD4.Q" ~ "Q",
+      annotation_level2 %in% c("CD4.R","CD4.S") ~ "R/S",
+      annotation_level2 %in% c("CD4.T","CD4.U") ~ "T/U",
+      annotation_level2 %in% c("CD4.X","CD4.Y") ~ "X/Y",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(cluster_group))
+
+pf_summary <- pf %>%
+  group_by(cluster_group) %>%
+  summarise(
+    percent_polyfunctional = mean(is_polyfunctional) * 100,
+    n_cells = n()
+  )
+
+p1 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_polyfunctional)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_polyfunctional)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% Polyfunctional cells"
+  )  + coord_cartesian(ylim = c(0,20))
+
+# pdf("polyfunctional_barplot.pdf", width = 8, height = 6, useDingbats = FALSE)
+# print(p)
+# dev.off()
+
+#prop of polyfunctional, coming from each
+pf_sub <- subset(pf, subset = is_polyfunctional== "TRUE")
+
+pf_summary <- pf_sub %>%
+  group_by(cluster_group) %>%
+  summarise(
+    n_cells = n()
+  ) %>%
+  mutate(
+    percent_of_polyfunctional = n_cells / sum(n_cells) * 100
+  )
+
+
+p2 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_of_polyfunctional)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_of_polyfunctional)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% of All Polyfunctional cells"
+  ) + coord_cartesian(ylim = c(0,45))
+
+pdf(sprintf("%s/barplot_polyfunctional_percent.pdf", out_dir), width = 4, height = 8, useDingbats = FALSE)
+print(p1)
+print(p2)
+dev.off()
+```
+
+
+**Make seurat for DGE limma with program annotation to compare Q_th with tips**
+```{r}
+th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4"))
 
 so
 so2 = so[,rownames(th_scores)]
@@ -678,13 +758,62 @@ so$annotation_level2_program[so$annotation_level2 %in% c("CD4.U")] = "CD4.U"
 so$annotation_level2_program[so$annotation_level2 %in% c("CD4.X")] = "CD4.X"
 so$annotation_level2_program[so$annotation_level2 %in% c("CD4.Y")] = "CD4.Y"
 
+```
+
+For Q programs vs tips
+-->limma_wrapper_20260320_CD4_ThprogramsQ.sh
+```{r}
 #For Q programs vs tips
 so@meta.data %>% count(annotation_level2, annotation_level2_program)
 so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% count(annotation_level2, annotation_level2_program)
 so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% rownames()]
 so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")
-saveRDS(so2, file = sprintf("%s/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
+# saveRDS(so2, file = sprintf("%s/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
 
+```
+
+on desktop
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_QprogramsvsTips/ttlist_QprogramsvsTips.Rds')
+tmp = ttlist
+gene_sig = list()
+
+cols = c("darkorchid", "violetred2", "burlywood2" )
+names(cols) = names(tmp)
+
+pdf(sprintf("%s/Volcano_QprogramsvsTips.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+
+
+
+```
+
+For G programs vs tips
+-->limma_wrapper_20260320_CD4_ThprogramsG.sh
+```{r}
 #For G programs vs tips
 so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I", "CD4.G.Th1", "CD4.G.Th2", "CD4.G.Th17", "CD4.G.Tfhchron")) %>% rownames()]
 so2@meta.data %>% count(annotation_level2, annotation_level2_program)
@@ -693,6 +822,44 @@ saveRDS(so2, file = sprintf("%s/CD4_GHIRSTUXY_igt1_96_withtotalvi20260206_clean_
 
 ```
 
+on desktop
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_GprogramsvsTips/ttlist_GprogramsvsTips.Rds')
+tmp = ttlist
+gene_sig = list()
+
+cols = c("darkorchid", "violetred2", "burlywood2","darkseagreen2" )
+names(cols) = names(tmp)
+
+pdf(sprintf("%s/Volcano_GprogramsvsTips.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-20, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-3) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+
+
+
+```
 
 **Figure 3 - CD4 GP analysis**
 ```{r}

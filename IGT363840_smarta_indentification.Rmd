@@ -1,0 +1,279 @@
+---
+title: "IGT363840_smarta_definition"
+output: html_document
+date: "2026-03-22"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = ZemmourLib::immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/IGT363840_SmartaP14" 
+# out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/IGT363840_SmartaP14"
+
+ensure_directory(out_dir)
+
+```
+
+**Most up-to-date data**
+on Midway
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "CD4" & organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+**Post mortem: smarta definition from 2025**
+```{r}
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "CD4" & organ_simplified != "thymus") %>% row.names()]
+smarta_giovanni = read.table(sprintf("%s/IGT36-38-40_SMARTA_LCMV_giovanni.csv", out_dir), sep = ",", header = F)[,1] #reload the list Giovanni sent me to make sure I didn't mess up importing.
+
+
+igt = so[,so$IGT %in% c("IGT36", "IGT38", "IGT40")]
+igt = NormalizeData(igt, assay = "ADT", normalization.method = "LogNormalize")
+
+igt$highlight = igt$Ag_spe == "SMARTA"
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "highlight", cols = "red", highlight_size = 1) + ggtitle("smarta byTCR 2025")
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified %in% c("spleen", "LN")) %>% count(timepoint)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+igt$highlight = !is.na(igt$transgenic_byTCR)
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "highlight", cols = "red", highlight_size = 2) + ggtitle("smarta byTCR 2025")
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "TCRVA2",raster = F, group.by = "highlight", cols = "red", highlight_size = 2) + ggtitle("smarta byTCR 2025")
+MyFeatureScatter(so = igt, feature1 = "CD45.1", feature2 = "TCRVA2",raster = F, group.by = "highlight", cols = "red", highlight_size = 2) + ggtitle("smarta byTCR 2025")
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & transgenic_byTCR == "SMARTA" , organ_simplified %in% c("spleen", "LN")) %>% count(timepoint)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & transgenic_byTCR == "SMARTA", organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "smarta_giovanni", cols = "red", highlight_size = 1) + ggtitle("smarta CITEseq giovanni 2025")
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "TCRVA2",raster = F, group.by = "smarta_giovanni", cols = "red", highlight_size = 1) + ggtitle("smarta CITEseq giovanni 2025")
+MyFeatureScatter(so = igt, feature1 = "CD45.1", feature2 = "TCRVA2",raster = F, group.by = "smarta_giovanni", cols = "red", highlight_size = 1) + ggtitle("smarta CITEseq giovanni 2025")
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_giovanni , organ_simplified %in% c("spleen", "LN")) %>% count(timepoint)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_giovanni, organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+```
+
+**Smarta in IGT 36, 38, 40 2026 definition**
+
+
+```{r}
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "CD4" & organ_simplified != "thymus") %>% row.names()]
+smarta = read.table(sprintf("%s/smarta.spleen 36_38_40.csv", out_dir), sep = ",", header = T)
+so$smarta_cb = colnames(so) %in% smarta$IGT.cellID
+igt = so[,so$IGT %in% c("IGT36", "IGT38", "IGT40")]
+
+```
+
+Comparison with TCRseq from last year
+```{r}
+# 345 match
+length(intersect(colnames(igt), smarta$IGT.cellID))
+
+#all spleen
+igt@meta.data %>% filter(smarta_cb) %>% count(organ_simplified)
+
+# 297 more sequences compared to last year
+igt@meta.data %>% filter(organ_simplified == "spleen") %>% count(transgenic_byTCR, smarta_cb)
+```
+
+Plotting back on CITEseq
+```{r}
+igt = NormalizeData(igt, assay = "ADT", normalization.method = "LogNormalize")
+
+# igt@meta.data %>% filter(IGT %in% c("IGT36", "IGT38", "IGT40")) %>% count(annotation_level1, smarta_cb, Ag_spe, transgenic_byTCR, transgenic_tet_byCITEseq, transgenic_tet_bySorting)
+
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 1) + ggtitle("smarta byTCR 2026 CB")
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "TCRVA2",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 1) + ggtitle("smarta byTCR 2026 CB")
+MyFeatureScatter(so = igt, feature1 = "CD45.1", feature2 = "TCRVA2",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 1) + ggtitle("smarta byTCR 2026 CB")
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_cb , organ_simplified %in% c("spleen", "LN")) %>% count(timepoint)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_cb, organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+```
+
+New gating by CD45.1
+```{r}
+tmp = data.frame(row.names = igt$cellID, x = igt[["ADT"]]@data["CD45.2",], y = igt[["ADT"]]@data["CD45.1",])
+library(gatepoints)
+plot(tmp$x, tmp$y,  pch = 16)
+selectedPoints = fhs(tmp[,1:2], mark = TRUE)
+# write.table(as.character(selectedPoints), file = sprintf("%s/smarta_citeseq_igt363840.csv",out_dir), row.names = F, col.names = F, quote = F)
+
+smarta_citeseq = read.table(sprintf("%s/smarta_citeseq_igt363840.csv",out_dir), header = F)[,1]
+igt$smarta_citeseq =  colnames(igt) %in% smarta_citeseq
+
+igt@meta.data %>% filter(organ_simplified == "spleen") %>% count(smarta_citeseq, smarta_cb)
+
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "smarta_citeseq", cols = "red", highlight_size = 2) + ggtitle("smarta CITEseq 2026")
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "TCRVA2",raster = F, group.by = "smarta_citeseq", cols = "red", highlight_size = 1) + ggtitle("smarta CITEseq 2026")
+MyFeatureScatter(so = igt, feature1 = "CD45.1", feature2 = "TCRVA2",raster = F, group.by = "smarta_citeseq", cols = "red", highlight_size = 1) + ggtitle("smarta CITEseq 2026")
+
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_citeseq == T) %>% count(timepoint, organ_simplified)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_citeseq == T & organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 110) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_citeseq == T & !(organ_simplified %in% c("spleen", "LN"))) %>% count(timepoint, organ_simplified)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_citeseq == T & !(organ_simplified %in% c("spleen", "LN"))) %>% group_by(timepoint) %>% slice_sample(n = 110) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+
+
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "CD45.1",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 2) + ggtitle("smarta TCRseq CB 2026")
+MyFeatureScatter(so = igt, feature1 = "CD45.2", feature2 = "TCRVA2",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 1) + ggtitle("smarta TCRseq CB 2026")
+MyFeatureScatter(so = igt, feature1 = "CD45.1", feature2 = "TCRVA2",raster = F, group.by = "smarta_cb", cols = "red", highlight_size = 1) + ggtitle("smarta TCRseq CB 2026")
+tmp = igt
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_cb == T) %>% count(timepoint, organ_simplified)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & smarta_cb == T & organ_simplified %in% c("spleen", "LN")) %>% group_by(timepoint) %>% slice_sample(n = 110) %>% ungroup() %>% pull(cellID)
+tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+# dev.off()
+
+
+
+
+```
+
+
