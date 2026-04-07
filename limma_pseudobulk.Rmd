@@ -1,0 +1,553 @@
+---
+title: "DGE_pseudobulk"
+output: html_document
+date: "2026-04-06"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+module load ImageMagick/7.1.1-7
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+R
+```
+
+
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = ZemmourLib::immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_pseudobulk" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_pseudobulk"
+
+prefix = "20260406"
+
+```
+
+
+**Most up-to-date data**
+on Midway
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
+
+# so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "CD4" & organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+
+**Pseudobulk by annotation_level2, IGT HT**
+```{r}
+
+# so_merged$pb_group <- paste(
+#     so_merged$sample_name,
+#     so_merged$annotation_level2,
+#     sep = "."
+# ) %>% gsub("\\_", ".", .)
+
+
+pb = AggregateExpression(
+    object = so_orig,
+    assay = "RNA",
+    group.by = "annotation_level2.IGTHT",
+    # features = tf,
+    normalization.method = "LogNormalize",
+    scale.factor = 10000,
+    verbose = T,
+    return.seurat = TRUE
+)
+
+library(dplyr)
+library(stringr)
+
+# original cell metadata
+meta_orig <- so_orig@meta.data
+
+# number of cells used for each pseudobulk aggregate
+cell_counts <- meta_orig %>%
+  count(annotation_level2.IGTHT, name = "n_cells")
+
+# parse pseudobulk IDs
+pb_meta <- pb@meta.data %>%
+  tibble::rownames_to_column("pb_id") %>%
+  mutate(
+    IGTHT = sub("^.*\\.(I[0-9]+H[0-9]+)$", "\\1", annotation_level2.IGTHT),
+    annotation_level2 = sub("\\.(I[0-9]+H[0-9]+)$", "", annotation_level2.IGTHT)
+  )
+
+pb_meta %>% count(annotation_level2)
+pb_meta %>% count(IGTHT)
+
+# sample metadata: keep one row per IGTHT
+mdata = read.table(file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/export_data/Sample_metadata_david_20260107_v11.csv", header = T, sep = ",", stringsAsFactors = F)
+
+mdata_sample <- mdata %>%
+  distinct(IGTHT, .keep_all = TRUE)
+
+# join everything
+pb_meta2 <- pb_meta %>%
+  left_join(cell_counts, by = "annotation_level2.IGTHT") %>%
+  left_join(mdata_sample, by = "IGTHT")
+
+# put back into Seurat object metadata
+pb@meta.data <- pb_meta2 %>%
+  tibble::column_to_rownames("pb_id")
+
+pb$orig.ident = NULL
+
+#Add annotation_lebvel1
+pb$annotation_level1 <- sub("\\..*$", "", pb@meta.data$annotation_level2)
+pb@meta.data %>% count(annotation_level1, annotation_level2)
+
+saveRDS(pb, file = sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406.Rds", out_dir) )
+
+#Split by annotation_level1
+# split into a named list of Seurat objects
+pb_list <- SplitObject(pb_orig, split.by = "annotation_level1")
+
+# save each one
+invisible(lapply(names(pb_list), function(nm) {
+  saveRDS(
+    pb_list[[nm]],
+    file = sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406_%s.Rds", out_dir, nm)
+  )
+}))
+
+```
+
+
+**CD4.Q vs CD4.G in spleen, colon, lung**
+
+Load pb_orig and filter genes
+```{r}
+pb_orig <- readRDS(sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406.Rds", out_dir))
+message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
+tcr_genes = grepl(x = rownames(pb_orig), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
+gm_rik_genes = grepl(x = rownames(pb_orig), pattern = "Gm|Rik$|\\-ps$")
+ribo_genes = grepl(x = rownames(pb_orig), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")
+mt_genes = grepl(x = rownames(pb_orig), pattern = "^mt-")
+genes_not_expressed = rowSums(pb_orig[["RNA"]]$counts) == 0
+genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
+cat("Number of genes to keep:", sum(genes_to_keep), "\n")
+pb_orig = pb_orig[genes_to_keep, ]
+```
+
+
+```{r}
+library(dplyr)
+library(edgeR)
+library(limma)
+
+pb_orig <- readRDS(sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406.Rds", out_dir))
+message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
+tcr_genes = grepl(x = rownames(pb_orig), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
+gm_rik_genes = grepl(x = rownames(pb_orig), pattern = "Gm|Rik$|\\-ps$")
+ribo_genes = grepl(x = rownames(pb_orig), pattern = "Rpl|Rps|Mrpl|Mrps|Rsl")
+mt_genes = grepl(x = rownames(pb_orig), pattern = "^mt-")
+genes_not_expressed = rowSums(pb_orig[["RNA"]]$counts) == 0
+genes_to_keep = !(tcr_genes | gm_rik_genes | ribo_genes | mt_genes | genes_not_expressed)
+cat("Number of genes to keep:", sum(genes_to_keep), "\n")
+pb_orig = pb_orig[genes_to_keep, ]
+
+
+prefix_file_name <- "CD4G_vs_CD4Q_organs_healthy"
+ensure_directory(sprintf("%s/%s/", out_dir, prefix_file_name))
+
+pb_orig@meta.data %>% count(organ_simplified)
+pb <- pb_orig[, pb_orig@meta.data %>%
+  filter(
+    condition_broad == "healthy",
+    annotation_level2 %in% c("CD4.G", "CD4.Q"),
+    organ_simplified %in% c("spleen", "LN","lung", "colon LP"),
+    n_cells >= 10
+  ) %>%
+  rownames()
+]
+
+pb@meta.data %>% count(organ_simplified, annotation_level2)
+pb@meta.data %>% count(sample_name, organ_simplified, annotation_level2)
+
+run_cluster_comparison_one_organ <- function(pb_sub = pb, organ_name = c("spleen", "LN"), min_cells = 10, cell_col = NULL) {
+  
+    
+  library(dplyr)
+  library(edgeR)
+  library(limma)
+  library(tidyr)
+  
+  meta <- pb_sub@meta.data
+  
+  # detect cell count column
+  if (is.null(cell_col)) {
+    if ("ncells" %in% colnames(meta)) {
+      cell_col <- "ncells"
+    } else if ("n_cells" %in% colnames(meta)) {
+      cell_col <- "n_cells"
+    } else {
+      stop("Could not find a cell count column.")
+    }
+  }
+  
+  # filter to organ + clusters + min cells
+  meta <- meta %>%
+    filter(
+      organ_simplified %in% organ_name,
+      annotation_level2 %in% c("CD4.G", "CD4.Q"),
+      .data[[cell_col]] >= min_cells
+    )
+  
+  meta %>% count(organ_simplified)
+  
+  # keep only IGTHT with BOTH CD4.G and CD4.Q
+  valid_samples <- meta %>%
+    count(IGTHT, annotation_level2) %>%
+    pivot_wider(
+      names_from = annotation_level2,
+      values_from = n,
+      values_fill = 0
+    ) %>%
+    filter(CD4.G > 0, CD4.Q > 0) %>%
+    pull(IGTHT)
+  
+  valid_samples
+  
+  meta <- meta %>%
+    filter(IGTHT %in% valid_samples) %>%
+    droplevels()
+  
+  pb_sub <- pb_sub[, rownames(meta)]
+  
+  message("Running: ", organ_name)
+  message("Min cells: ", min_cells)
+  print(meta %>% count(annotation_level2))
+  print(meta %>% count(IGTHT, annotation_level2))
+  
+  # safety checks
+  if (nrow(meta) == 0) stop("No samples left after filtering.")
+  if (length(unique(meta$annotation_level2)) < 2) stop("Need both CD4.G and CD4.Q.")
+  
+  dge <- DGEList(counts = pb_sub@assays$RNA$counts)
+  dge <- calcNormFactors(dge)
+  
+  meta$annotation_level2 <- factor(meta$annotation_level2, levels = c("CD4.Q", "CD4.G"))
+  meta$IGTHT <- factor(meta$IGTHT)
+  
+  # paired design using IGTHT
+  design <- model.matrix(~ 0 + annotation_level2 + IGTHT, data = meta)
+  
+  colnames(design) <- gsub("^annotation_level2", "", colnames(design))
+  colnames(design) <- gsub("^IGTHT", "", colnames(design))
+  colnames(design) <- make.names(colnames(design))
+  
+  print(colnames(design))
+  print(limma::nonEstimable(design))
+  
+  # filtering
+  keep_genes <- filterByExpr(dge, design = design)
+  dge <- dge[keep_genes, , keep.lib.sizes = FALSE]
+  dge <- calcNormFactors(dge)
+  
+  # voom + fit
+  v <- voom(dge, design, plot = F)
+  fit <- lmFit(v, design)
+  
+  contrast_matrix <- makeContrasts(
+    CD4G_vs_CD4Q = CD4.G - CD4.Q,
+    levels = design
+  )
+  
+  fit2 <- contrasts.fit(fit, contrast_matrix)
+  fit2 <- eBayes(fit2)
+  
+  tt <- topTable(
+    fit2,
+    coef = "CD4G_vs_CD4Q",
+    number = Inf,
+    adjust.method = "BH",
+    sort.by = "none"
+  )
+  
+  tt$SYMBOL <- rownames(tt)
+  tt$contrast <- paste0("CD4G_vs_CD4Q_", paste(organ_name,collapse = ""))
+  tt$organ_simplified <- paste(organ_name,collapse = "")
+  tt$min_cells <- min_cells
+  tt$n_pairs <- length(unique(meta$IGTHT))
+  
+  return(tt)
+}
+
+tt_spleen <- run_cluster_comparison_one_organ(pb, c("spleen", "LN"))
+
+tt_spleen %>% filter(adj.P.Val < 0.05) %>% arrange(desc(logFC)) %>% select(SYMBOL, logFC) %>% head(30)
+
+tt_lung   <- run_cluster_comparison_one_organ(pb, "lung")
+tt_lung %>% filter(adj.P.Val < 0.05) %>% arrange(desc(logFC)) %>% select(SYMBOL, logFC) %>% head(30)
+
+tt_colon  <- run_cluster_comparison_one_organ(pb, "colon LP")
+tt_colon %>% filter(adj.P.Val < 0.05) %>% arrange(desc(logFC)) %>% select(SYMBOL, logFC) %>% head(30)
+
+tt_list <- list(
+  CD4G_vs_CD4Q_spleen = tt_spleen,
+  CD4G_vs_CD4Q_lung   = tt_lung,
+  CD4G_vs_CD4Q_colon  = tt_colon
+)
+
+# saveRDS(tt_list, sprintf("%s/%s/ttlist.Rds", out_dir, prefix_file_name))
+
+
+library(ggrepel)
+
+tmp <- tt_list
+
+pdf(sprintf("%s/%s/Volcanoes.pdf", out_dir, prefix_file_name), width = 10, height = 10, useDingbats = F)
+for (i in seq_along(tmp)) {
+  message(i, " : ", names(tmp)[i])
+  
+  vplot <- na.omit(data.frame(
+    SYMBOL = tmp[[i]]$SYMBOL,
+    fc = 2^(tmp[[i]]$logFC),
+    pval = tmp[[i]]$P.Value + 1e-100,
+    AveExpr = 2^(tmp[[i]]$AveExpr)
+  ))
+  
+  p <- Vplot(
+    vplot = vplot,
+    xlab = names(tmp)[i],
+    xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)),
+    ylimits = c(min(vplot$pval), 1)
+  )
+  
+  sub <- vplot %>%
+    filter(abs(log2(fc)) > 0.5 & pval < 0.05) %>%
+    arrange(desc(log2(fc))) %>%
+    pull(SYMBOL)
+  
+  highlight_genes <- unique(c(head(sub, 50), tail(sub, 50)))
+  highlight_filter <- vplot$SYMBOL %in% highlight_genes
+  
+  print(
+    p + geom_text_repel(
+      data = vplot[highlight_filter, ],
+      aes(x = fc, y = pval, label = SYMBOL)
+    )
+  )
+}
+dev.off()
+
+```
+
+
+DGE limma - genes that are different between A,B,C vs G,H,I,Q,R,S CD4 T cells in SLO at memory timepoints, LCMV only
+```{r}
+library(edgeR)
+
+pb_orig = readRDS(sprintf("%s/trbi_8studies_20260311_pseudobulk.Rds", out_dir))
+
+pb_orig@meta.data %>% count(dataset, sample_name)
+pb = pb_orig[,pb_orig@meta.data %>% filter(dataset == "GSE184259_Nguyen_LCMV", infection_phase %in% c("memory"), organ_simplified %in% c("SLO", "SILP"), annotation_level2 %in% c("CD4.G", "CD4.Q"), !(sample_name %in% c("Arm_d7_SILP_Bcl6KO_GSE184259", "Arm_d7_SLO_Bcl6KO_GSE184259")), ncells > 10) %>% rownames()] #!(annotation_level2 %in% c("CD4.wM", "CD4.wZ", "CD4.wN", "CD4.P", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.E", "CD4.F"))
+dim(pb)
+pb@meta.data %>% count(dataset, sample_name)
+
+#check that there are at least 2 replicates per cluster timepoint 
+pb@meta.data %>% count(infection_phase, annotation_level2)
+
+dge = DGEList(counts = pb@assays$RNA$counts)
+dge = calcNormFactors(dge)
+
+meta = pb@meta.data
+meta %>% count(dataset, sample_name, annotation_level2,  infection_agent, infection_phase, organ_simplified)
+meta$organ_simplified = factor(meta$organ_simplified, levels = c("SLO", "SILP"))
+meta$annotation_level2 = factor(meta$annotation_level2, levels = unique(meta$annotation_level2))
+meta$infection_phase = factor(meta$infection_phase, levels = c("acute", "memory"))
+meta$infection_agent = make.names(meta$infection_agent)
+# meta$infection_agent = factor(meta$infection_agent, levels= c("Listeria.monocytogenes"))
+meta$sample_name = factor(meta$sample_name)
+meta$dataset = factor(meta$dataset)
+
+# design <- model.matrix(
+#   ~ 0 + level2_final*infection_phase + infection_agent + dataset,
+#   data = meta
+# )
+# colnames(design) = gsub(colnames(design), pattern = "level2_final", replacement = "")
+# colnames(design) = gsub(colnames(design), pattern = "dataset", replacement = "")
+# colnames(design) = gsub(colnames(design), pattern = "infection_phase", replacement = "")
+# colnames(design) = gsub(colnames(design), pattern = "infection_agent", replacement = "")
+# colnames(design) = make.names(colnames(design))
+# colnames(design) 
+
+# design <- model.matrix(
+#   ~ 0 + annotation_level2*infection_phase + organ_simplified + sample_name,
+#   data = meta
+# )
+design <- model.matrix(
+  ~ 0 + annotation_level2*organ_simplified + sample_name,
+  data = meta
+)
+colnames(design) = gsub(colnames(design), pattern = "annotation_level2", replacement = "")
+colnames(design) = gsub(colnames(design), pattern = "sample_name", replacement = "")
+colnames(design) = gsub(colnames(design), pattern = "infection_phase", replacement = "")
+colnames(design) = gsub(colnames(design), pattern = "organ_simplified", replacement = "")
+colnames(design) = make.names(colnames(design))
+colnames(design) 
+limma::nonEstimable(design)
+
+#Filter genes using the design-aware approach:
+keep_genes <- filterByExpr(dge, design = design)
+dge <- dge[keep_genes, , keep.lib.sizes = FALSE]
+dge <- calcNormFactors(dge)
+
+library(limma)
+v = voom(dge, design, plot = TRUE)
+fit = lmFit(v, design)
+
+tt_list = list()
+
+#Contrast for A,B,C vs G,H,IQ,R,S at memory
+# clusters <- grep("^CD4", colnames(design), value = TRUE)
+# contrast_formulas <- sapply(clusters, function(cl) {
+#   others <- setdiff(clusters, cl)
+#   paste0(
+#     cl,
+#     " - (",
+#     paste(others, collapse = " + "),
+#     ")/", length(others)
+#   )
+# })
+# names(contrast_formulas) <- paste0(clusters, "_vs_others")
+
+contrast_formulas = c()
+contrast_formulas["CD4G_SILP_vs_SLO"] = "SILP"
+contrast_formulas["CD4Q_SILP_vs_SLO"] = "CD4.Q + SILP"
+
+contrast_matrix <- makeContrasts(
+  contrasts = contrast_formulas,
+  levels = design
+)
+
+fit2 <- contrasts.fit(fit, contrast_matrix)
+fit2 <- eBayes(fit2)
+
+tt_list <- lapply(colnames(contrast_matrix), function(coef_name) {
+  tt <- topTable(
+    fit2,
+    coef = coef_name,
+    number = Inf,
+    adjust.method = "BH",
+    sort.by = "none"
+  )
+  tt$SYMBOL <- rownames(tt)
+  tt$contrast <- coef_name
+  tt$cluster <- sub("_vs_others$", "", coef_name)
+  tt
+})
+
+names(contrast_formulas)
+colnames(contrast_matrix)
+
+names(tt_list) <- names(contrast_formulas)
+
+saveRDS(tt_list, sprintf("%s/ttlist_Nguyen_CD4Trm.Rds", out_dir))
+
+# vplot = data.frame(fc = 2^(tt$logFC), pval = tt$adj.P.Val, SYMBOL = rownames(tt))
+# ZemmourLib::Vplot(vplot, ylimits = c(10^-50, 1), xlimits = NULL) + ggtitle(label = "memory_vs_acute_all")
+
+prefix_file_name = "Nguyen_CD4Trm"
+tmp = tt_list
+pdf(sprintf("%s/DiffExpression_volcano_%s.pdf", out_dir, prefix_file_name), width = 10, height = 10)
+# i = "memory_vs_acute_all2"
+for (i in 1:length(tmp)) {
+    print(i)
+   
+     vplot = na.omit(data.frame(SYMBOL = tt_list[[i]]$SYMBOL, fc = 2^tt_list[[i]]$logFC, pval = tt_list[[i]]$P.Value + 10^-300, AveExpr = 2^(tt_list[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1)) #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0.5 & pval < 0.05) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    highlight_genes = unique(c(head(sub, 50), tail(sub, 50)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+    # print(p + geom_text(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)))
+}
+dev.off()
+
+```
+
+
