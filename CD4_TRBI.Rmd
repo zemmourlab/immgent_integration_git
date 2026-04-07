@@ -874,7 +874,7 @@ so_query$infection_phase = NA
 so_query$infection_phase[grepl(x = so_query$sample_name, pattern = "d7")] = "acute"
 so_query$infection_phase[grepl(x = so_query$sample_name, pattern = "d21")] = "memory"
 
-so_query@meta.data %>% count(IGTHT, sample_name)
+so_query@meta.data %>% count(sample_type, level2_final)
 
 so_query$annotation_level2 = so_query$level2_final
 so_query@meta.data %>% count(annotation_level2)
@@ -882,6 +882,7 @@ so_query@meta.data %>% count(annotation_level2)
 ##Save a clean version
 sub = so_query@meta.data %>% filter(!(level2_final %in% c("not classified"))) %>% row.names()
 so_query = so_query[,sub]
+so_query@meta.data %>% count(sample_type)
 # saveRDS(so_query, sprintf("%s/Final_Seurat_object_clean_david.Rds", query_dir))
 
 #####Plots
@@ -3152,13 +3153,13 @@ so_merged = so_merged_orig
 so_merged@meta.data %>% count(dataset, sample_type, Ag_spe, infection_agent)
 so_merged@meta.data %>% filter(dataset %in% c("GSE184259_Nguyen_LCMV"), infection_agent == "LCMV Armstrong") %>% count(sample_type, organ_simplified)
 sub = so_merged@meta.data %>% filter(dataset %in% c("GSE184259_Nguyen_LCMV"), infection_agent == "LCMV Armstrong", organ_simplified %in% c("SLO", "SILP", "SIIEL"), !(sample_name %in% c("Arm_d7_SIIEL_Bcl6KO_GSE184259", "Arm_d7_SILP_Bcl6KO_GSE184259", "Arm_d7_SLO_Bcl6KO_GSE184259"))) %>% group_by(sample_type) %>% slice_sample(n = 1800) %>% ungroup() %>% pull(cellID)
-tmp = so_merged[,sub]
-tmp@meta.data %>% count(sample_type)
+tmp0 = so_merged[,sub]
+tmp0@meta.data %>% count(sample_type)
     
 pdf(sprintf("%s/TRBI_MDE_LCMV_SLO_NLT_Smarta_Nguyen.pdf",out_dir),7, 7, useDingbats = F)
-for (i in unique(tmp$sample_type)) {
+for (i in unique(tmp0$sample_type)) {
     print(i)
-    tmp = so_merged[,so_merged@meta.data %>% filter(sample_type == i) %>% rownames()]
+    tmp = tmp0[,tmp0@meta.data %>% filter(sample_type == i) %>% rownames()]
     
     p = DimPlot(tmp, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2) + ggtitle(i)
     bg = AddEmbeddingRasterBackground(lineage = "CD4")
@@ -3170,7 +3171,7 @@ dev.off()
 
 ```
 
-Calculate proportions, TRBI_memory_acute_ClusterProp_LCMV_NLT.pdf
+Calculate proportions, TRBI_memory_acute_ClusterProp_LCMV_SLO.pdf
 ```{r}
 library(dplyr)
 library(ggplot2)
@@ -3184,7 +3185,7 @@ library(stringr)
 
 cluster_col <- "annotation_level2"   # change if needed
 
-so_merged@meta.data %>% filter(!is.na(dataset), !is.na(sample_name), !is.na(infection_phase), infection_phase %in% c("acute", "memory"), organ_simplified %in% "SLO", !(dataset %in% c("GSE184259_Nguyen_LCMV"))) %>% count(dataset, sample_name, infection_phase)
+so_merged@meta.data %>% filter(!is.na(dataset), !is.na(sample_name), !is.na(infection_phase), infection_phase %in% c("acute", "memory"), organ_simplified %in% "SLO", dataset %in% c("GSE184259_Nguyen_LCMV")) %>% count(dataset, sample_name, infection_phase)
 
 df_plot <- so_merged@meta.data %>% filter(dataset == "GSE184259_Nguyen_LCMV") %>% 
   count(sample_type, sample_name, infection_phase, organ_simplified, .data[[cluster_col]], name = "n") %>%
@@ -3316,6 +3317,197 @@ p3 = ggplot(df_plot3, aes(cluster, pct, color = organ_simplified)) +
 p3 + NoGrid()
 
 pdf(sprintf("%s/ClusterProp_LCMV_NLT_memory_acute.pdf", out_dir), 8,5, useDingbats = F)
+p1 + NoGrid()
+p2 + NoGrid()
+p3 + NoGrid()
+dev.off()
+
+```
+
+
+Calculate proportions, TRBI_memory_acute_ClusterProp_LCMV_NLT.pdf
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(scales)
+library(stringr)
+
+# so_merged@meta.data %>% filter(dataset == "GSE184259_Nguyen_LCMV") %>% count(sample_name)
+# sub = so_merged@meta.data %>% filter(dataset == "GSE184259_Nguyen_LCMV") %>% pull(cellID)
+# tmp0 = so_merged[,sub]
+
+cluster_col <- "annotation_level2"   # change if needed
+
+so_merged@meta.data %>% filter(!is.na(dataset), !is.na(sample_name), !is.na(infection_phase), infection_phase %in% c("acute", "memory"), organ_simplified %in% "SLO", !(dataset %in% c("GSE184259_Nguyen_LCMV"))) %>% count(dataset, sample_name, infection_phase)
+
+df_plot <- so_merged@meta.data %>% filter(dataset == "GSE184259_Nguyen_LCMV") %>% 
+  count(sample_type, sample_name, infection_phase, organ_simplified, .data[[cluster_col]], name = "n") %>%
+  group_by(sample_name) %>%
+  mutate(
+    sample_total = sum(n),
+    pct = 100 * n / sample_total
+  ) %>%
+  ungroup() %>%
+  rename(cluster = all_of(cluster_col))
+
+df_plot2 <- df_plot %>%
+  filter(infection_phase %in% c("acute","memory")) %>%
+  mutate(
+    cluster_phase = paste(cluster, infection_phase)
+  )
+clusters <- levels(so$annotation_level2)[grepl("^CD4", levels(so$annotation_level2))]
+x_levels <- as.vector(
+  rbind(
+    paste(clusters, "acute"),
+    paste(clusters, "memory")
+  )
+)
+df_plot2$cluster_phase <- factor(df_plot2$cluster_phase, levels = x_levels)
+df_plot2$organ_simplified = factor(df_plot2$organ_simplified, levels = c("SLO", "SILP", "SIIEL"))
+
+##SLO D7 vs D21
+df_plot2 %>% count(sample_type, sample_name)
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), organ_simplified %in% c("SLO"), !(sample_type %in% c("Arm_d7_SIIEL_Bcl6KO", "Arm_d7_SILP_Bcl6KO", "Arm_d7_SLO_Bcl6KO")) )
+df_plot3 %>% count(sample_name)
+df_plot3$cluster = factor(df_plot3$cluster, levels = intersect(clusters, df_plot3$cluster))
+
+p0 = ggplot(df_plot3, aes(cluster, pct, color = infection_phase)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 2
+    ) +
+    stat_summary(
+        aes(group = infection_phase),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("acute" = "blue", "memory" = "red")) +
+    theme_bw() +
+    ggtitle ("LCMV SLO D7 vs D21") +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p0 + NoGrid()
+
+
+##NLT D7 vs D21
+df_plot2 %>% count(sample_type, sample_name)
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), organ_simplified %in% c("SILP", "SIIEL"), !(sample_type %in% c("Arm_d7_SIIEL_Bcl6KO", "Arm_d7_SILP_Bcl6KO", "Arm_d7_SLO_Bcl6KO")) )
+df_plot3 %>% count(sample_name)
+df_plot3$cluster = factor(df_plot3$cluster, levels = intersect(clusters, df_plot3$cluster))
+
+p1 = ggplot(df_plot3, aes(cluster, pct, color = infection_phase, shape = sample_type)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 2
+    ) +
+    stat_summary(
+        aes(group = infection_phase),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("acute" = "blue", "memory" = "red")) +
+    theme_bw() +
+    ggtitle ("LCMV NLT D7 vs D21") +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p1 + NoGrid()
+
+
+##LCMV SLO vs NLT D7
+df_plot2 %>% count(sample_type, sample_name)
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), infection_phase == "acute", organ_simplified %in% c("SLO","SILP", "SIIEL"), !(sample_type %in% c("Arm_d7_SIIEL_Bcl6KO", "Arm_d7_SILP_Bcl6KO", "Arm_d7_SLO_Bcl6KO")) )
+df_plot3$cluster = factor(df_plot3$cluster, levels = intersect(clusters, df_plot3$cluster))
+
+p2 = ggplot(df_plot3, aes(cluster, pct, color = organ_simplified)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 2
+    ) +
+    stat_summary(
+        aes(group = organ_simplified),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("SLO" = "blue", "SILP" = "red", "SIIEL" = "orange")) +
+    theme_bw() +
+    ggtitle ("LCMV SLO vs NLT D7") +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p2 + NoGrid()
+
+##LCMV SLO vs NLT D21
+df_plot2 %>% count(sample_type, sample_name)
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), infection_phase == "memory", organ_simplified %in% c("SLO","SILP", "SIIEL"), !(sample_type %in% c("Arm_d7_SIIEL_Bcl6KO", "Arm_d7_SILP_Bcl6KO", "Arm_d7_SLO_Bcl6KO")) )
+df_plot3$cluster = factor(df_plot3$cluster, levels = intersect(clusters, df_plot3$cluster))
+
+p3 = ggplot(df_plot3, aes(cluster, pct, color = organ_simplified)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 2
+    ) +
+    stat_summary(
+        aes(group = organ_simplified),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("SLO" = "blue", "SILP" = "red", "SIIEL" = "orange")) +
+    theme_bw() +
+    ggtitle ("LCMV SLO vs NLT D21") +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3 + NoGrid()
+
+pdf(sprintf("%s/ClusterProp_LCMV_NLT_memory_acute.pdf", out_dir), 8,5, useDingbats = F)
+p0 + NoGrid()
 p1 + NoGrid()
 p2 + NoGrid()
 p3 + NoGrid()
@@ -3659,517 +3851,6 @@ p3 + NoGrid()
 pdf(sprintf("%s/TRBI_memory_acute_ClusterProp_LCMV_BCL6KO.pdf", out_dir), 8,5, useDingbats = F)
 p2 + NoGrid()
 p3 + NoGrid()
-dev.off()
-
-
-```
-
-
-**Analysis within ImmgenT data**
-
-Plot MDE immgenT - SLO in LCMV arm and Listeria
-```{r}
-sub = so@meta.data %>% filter(infection_agent %in% c("ActA-deficient Listeria monocytogenes (DPL1942)-2W", "LCMV Armstrong"), organ_simplified %in% c("SLO", "LN", "spleen"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(sample_code, sample_type, organ_simplified)
-tmp = so[,so@meta.data %>% filter(infection_agent %in% c("ActA-deficient Listeria monocytogenes (DPL1942)-2W", "LCMV Armstrong"), organ_simplified %in% c("SLO", "LN", "spleen"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% rownames()]
-tmp$organ_simplified0 = "SLO"
-
-tmp@meta.data %>% count(infection_agent, timepoint, Ag_spe)
-
-tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(timepoint)
-sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
-tmp2 = tmp[,sub]
-pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir2),7, 7, useDingbats = F)
-for (i in unique(tmp2$timepoint)) {
-    print(i)
-    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
-    
-    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
-    bg = AddEmbeddingRasterBackground(lineage = "CD4")
-    p$layers = c(list(bg), p$layers)
-    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
-    print(p)
-}
-dev.off()
-
-tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% count(timepoint)
-sub = tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% group_by(timepoint) %>% slice_sample(n = 500) %>% ungroup() %>% pull(cellID)
-tmp2 = tmp[,sub]
-pdf(sprintf("%s/MDE_Listeria_timecourse_IGT43.pdf",out_dir2),7, 7, useDingbats = F)
-for (i in unique(tmp2$timepoint)) {
-    print(i)
-    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
-    
-    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
-    bg = AddEmbeddingRasterBackground(lineage = "CD4")
-    p$layers = c(list(bg), p$layers)
-    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
-    print(p)
-}
-dev.off()
-```
-
-Plot MDE immgenT CD4 Trm
-```{r}
-
-so@meta.data %>% filter(condition_broad %in% c("bacteria", "virus"), !(organ_simplified %in% c("SLO", "LN", "spleen"))) %>% count(sample_code, sample_type, organ_simplified, Ag_spe)
-
-so@meta.data %>% filter(infection_agent %in% c("LCMV Armstrong"), !(organ_simplified %in% c("SLO", "LN", "spleen")), Ag_spe == "SMARTA", IGT %in% c("IGT36", "IGT38", "IGT40")) %>% count(sample_code, sample_type, organ_simplified)
-tmp = so[,so@meta.data %>% filter(infection_agent %in% c("LCMV Armstrong"), !(organ_simplified %in% c("SLO", "LN", "spleen")), Ag_spe == "SMARTA", IGT %in% c("IGT36", "IGT38", "IGT40"))  %>% rownames()]
-tmp$organ_simplified0 = "NLT"
-
-tmp@meta.data %>% count(infection_agent, timepoint, Ag_spe)
-
-tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(timepoint)
-sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% ungroup() %>% pull(cellID) # %>% slice_sample(n = 121)
-tmp2 = tmp[,sub]
-pdf(sprintf("%s/MDE_LCMV_timecourse_NLT_IGT363840.pdf",out_dir2),7, 7, useDingbats = F)
-for (i in unique(tmp2$timepoint)) {
-    print(i)
-    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
-    
-    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(i)
-    bg = AddEmbeddingRasterBackground(lineage = "CD4")
-    p$layers = c(list(bg), p$layers)
-    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
-    print(p)
-}
-dev.off()
-
-```
-
-TopicDGE LCMV
-```{r}
-mdata_orig = so@meta.data
-
-L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
-F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
-
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA", "2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO") ) %>% count(infection_phase, annotation_level2)
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
-
-group_list = list(
-    
-        list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 memory vs acute in LCMV"),
-
-    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "cleared" )  %>% pull(cellID),
-    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "acute" )  %>% pull(cellID),
-    #      title = "CD4 ABC memory vs acute in LCMV"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 GHI memory vs acute in LCMV"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 QRS memory vs acute in LCMV")
-
-)
-
-results_list = list()
-
-for (i in 1:length(group_list)) {
-    print(group_list[[i]]$title)
-    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
-}
-
-
-# results$p1  # First plot (MA plot of factors)
-# results$p2  # Second plot (MA plot of genes)
-# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
-# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
-
-results_list_LCMV = results_list
-
-#Heatmap with the results
-tt = results_list 
-
-comp_filt = names(tt)
-# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
-
-# #filter gene names
-# genes_to_label <- c()
-# for (i in comp_filt) {
-#   new_genes <- tt[[i]]$diff_genes %>%
-#     arrange(desc(log2FC)) %>%
-#     # filter(adj.P.Val < 0.05) %>%
-#     pull(SYMBOL)
-#   new_genes <- setdiff(new_genes, genes_to_label)
-#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
-# }
-
-genes_to_label <- c()
-for (i in comp_filt) {
-  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
-  # top up
-  up_genes <- df %>%
-    arrange(desc(log2FC)) %>%
-    pull(SYMBOL)
-  # top down
-  down_genes <- df %>%
-    arrange(log2FC) %>%
-    pull(SYMBOL)
-  # remove genes already selected
-  up_genes <- setdiff(up_genes, genes_to_label)
-  down_genes <- setdiff(down_genes, genes_to_label)
-
-  # add top 20 each
-  genes_to_label <- c(
-    genes_to_label,
-    head(up_genes, 10),
-    head(down_genes, 10)
-  )
-}
-
-genes_to_label <- genes_to_label[
-  !grepl(
-    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
-    genes_to_label,
-    ignore.case = TRUE
-  )
-]
-
-genes_to_label_LCMV = genes_to_label
-
-#plot heatmap
-# mat_coef <- sapply(tt, function(tt) tt$logFC)
-mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
-rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
-colnames(mat_coef) = make.names(names(tt))
-mat_coef_LCMV = mat_coef
-mat_plot = mat_coef[genes_to_label, ]
-range(mat_plot)
-
-library(ComplexHeatmap)
-library(circlize)
-
-col_fun <- circlize::colorRamp2(
-  c(-1, 0, 1),
-  c("#4575B4", "white", "#D73027")
-)
-
-# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
-pdf(sprintf("%s/Heatmap_LCMV_SLO_memory_vs_acute_IGT363840.pdf", out_dir2), width = 3, 8, useDingbats = F)
-Heatmap(
-  mat_plot,
-  name = "log2FC",
-  col = col_fun,
-  cluster_columns = FALSE,
-  cluster_rows = T,
-    row_names_gp = gpar(fontsize = 6),
-      column_names_gp = gpar(fontsize = 6),
-  column_title = "memory vs acute across clusters in LCMV SLO"
-)
-dev.off()
-
-
-
-
-```
-
-TopicDGE Listeria
-```{r}
-# mdata_orig = so@meta.data
-# L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
-# F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
-
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO") ) %>% count(infection_phase, annotation_level2)
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
-
-group_list = list(
-    
-        list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 memory vs acute in Listeria"),
-
-    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "cleared" )  %>% pull(cellID),
-    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "acute" )  %>% pull(cellID),
-    #      title = "CD4 ABC memory vs acute in Listeria"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 GHI memory vs acute in Listeria"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "cleared" )  %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "acute" )  %>% pull(cellID),
-         title = "CD4 QRS memory vs acute in Listeria")
-)
-
-results_list = list()
-
-for (i in 1:length(group_list)) {
-    print(group_list[[i]]$title)
-    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
-}
-
-
-# results$p1  # First plot (MA plot of factors)
-# results$p2  # Second plot (MA plot of genes)
-# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
-# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
-
-results_list_Lm = results_list
-
-#Heatmap with the results
-tt = results_list 
-
-comp_filt = names(tt)
-# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
-
-#filter gene names
-# genes_to_label <- c()
-# for (i in comp_filt) {
-#   new_genes <- tt[[i]]$diff_genes %>%
-#     arrange(desc(abs(log2FC))) %>%
-#     # filter(adj.P.Val < 0.05) %>%
-#     pull(SYMBOL)
-#   new_genes <- setdiff(new_genes, genes_to_label)
-#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
-# }
-
-genes_to_label <- c()
-for (i in comp_filt) {
-  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
-  # top up
-  up_genes <- df %>%
-    arrange(desc(log2FC)) %>%
-    pull(SYMBOL)
-  # top down
-  down_genes <- df %>%
-    arrange(log2FC) %>%
-    pull(SYMBOL)
-  # remove genes already selected
-  up_genes <- setdiff(up_genes, genes_to_label)
-  down_genes <- setdiff(down_genes, genes_to_label)
-
-  # add top 20 each
-  genes_to_label <- c(
-    genes_to_label,
-    head(up_genes, 10),
-    head(down_genes, 10)
-  )
-}
-
-genes_to_label <- genes_to_label[
-  !grepl(
-    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
-    genes_to_label,
-    ignore.case = TRUE
-  )
-]
-
-genes_to_label_Lm = genes_to_label
-
-#plot heatmap
-# mat_coef <- sapply(tt, function(tt) tt$logFC)
-mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
-rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
-colnames(mat_coef) = make.names(names(tt))
-mat_coef_Lm = mat_coef
-mat_plot = mat_coef[genes_to_label, ]
-range(mat_plot)
-
-library(ComplexHeatmap)
-library(circlize)
-
-col_fun <- circlize::colorRamp2(
-  c(-0.5, 0, 0.5),
-  c("#4575B4", "white", "#D73027")
-)
-
-# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
-pdf(sprintf("%s/Heatmap_Listeria_SLO_memory_vs_acute_IGT363840.pdf", out_dir2), width = 3, 8, useDingbats = F)
-Heatmap(
-  mat_plot,
-  name = "log2FC",
-  col = col_fun,
-  cluster_columns = FALSE,
-  cluster_rows = T,
-    row_names_gp = gpar(fontsize = 6),
-      column_names_gp = gpar(fontsize = 6),
-  column_title = "memory vs acute across clusters in Listeria SLO"
-)
-dev.off()
-
-```
-
-Heatmap with LCMV and Listeria together
-```{r}
-tt = c(results_list_Lm, results_list_LCMV)
-genes_to_label = unique(genes_to_label_LCMV, genes_to_label_Lm)
-
-all(rownames(mat_coef_LCMV) == rownames(mat_coef_Lm))
-mat_coef =  cbind(mat_coef_LCMV, mat_coef_Lm)
-mat_plot = mat_coef[genes_to_label, ]
-mat_plot_LCMV = mat_coef_LCMV[genes_to_label, ]
-mat_plot_Lm = mat_coef_Lm[genes_to_label, ]
-
-range(mat_plot)
-
-library(ComplexHeatmap)
-library(circlize)
-
-pdf(sprintf("%s/Heatmap_ListeriaLCMV_SLO_memory_vs_acute_IGT36384043.pdf", out_dir2), width = 3, 8, useDingbats = F)
-col_fun <- circlize::colorRamp2(
-  c(-1, 0, 1),
-  c("#4575B4", "white", "#D73027")
-)
-Heatmap(
-  mat_plot_LCMV,
-  name = "log2FC",
-  col = col_fun,
-  cluster_columns = FALSE,
-  cluster_rows = F,
-    row_names_gp = gpar(fontsize = 6),
-      column_names_gp = gpar(fontsize = 6),
-  column_title = "memory vs acute across clusters in Listeria SLO"
-)
-
-col_fun <- circlize::colorRamp2(
-  c(-0.5, 0, 0.5),
-  c("#4575B4", "white", "#D73027")
-)
-Heatmap(
-  mat_plot_Lm,
-  name = "log2FC",
-  col = col_fun,
-  cluster_columns = FALSE,
-  cluster_rows = F,
-    row_names_gp = gpar(fontsize = 6),
-      column_names_gp = gpar(fontsize = 6),
-  column_title = "memory vs acute across clusters in Listeria SLO"
-)
-dev.off()
-
-```
-
-TopicDGE LCMV NLT vs SLO
-```{r}
-mdata_orig = so@meta.data
-
-L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
-F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
-
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO") ) %>% count(infection_phase, organ_simplified)
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")) ) %>% count(infection_phase, organ_simplified)
-mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
-
-group_list = list(
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.Q"), infection_phase == "cleared" ) %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.G","CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
-         title = "SLO vs NLT in GQ, in LCMV at memory timepoint"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" ) %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" )  %>% pull(cellID),
-         title = "SLO vs NLT in G, in LCMV at memory timepoint"),
-    
-    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" ) %>% pull(cellID),
-         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
-         title = "SLO vs NLT in Q, in LCMV at memory timepoint")
-    
-)
-
-results_list = list()
-
-for (i in 1:length(group_list)) {
-    print(group_list[[i]]$title)
-    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
-}
-
-# results = results_list[[3]]
-# results$p1  # First plot (MA plot of factors)
-# results$p2  # Second plot (MA plot of genes)
-# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
-# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
-
-pdf(sprintf("%s/Volcano_LCMV_SLO_vs_NLT_IGT363840.pdf", out_dir2), width = 5, 5, useDingbats = F)
-results = results_list[["SLO vs NLT in GQ, in LCMV at memory timepoint"]]
-results$p1  # First plot (MA plot of factors)
-results$p2  # Second plot (MA plot of genes)
-# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
-# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
-dev.off()
-
-#Heatmap with the results
-tt = results_list 
-
-comp_filt = names(tt)
-# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
-
-# #filter gene names
-# genes_to_label <- c()
-# for (i in comp_filt) {
-#   new_genes <- tt[[i]]$diff_genes %>%
-#     arrange(desc(log2FC)) %>%
-#     # filter(adj.P.Val < 0.05) %>%
-#     pull(SYMBOL)
-#   new_genes <- setdiff(new_genes, genes_to_label)
-#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
-# }
-
-genes_to_label <- c()
-for (i in comp_filt) {
-  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
-  # top up
-  up_genes <- df %>%
-    arrange(desc(log2FC)) %>%
-    pull(SYMBOL)
-  # top down
-  down_genes <- df %>%
-    arrange(log2FC) %>%
-    pull(SYMBOL)
-  # remove genes already selected
-  up_genes <- setdiff(up_genes, genes_to_label)
-  down_genes <- setdiff(down_genes, genes_to_label)
-
-  # add top 20 each
-  genes_to_label <- c(
-    genes_to_label,
-    head(up_genes, 10),
-    head(down_genes, 10)
-  )
-}
-
-genes_to_label <- genes_to_label[
-  !grepl(
-    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
-    genes_to_label,
-    ignore.case = TRUE
-  )
-]
-
-
-#plot heatmap
-# mat_coef <- sapply(tt, function(tt) tt$logFC)
-mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
-rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
-colnames(mat_coef) = make.names(names(tt))
-mat_coef_LCMV = mat_coef
-mat_plot = mat_coef[genes_to_label, ]
-range(mat_plot)
-
-library(ComplexHeatmap)
-library(circlize)
-
-col_fun <- circlize::colorRamp2(
-  c(-1, 0, 1),
-  c("#4575B4", "white", "#D73027")
-)
-
-# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
-pdf(sprintf("%s/Heatmap_LCMV_SLO_vs_NLT_IGT363840.pdf", out_dir2), width = 3, 8, useDingbats = F)
-Heatmap(
-  mat_plot,
-  name = "log2FC",
-  col = col_fun,
-  cluster_columns = FALSE,
-  cluster_rows = T,
-    row_names_gp = gpar(fontsize = 6),
-      column_names_gp = gpar(fontsize = 6),
-  column_title = "SLO vs NLT in GQ, in LCMV"
-)
 dev.off()
 
 
