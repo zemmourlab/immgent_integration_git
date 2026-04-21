@@ -116,52 +116,150 @@ so@meta.data %>% filter(organ_simplified %in% c("spleen", "SLO", "LN")) %>% coun
 ```
 
 
-**FCFC plots**
+**Figure 4 FCFC plots**
 Tfh/Tex
 ```{r}
-source('/Users/david/Library/CloudStorage/GoogleDrive-david.puyraimond@gmail.com/My Drive/ImmgenT/analysis/immgent_integration_git/custom_functions_david.R')
-
-tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20250109/ttlist_OneVsAll.Rds')
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/ttlist_OneVsAll.Rds')
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/ttlist_in_Activated.Rds')
 
 names(tt_list)
 
 
 # Create the vplot dataframe with fold changes
-vplot = data.frame(fc1 = exp(tt_list$CD4_cl13_vs_All$logFC), fc2 = exp(tt_list$CD4_cl14_vs_All$logFC), SYMBOL = tt_list$CD4_cl13_vs_All$SYMBOL)
+# vplot = data.frame(fc1 = exp(tt_list$CD4.H_vs_All$logFC), fc2 = exp(tt_list$CD4.I_vs_All$logFC), SYMBOL = tt_list$CD4.H_vs_All$SYMBOL)
+vplot = data.frame(fc1 = exp(tt_list$CD4.I_vs_AllActivated$logFC), fc2 = exp(tt_list$CD4.H_vs_AllActivated$logFC), SYMBOL = tt_list$CD4.H_vs_AllActivated$SYMBOL)
 
 # Identify genes with large fold changes (>2)
-genes_to_plot = abs(tt_list$CD4_cl13_vs_All$logFC) > 0.69 | abs(tt_list$CD4_cl14_vs_All$logFC) > 0.69
+# genes_to_plot = abs(tt_list$CD4.H_vs_All$logFC) > 0.69 | abs(tt_list$CD4.I_vs_All$logFC) > 0.69
+genes_to_plot = abs(tt_list$CD4.H_vs_AllActivated$logFC) > 0.5 | abs(tt_list$CD4.I_vs_AllActivated$logFC) > 0.5
 # genes_to_label = vplot[genes_to_plot, ]
 genes_to_label = vplot$SYMBOL[genes_to_plot]
 
 # Create the plot
+pdf(sprintf("%s/FCFCplot_H_vs_I_.pdf", out_dir), 6,6, useDingbats = F)
 FCFCplot(vplot, 
-         xlab = "FC for CD4_cl13", 
-         ylab = "FC for CD4_cl14", 
-         main = "Fold Change vs Fold Change", 
-         genes_to_label = genes_to_label)
-
-FCFCplot(vplot, 
-         xlab = "FC for CD4_cl13", 
-         ylab = "FC for CD4_cl14", 
+         xlab = "FC for CD4.I", 
+         ylab = "FC for CD4.H", 
          main = "Fold Change vs Fold Change", 
          genes_to_label = NULL)
-
-vplot = data.frame(fc1 = exp(tt_list$CD8_cl10_vs_All$logFC), fc2 = exp(tt_list$CD8_cl7_vs_All$logFC), SYMBOL = tt_list$CD8_cl10_vs_All$SYMBOL)
-# Identify genes with large fold changes (>2)
-genes_to_plot = abs(tt_list$CD8_cl10_vs_All$logFC) > 0.69 | abs(tt_list$CD8_cl7_vs_All$logFC) > 0.69
-genes_to_label = vplot[genes_to_plot, ]
-# Create the plot
+dev.off()
+pdf(sprintf("%s/FCFCplot_H_vs_I_labels.pdf", out_dir), 12,12, useDingbats = F)
 FCFCplot(vplot, 
-         xlab = "FC for CD8_cl10", 
-         ylab = "FC for CD8_cl7", 
+         xlab = "FC for CD4.I", 
+         ylab = "FC for CD4.H", 
          main = "Fold Change vs Fold Change", 
-         printgeomtext = T, 
-         genes_to_label = genes_to_label)
+         genes_to_label = genes_to_label, 
+            )
+dev.off()
 
+```
+
+
+Top10 in H or I
+```{r}
+prop = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20260206/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds')
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# your starting point
+prop_sub <- prop %>% 
+  select(
+    sample_type, sample_code,
+    CD4.H.ncells, CD4.H.prop,
+    CD4.I.ncells, CD4.I.prop
+  )
+
+# ---- compute averages ---- 
+prop_avg <- prop_sub %>% 
+  group_by(sample_type) %>%
+  summarise(
+    CD4.H.prop = mean(CD4.H.prop, na.rm = TRUE),
+    CD4.I.prop = mean(CD4.I.prop, na.rm = TRUE),
+    CD4.H.ncells = mean(CD4.H.ncells, na.rm = TRUE),
+    CD4.I.ncells = mean(CD4.I.ncells, na.rm = TRUE),
+    n_samples = n(),
+    .groups = "drop"
+  ) %>%
+  filter(n_samples > 2, (CD4.H.ncells > 20 | CD4.I.ncells > 20)) %>%
+  arrange(desc(CD4.H.prop)) %>%
+  slice_head(n = 20)
+
+# keep only top sample_types
+top_types <- prop_avg$sample_type
+
+# ---- reshape mean ----
+mean_long <- prop_avg %>%
+  select(sample_type, CD4.H.prop, CD4.I.prop) %>%
+  pivot_longer(
+    cols = c(CD4.H.prop, CD4.I.prop),
+    names_to = "cluster",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    cluster = recode(cluster,
+                     "CD4.H.prop" = "CD4.H",
+                     "CD4.I.prop" = "CD4.I"),
+    prop_plot = ifelse(cluster == "CD4.H", -prop, prop)
+  )
+
+# ---- reshape individual samples ----
+points_long <- prop_sub %>%
+  filter(sample_type %in% top_types) %>%
+  pivot_longer(
+    cols = c(CD4.H.prop, CD4.I.prop),
+    names_to = "cluster",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    cluster = recode(cluster,
+                     "CD4.H.prop" = "CD4.H",
+                     "CD4.I.prop" = "CD4.I"),
+    prop_plot = ifelse(cluster == "CD4.H", -prop, prop)
+  )
+
+# keep order
+mean_long$sample_type <- factor(mean_long$sample_type, levels = rev(prop_avg$sample_type))
+points_long$sample_type <- factor(points_long$sample_type, levels = rev(prop_avg$sample_type))
+
+# ---- plot ----
+p = ggplot() +
+  geom_col(
+    data = mean_long,
+    aes(x = sample_type, y = prop_plot, fill = cluster),
+    width = 0.7,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = points_long,
+    aes(x = sample_type, y = prop_plot), color = "black",
+    position = position_jitter(width = 0.15),
+    size = 2,
+    alpha = 1
+  ) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  scale_y_continuous(labels = abs) +
+  scale_fill_manual(values = mypal_level2) +
+  # scale_color_manual(values = mypal_level2) +
+  labs(
+    x = NULL,
+    y = "Proportion (H left, I right)"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.y = element_text(size = 12),
+    legend.position = "top"
+  )
+
+pdf(sprintf("%s/Top10_samples_HI.pdf", out_dir), 10,5, useDingbats = F)
+print(p)
+dev.off()
 
 
 ```
+
 
 
 **MDE plots**
@@ -569,7 +667,7 @@ th_scores$program = cell_class
 th_scores_bin %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
 th_scores %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
 
-saveRDS(th_scores, sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/"))
+# saveRDS(th_scores, sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/"))
 
 ```
 
@@ -792,23 +890,6 @@ p
 pdf(sprintf("%s/barplot_polyfunctional_GQOnly.pdf", out_dir), 8,8)
 p
 dev.off()
-
-
-###########
-
-so@meta.data %>% count(annotation_level2, annotation_level2_group)
-so@meta.data %>% count(annotation_level2_group, annotation_level2)
-
-anndata = readRDS("CD4Q_CD4G_cell_ids_with_program_labels.rds")
-anndata %>% count(annotation_level2)
-anndata_g = anndata %>% filter(annotation_level2 == "CD4.G")
-anndata_q = anndata %>% filter(annotation_level2 == "CD4.Q")
-
-so$program = NA
-so$program[anndata_g$cell_id] = anndata_g$g_program
-so$program[anndata_q$cell_id] = anndata_q$q_program
-
-so@meta.data %>% filter(annotation_level2 %in% c("CD4.G", "CD4.Q")) %>% count(annotation_level2, program)
 
 
 ```
@@ -1114,6 +1195,257 @@ names(ttlist3)
 
 ```
 
+Genes present in at least 1 comparison
+```{r}
+tmp = list(ttlist2[["RS_vs_Qth1"]], ttlist2[["TU_vs_Qth2"]], ttlist2[["XY_vs_Qth17"]])
+names(tmp) = c( "RS_vs_Qth1", "TU_vs_Qth2", "XY_vs_Qth17")
+
+tmp_list = list()
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("grey", "grey", "grey", "grey" )
+names(cols) = names(tmp)
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.5,  P.Value < 10^-10) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL)
+    # top down
+    down_genes <- df %>% filter(logFC < -0.5,  P.Value < 10^-10) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 1000), head(down_genes, 1000)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+] %>% unique() %>% sort()
+genes_to_label
+
+# genes_to_label_top100 = list()
+# genes_to_label_top100[["Th1"]] = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# # pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Tips_vsQTh_AllGenes.pdf", out_dir), width = 3, 15, useDingbats = F)
+# # pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+# Heatmap(
+#     mat_plot,
+#     name = "log2FC",
+#     col = col_fun,
+#     cluster_columns = FALSE,
+#     cluster_rows = T,
+#     row_names_gp = gpar(fontsize = 6),
+#     column_names_gp = gpar(fontsize = 6),
+#     column_title = "Tips vs QTh clusters"
+# )
+# dev.off()
+
+pdf(sprintf("%s/Heatmap_Tips_vsQTh_AllGenes.pdf", out_dir), width = 3, 5, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize =2),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Tips vs QTh clusters"
+)
+dev.off()
+
+
+###Suppl Table
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(paste(names(tmp), "_log2FC", sep = ""))
+mat_coef = mat_coef[genes_to_label, ]
+mat_pv <- Reduce(cbind, lapply(tmp, function(x) x[,"adj.P.Val"]))
+rownames(mat_pv) = tmp[[1]]$SYMBOL
+colnames(mat_pv) = make.names(paste(names(tmp), "_adj.P.Value", sep = ""))
+mat_pv = mat_pv[genes_to_label, ]
+all(rownames(mat_coef) == rownames(mat_pv))
+
+# write.table(data.frame(SYMBOL = rownames(mat_coef), mat_coef, mat_pv), file = sprintf("%s/Tips_vsQTh_table.txt", out_dir), sep = "\t", quote = F, row.names = F)
+
+
+###FCFC plots
+pdf(sprintf("%s/FCFC_Tips_vsQTh1Th2.pdf", out_dir), width = 30, 30, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+
+vplot = data.frame(fc1 = 2^tmp$RS_vs_Qth1$logFC, fc2 = 2^(tmp$TU_vs_Qth2$logFC), SYMBOL = tmp$RS_vs_Qth1$SYMBOL)
+genes_to_label = c(tmp$RS_vs_Qth1 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100),
+                   tmp$TU_vs_Qth2 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100)) %>% unique()
+                   #     
+                   #     arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$RS_vs_Qth1 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+dev.off()
+
+pdf(sprintf("%s/FCFC_Tips_vsQTh1Th17.pdf", out_dir), width = 30, 30, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+
+vplot = data.frame(fc1 = 2^tmp$RS_vs_Qth1$logFC, fc2 = 2^(tmp$XY_vs_Qth17$logFC), SYMBOL = tmp$RS_vs_Qth1$SYMBOL)
+genes_to_label = c(tmp$RS_vs_Qth1 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100),
+                   tmp$XY_vs_Qth17 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100)) %>% unique()
+                   #     
+                   #     arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$RS_vs_Qth1 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+dev.off()
+
+```
+
+Genes present in at least 2 comparisons with FDR < 1% and log2FC > 0.5
+```{r}
+library(dplyr)
+library(purrr)
+
+tmp = list(
+  RS_vs_Qth1 = ttlist2[["RS_vs_Qth1"]],
+  TU_vs_Qth2 = ttlist2[["TU_vs_Qth2"]],
+  XY_vs_Qth17 = ttlist2[["XY_vs_Qth17"]]
+)
+
+# combine all comparisons into one long table
+tmp_long <- imap_dfr(tmp, ~{
+  .x %>%
+    select(SYMBOL, logFC, adj.P.Val) %>%
+    mutate(comparison = .y)
+})
+
+# genes strongly up in at least one comparison
+strong_genes_up <- tmp_long %>%
+  filter(logFC > 0.5, adj.P.Val < 10^-2) %>%
+  distinct(SYMBOL) %>%
+  pull(SYMBOL)
+
+# among those, require mild up in at least 2 comparisons
+genes_filt_up <- tmp_long %>%
+  filter(SYMBOL %in% strong_genes_up) %>%
+  mutate(pass_mild = logFC > 0 & adj.P.Val < 10^-2) %>%
+  group_by(SYMBOL) %>%
+  summarise(
+    n_mild = sum(pass_mild),
+    .groups = "drop"
+  ) %>%
+  filter(n_mild >= 2) %>%
+  pull(SYMBOL)
+
+# genes strongly down in at least one comparison
+strong_genes_down <- tmp_long %>%
+  filter(logFC < -0.5, adj.P.Val < 10^-2) %>%
+  distinct(SYMBOL) %>%
+  pull(SYMBOL)
+
+# among those, require mild up in at least 2 comparisons
+genes_filt_down <- tmp_long %>%
+  filter(SYMBOL %in% strong_genes_down) %>%
+  mutate(pass_mild = logFC < 0 & adj.P.Val < 10^-2) %>%
+  group_by(SYMBOL) %>%
+  summarise(
+    n_mild = sum(pass_mild),
+    .groups = "drop"
+  ) %>%
+  filter(n_mild >= 2) %>%
+  pull(SYMBOL)
+
+genes_filt = c(genes_filt_up, genes_filt_down)
+length(genes_filt)
+
+genes_to_label <- genes_filt[
+    !grepl(
+        "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_filt,
+        ignore.case = TRUE
+    )
+] %>% unique() %>% sort()
+genes_filt
+
+
+mat_plot2 = mat_coef[genes_to_label, ]
+range(mat_plot2)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-1.5, 0, 1.5),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_Tips_vsQTh_SharedGenes.pdf", out_dir), width = 3, 6, useDingbats = F)
+Heatmap(
+    mat_plot2,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = T,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Shared Th1 Th2 Th17 tips"
+)
+dev.off()
+
+
+
+```
+
+
+
 Th1
 ```{r}
 # tmp = list(ttlist3[["RS_vs_Gth1"]], ttlist2[["RS_vs_Qth1"]], ttlist1[["R_vs_S"]])
@@ -1188,8 +1520,8 @@ for (i in comp_filt) {
     # add top 20 each
     genes_to_label <- c(
         genes_to_label,
-        # head(up_genes, 10), head(down_genes, 10)
-        head(up_genes, 100), head(down_genes, 100)
+        head(up_genes, 10), head(down_genes, 10)
+        # head(up_genes, 100), head(down_genes, 100)
     )
 }
 
@@ -1201,8 +1533,8 @@ genes_to_label <- genes_to_label[
     )
 ] %>% unique()
 
-genes_to_label_top100 = list()
-genes_to_label_top100[["Th1"]] = genes_to_label
+# genes_to_label_top100 = list()
+# genes_to_label_top100[["Th1"]] = genes_to_label
 
 genes_to_label_top10 = list()
 genes_to_label_top10[["Th1"]] = genes_to_label
@@ -1646,14 +1978,17 @@ library(ComplexHeatmap)
 library(circlize)
 
 col_fun <- circlize::colorRamp2(
-    c(-3, 0, 3),
+    c(-2, 0, 2),
     c("#4575B4", "white", "#D73027")
 )
 
 # pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
 # pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top100Genes.pdf", out_dir), width = 3, 20, useDingbats = F)
-pdf(sprintf("%s/Heatmap_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Q_Clusters_Top10Genes2.pdf", out_dir), width = 3, 8, useDingbats = F)
 # pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+mat_plot = -mat_plot
+colnames(mat_plot)
+colnames(mat_plot) = c("RS_vs_Qth1", "TU_vsQth2", "XU_vsQTh17")
 Heatmap(
     mat_plot,
     name = "log2FC",
@@ -1663,6 +1998,7 @@ Heatmap(
     row_names_gp = gpar(fontsize = 6),
     column_names_gp = gpar(fontsize = 6),
     column_title = "Q.Th vs their tips"
+    
 )
 dev.off()
 
@@ -1709,7 +2045,7 @@ col_fun <- circlize::colorRamp2(
 
 # pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
 # pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top100Genes.pdf", out_dir), width = 3, 20, useDingbats = F)
-pdf(sprintf("%s/Heatmap_G_Clusters_Top10Genes.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_G_Clusters_Top10Genes2.pdf", out_dir), width = 3, 8, useDingbats = F)
 # pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
 Heatmap(
     mat_plot,
@@ -2292,6 +2628,9 @@ results$diff_genes %>% arrange(desc(log2FC)) # table for fold changes of genes
 
 
 ```
+
+
+
 
 **Figure 5 - memory **
 --> see CD4_TRBI.Rmd for external datasets
