@@ -185,7 +185,8 @@ invisible(lapply(names(pb_list), function(nm) {
 
 Load pb_orig and filter genes
 ```{r}
-pb_orig <- readRDS(sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406.Rds", out_dir))
+# pb_orig <- readRDS(sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406.Rds", out_dir))
+pb_orig <- readRDS(sprintf("%s/igt1_96_pseudobulkLevel2IGTHT_20260406_CD4.Rds", out_dir))
 message("Removing TCR, mt, ribo, Gm, and Rik genes and genes that are not expressed")
 tcr_genes = grepl(x = rownames(pb_orig), pattern = "Trbv|Trbd|Trbj|Trbc|Trav|Traj|Trac|Trgv|Trgd|Trgj|Trgc|Trdv|Trdj|Trdc")
 gm_rik_genes = grepl(x = rownames(pb_orig), pattern = "Gm|Rik$|\\-ps$")
@@ -200,7 +201,7 @@ pb_orig = pb_orig[genes_to_keep, ]
 **CD4.Q vs CD4.G in spleen, colon, lung**
 
 ```{r}
-prefix_file_name <- "CD4G_vs_CD4Q_organs_healthy"
+prefix_file_name <- "CD4G_vs_CD4Q_organs_healthy2"
 ensure_directory(sprintf("%s/%s/", out_dir, prefix_file_name))
 ```
 
@@ -370,7 +371,7 @@ for (i in seq_along(tmp)) {
     vplot = vplot,
     xlab = names(tmp)[i],
     xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)),
-    ylimits = c(min(vplot$pval), 1)
+    ylimits = c(min(vplot$pval), 1).       c    z      hghf. 
   )
   
   sub <- vplot %>%

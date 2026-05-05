@@ -1109,8 +1109,6 @@ m$organ_simplified = factor(m$organ_simplified, levels = c("blood","spleen","LN"
 m %>% select(IGTHT,organ_simplified) %>% write.table("~/Desktop/org_meta.txt", quote = F, row.names = F, sep = "\t")
 ```
 
-
-
 **Split by cell types, add latent space**
 ```{r}
 AddLatentData = function(so, latent_file, prefix, calculate_umap = F) {
@@ -1168,6 +1166,19 @@ dir_with_file = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_9
 unconv = AddLatentData(unconv, latent_file = sprintf("%s/latent.csv",dir_with_file), prefix = "totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
 unconv = AddLatentData(unconv, latent_file = sprintf("%s/mde2.csv",dir_with_file), prefix = "mde_totalvi_20241014_unconventional_rmIGTsample", calculate_umap = F)
 saveRDS(unconv, "unconventional/igt1_96_unconventional_20241029_so.Rds")
+
+```
+
+
+**Export a smaller version**
+```{r}
+
+sub = so_orig@meta.data %>% group_by(IGTHT) %>% dplyr::slice_sample(n = 50) %>% ungroup() %>% pull(cellID)
+so_sub = so_orig[,sub]
+saveRDS(so_sub,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean_50CellsPerIGTHT.Rds")
+
+so_sub = so_orig[,so_orig$IGT %in% c("IGT36", "IGT38", "IGT40")]
+saveRDS(so_sub,"/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean_IGT363840.Rds")
 
 ```
 

@@ -18,6 +18,7 @@ sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 
 module load python/anaconda-2022.05 
 module load hdf5/1.12.0 #for BPCells but also others
 module load openblas/0.3.13
+module load ImageMagick/7.1.1-7
 source activate /project/zemmour/david/envs/scvi_20240315
 #source activate /project/zemmour/david/envs/r443
 module load openblas/0.3.13
@@ -3313,6 +3314,113 @@ p3 <- ggplot(
 p3
 
 ```
+
+**Extended Data Table S1**
+```{r}
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+meta = so_orig@meta.data
+cell_counts <- meta %>%
+  group_by(sample_code_GEO) %>%
+  summarise(n_cells = n(), .groups = "drop")
+
+annotation_counts <- meta %>%
+  group_by(sample_code_GEO, annotation_level1) %>%
+  summarise(n = n(), .groups = "drop")
+
+annotation_counts_wide <- annotation_counts %>%
+  tidyr::pivot_wider(
+    names_from = annotation_level1,
+    values_from = n,
+    values_fill = 0
+  )
+
+sample_meta <- meta %>%
+  distinct(sample_code_GEO, .keep_all = TRUE)
+
+sample_meta_filtered <- sample_meta %>%
+  select(
+    sample_code_GEO,
+    IGT = IGT,   # rename here if needed
+    hashtag_number = HT,
+    condition_broad,
+    condition_detailed,
+    exp_number,
+    exp_name,
+    lab,
+    organism_name,
+    strain,
+    genetics,
+    sex,
+    age_weeks,
+    pool_of_mice,
+    jax,
+    infection_agent,
+    infection_dose,
+    infection_mode,
+    treat_agent,
+    treat_dose,
+    timepoint,
+    tumor,
+    cite_seq,
+    prep_description,
+    organ,
+    organ_uberon_id,
+    t_specificity,
+    target_cells,
+    gating_strategy
+  )
+
+final_table <- sample_meta_filtered %>%
+  left_join(cell_counts, by = "sample_code_GEO")
+
+final_table <- final_table %>%
+  left_join(annotation_counts_wide, by = "sample_code_GEO")
+
+write.table(final_table, file = sprintf("%s/Extended_Data_Table_S1.txt", out_dir), sep = "\t", quote = FALSE, row.names = FALSE)
+```
+
+
+**Table S2: DGE for each cluster**
+```{r}
+library(dplyr)
+library(readr)
+library(purrr)
+library(stringr)
+
+base_dir <- '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20260206_freeze/DGE_Limma'  # change this
+
+folders <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE) %>%
+  keep(~ str_detect(basename(.x), "^OnevsAllinLineage_"))
+
+for (folder in folders[7:8]) {
+  
+  lineage <- str_remove(basename(folder), "OnevsAllinLineage_")
+  # e.g. "CD4", "Treg", "CD8", etc.
+  print(lineage)
+  
+  files <- list.files(folder, pattern = "\\.txt$", full.names = TRUE)
+  
+  combined <- map_dfr(files, function(f) {
+    
+    sig <- str_remove(basename(f), "\\.txt$")
+    
+    # insert lineage after "All"
+    sig_new <- str_replace(sig, "_vs_All_", paste0("_vs_All", lineage, "_"))
+    
+    read_tsv(f, show_col_types = FALSE) %>%
+      mutate(signature = sig_new)
+  })
+  
+  out_file <- file.path(
+    folder,
+    paste0(basename(folder), "_combined.txt")
+  )
+  
+  write_tsv(combined, out_file)
+}
+```
+
 
 ###########
 ```{r}

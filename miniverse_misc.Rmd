@@ -1121,7 +1121,7 @@ DimPlot(so, reduction = "mde2_totalvi_20241006", group.by = "is_prolif", raster 
 
 ```
 
-*GSEA analysis on miniverse**
+**GSEA analysis on miniverse**
 --> GSEA_signatures.Rda
 ```{r}
 library(fgsea)
