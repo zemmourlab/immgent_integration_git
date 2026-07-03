@@ -1,3 +1,19 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```{r}
 pdf("AlluvialPlot_level2_tissue3.pdf", 25, 8, useDingbats = F) #no more than 1000 cells per organ before subsetting gdT
 df = so_orig@meta.data %>% filter(condition_broad == "healthy" & grepl(pattern = "allT|CD45p", x = target_cells_simplified)) %>% group_by(organ_simplified) %>% slice_sample(n = 1000) %>% ungroup() %>% filter(annotation_level1 %in% "nonconv" & & !(annotation_level2 %in% c("nonconv_prolif", "nonconv_miniverse"))) %>% group_by(annotation_level2, organ_simplified) %>% summarize(count = n()) %>% as.data.frame()

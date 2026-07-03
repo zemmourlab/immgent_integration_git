@@ -305,3 +305,12 @@ results$p2
 
 
 
+```{r}
+F1[,30][F1[,30] > 0.1] %>% sort(decreasing = T) %>% write.table("~/Desktop/GP30_up.txt", sep = "\t", quote = F, col.names = F, row.names = T)
+F1[,30][F1[,30] < -0.1] %>% sort(decreasing = F) %>% write.table("~/Desktop/GP30_down.txt", sep = "\t", quote = F, col.names = F, row.names = T)
+
+
+```
+
+
+
