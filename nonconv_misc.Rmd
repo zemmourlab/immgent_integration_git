@@ -1,0 +1,4407 @@
+---
+title: "CD4_misc"
+output: html_document
+date: "2025-05-28"
+author: "David Zemmour"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Initialize: load libraries and custom functions**
+
+```{bash}
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=jfkfloor2 --qos=jfkfloor2 --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=beagle3-bigmem --nodes=1 
+sinteractive --exclusive --time=12:00:00 --account=pi-zemmour --partition=zemmour-hm --qos=zemmour --nodes=1 
+sinteractive --time=03:00:00 --account=pi-zemmour --partition=caslake --nodes=1 --mem=96GB
+
+module load python/anaconda-2022.05 
+module load hdf5/1.12.0 #for BPCells but also others
+module load openblas/0.3.13
+module load ImageMagick/7.1.1-7
+source activate /project/zemmour/david/envs/scvi_20240315
+#source activate /project/zemmour/david/envs/r443
+module load openblas/0.3.13
+
+cd /project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4
+R
+```
+
+
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4")
+libs = c("ZemmourLib","forcats", "gridExtra","patchwork", "Matrix", "Seurat", "ggplot2", "dplyr", "reshape2", "ggrastr","scattermore", "RColorBrewer", "pals", "scales", "pheatmap", "rafalib") 
+sapply(libs, function(x) suppressMessages(suppressWarnings(library(x, character.only = TRUE, quietly = T, warn.conflicts  = F))))
+#source("/project/jfkfloor2/zemmourlab/david/immgent/immgent_integration_git/custom_functions_david.R")
+
+ColorRamp = rev(colorRampPalette(brewer.pal(n = 7,name = "RdYlBu"))(100))
+ColorRamp = rev(colorRampPalette(c('red','white','blue'))(20))
+ColorRamp = rev(rainbow(10, end = 4/6))
+ColorRamp = rev(viridis(100))
+ColorRamp = brewer.pal(9, "Blues")
+
+#mycol = c("black","blue","red","darkgreen", "orange","purple", "cyan", "greenyellow",    "salmon", "magenta","pink", "tan", "brown") # c("magenta", "red",  "darkgreen", "cyan", "blue", "blue", "blue", "black", "blue", "blue", "blue", "blue", "orange")
+
+mypal_level2 = ZemmourLib::immgent_colors$level2
+mypal_level2["not classified"] = "black"
+# names(mypal_level2) = gsub("nonconv", replacement = "Tz",names(mypal_level2) )
+# mypal_level2 = immgent_colors$level2_option2
+# mypal_level2["not classified"] = "black"
+mypal_level1 = immgent_colors$level1
+mypal_level1["not classified"] = "black"
+# names(mypal_level1) = gsub("nonconv", replacement = "Tz",names(mypal_level1) )
+mypal_organ = immgent_colors$organ_simplified
+mypal_level2group = c("resting" = "blue", "activated" = "red", "miniverse" = "darkgreen", "proliferating" = "black", "other" = "grey", "preT" = "grey" )
+
+#Large Color palette
+library("pals")
+n = 70
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+mypal1 = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+mypal1 = mypal1[-4]
+mypal = c(glasbey(), polychrome(), mypal1)
+names(mypal) = NULL
+#pal.bands(mypal, main="Colormap suggestions")
+# mypal_organ = setNames(mypal, unique(so$organ_simplified))
+# mypal_organ = mypal_organ[!is.na(names(mypal_organ))]
+# mypal_level1 = setNames(mypal, unique(so$annotation_level1))
+# mypal_level1 = mypal_level1[!is.na(names(mypal_level1))]
+# mypal_level2 = setNames(mypal, unique(so_orig$annotation_level2))
+# mypal_level2 = mypal_level2[!is.na(names(mypal_level2))]
+# mypal_level2["CD4_cl18"] = "blue"
+mypal_igt = setNames(mypal, unique(so_orig$IGT))
+mypal_igt = mypal_igt[!is.na(names(mypal_igt))]
+
+```
+
+```{r}
+# fig_dir = "~/google_drive_uchicago/ImmgenT/20250109_freeze/paper_cosmology/figures/bits"
+# fig_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/paper_cosmology/figures/bits"
+
+out_dir = "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots" 
+out_dir = "/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots"
+
+```
+
+
+**Most up-to-date data**
+on Midway
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
+
+so = so_orig[,so_orig@meta.data %>% filter(organ_simplified != "thymus") %>% row.names()]
+so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+```
+
+on Desktop
+```{r}
+setwd("~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/")
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+so = so_orig[,so_orig@meta.data %>% filter(annotation_level1 == "CD4" & organ_simplified != "thymus") %>% row.names()]
+# so = NormalizeData(so, assay = "RNA", normalization.method = "LogNormalize")
+# so = NormalizeData(so, assay = "ADT", normalization.method = "LogNormalize")
+
+```
+
+**Stats for the paper**
+
+```{r}
+so@meta.data %>% filter(annotation_level2_group %in% c("activated")) %>% group_by(annotation_level2) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100) 
+
+so@meta.data %>% count(condition_broad)
+so@meta.data %>% filter(organ_simplified %in% c("spleen", "SLO", "LN")) %>% count()
+
+
+```
+
+**Extended Data Table S1**
+```{r}
+so_orig = readRDS("igt1_96_withtotalvi20260206_clean_ADTonly.Rds")
+
+meta = so_orig@meta.data
+cell_counts <- meta %>%
+  group_by(sample_code_GEO) %>%
+  summarise(n_cells = n(), .groups = "drop")
+
+annotation_counts <- meta %>%
+  group_by(sample_code_GEO, annotation_level1) %>%
+  summarise(n = n(), .groups = "drop")
+
+annotation_counts_wide <- annotation_counts %>%
+  tidyr::pivot_wider(
+    names_from = annotation_level1,
+    values_from = n,
+    values_fill = 0
+  )
+
+sample_meta <- meta %>%
+  distinct(sample_code_GEO, .keep_all = TRUE)
+
+sample_meta_filtered <- sample_meta %>%
+  select(
+    sample_code_GEO,
+    IGT = IGT,   # rename here if needed
+    hashtag_number = HT,
+    condition_broad,
+    condition_detailed,
+    exp_number,
+    exp_name,
+    lab,
+    organism_name,
+    strain,
+    genetics,
+    sex,
+    age_weeks,
+    pool_of_mice,
+    jax,
+    infection_agent,
+    infection_dose,
+    infection_mode,
+    treat_agent,
+    treat_dose,
+    timepoint,
+    tumor,
+    cite_seq,
+    prep_description,
+    organ,
+    organ_uberon_id,
+    t_specificity,
+    target_cells,
+    gating_strategy
+  )
+
+final_table <- sample_meta_filtered %>%
+  left_join(cell_counts, by = "sample_code_GEO")
+
+final_table <- final_table %>%
+  left_join(annotation_counts_wide, by = "sample_code_GEO")
+
+write.table(final_table, file = "Extended_Data_Table_S1.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+```
+
+
+**Figure 4 FCFC plots**
+Tfh/Tex
+```{r}
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/ttlist_OneVsAll.Rds')
+tt_list = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260206/ttlist_in_Activated.Rds')
+
+names(tt_list)
+
+
+# Create the vplot dataframe with fold changes
+# vplot = data.frame(fc1 = exp(tt_list$CD4.H_vs_All$logFC), fc2 = exp(tt_list$CD4.I_vs_All$logFC), SYMBOL = tt_list$CD4.H_vs_All$SYMBOL)
+vplot = data.frame(fc1 = exp(tt_list$CD4.I_vs_AllActivated$logFC), fc2 = exp(tt_list$CD4.H_vs_AllActivated$logFC), SYMBOL = tt_list$CD4.H_vs_AllActivated$SYMBOL)
+
+# Identify genes with large fold changes (>2)
+# genes_to_plot = abs(tt_list$CD4.H_vs_All$logFC) > 0.69 | abs(tt_list$CD4.I_vs_All$logFC) > 0.69
+genes_to_plot = abs(tt_list$CD4.H_vs_AllActivated$logFC) > 0.5 | abs(tt_list$CD4.I_vs_AllActivated$logFC) > 0.5
+# genes_to_label = vplot[genes_to_plot, ]
+genes_to_label = vplot$SYMBOL[genes_to_plot]
+
+# Create the plot
+pdf(sprintf("%s/FCFCplot_H_vs_I.pdf", out_dir), 6,6, useDingbats = F)
+FCFCplot(vplot, 
+         xlab = "FC for CD4.I", 
+         ylab = "FC for CD4.H", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = NULL)
+dev.off()
+pdf(sprintf("%s/FCFCplot_H_vs_I_labels.pdf", out_dir), 12,12, useDingbats = F)
+FCFCplot(vplot, 
+         xlab = "FC for CD4.I", 
+         ylab = "FC for CD4.H", 
+         main = "Fold Change vs Fold Change", 
+         genes_to_label = genes_to_label, 
+            )
+dev.off()
+
+```
+
+
+Top10 in H or I
+```{r}
+prop = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/SampleComp/20260206/annotation_level2_PropPerSamplePerLevel1_withMetadata.Rds')
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# your starting point
+prop_sub <- prop %>% 
+  select(
+    sample_type, sample_code,
+    CD4.H.ncells, CD4.H.prop,
+    CD4.I.ncells, CD4.I.prop
+  )
+
+# ---- compute averages ---- 
+prop_avg <- prop_sub %>% 
+  group_by(sample_type) %>%
+  summarise(
+    CD4.H.prop = mean(CD4.H.prop, na.rm = TRUE),
+    CD4.I.prop = mean(CD4.I.prop, na.rm = TRUE),
+    CD4.H.ncells = mean(CD4.H.ncells, na.rm = TRUE),
+    CD4.I.ncells = mean(CD4.I.ncells, na.rm = TRUE),
+    n_samples = n(),
+    .groups = "drop"
+  ) %>%
+  filter(n_samples > 2, (CD4.H.ncells > 20 | CD4.I.ncells > 20)) %>%
+  arrange(desc(CD4.H.prop)) %>%
+  slice_head(n = 20)
+
+# keep only top sample_types
+top_types <- prop_avg$sample_type
+
+# ---- reshape mean ----
+mean_long <- prop_avg %>%
+  select(sample_type, CD4.H.prop, CD4.I.prop) %>%
+  pivot_longer(
+    cols = c(CD4.H.prop, CD4.I.prop),
+    names_to = "cluster",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    cluster = recode(cluster,
+                     "CD4.H.prop" = "CD4.H",
+                     "CD4.I.prop" = "CD4.I"),
+    prop_plot = ifelse(cluster == "CD4.H", -prop, prop)
+  )
+
+# ---- reshape individual samples ----
+points_long <- prop_sub %>%
+  filter(sample_type %in% top_types) %>%
+  pivot_longer(
+    cols = c(CD4.H.prop, CD4.I.prop),
+    names_to = "cluster",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    cluster = recode(cluster,
+                     "CD4.H.prop" = "CD4.H",
+                     "CD4.I.prop" = "CD4.I"),
+    prop_plot = ifelse(cluster == "CD4.H", -prop, prop)
+  )
+
+# keep order
+mean_long$sample_type <- factor(mean_long$sample_type, levels = rev(prop_avg$sample_type))
+points_long$sample_type <- factor(points_long$sample_type, levels = rev(prop_avg$sample_type))
+
+# ---- plot ----
+p = ggplot() +
+  geom_col(
+    data = mean_long,
+    aes(x = sample_type, y = prop_plot, fill = cluster),
+    width = 0.7,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = points_long,
+    aes(x = sample_type, y = prop_plot), color = "black",
+    position = position_jitter(width = 0.15),
+    size = 2,
+    alpha = 1
+  ) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  scale_y_continuous(labels = abs) +
+  scale_fill_manual(values = mypal_level2) +
+  # scale_color_manual(values = mypal_level2) +
+  labs(
+    x = NULL,
+    y = "Proportion (H left, I right)"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.y = element_text(size = 12),
+    legend.position = "top"
+  )
+
+pdf(sprintf("%s/Top10_samples_HI.pdf", out_dir), 10,5, useDingbats = F)
+print(p)
+dev.off()
+
+
+```
+
+
+
+**MDE plots**
+```{r}
+pdf("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/CD4/MDE_clusters_20250527.pdf", width = 10, height = 10, useDingbats = F)
+p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = NULL, raster = T, raster.dpi = c(512,512), label = T, pt.size = 1) + scale_color_manual(values = mypal_level2)
+p
+p + NoLegend()
+
+p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", split.by = NULL, raster = T, raster.dpi = c(512,512), label = F, pt.size = 1) + scale_color_manual(values = mypal_level2)
+p + NoLegend()
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl1","CD4_cl2","CD4_cl3", "CD4_cl4", "CD4_cl5", "CD4_cl7", "CD4_cl12"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl2"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl5", "CD4_cl7"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9", "CD4_cl10", "CD4_cl13", "CD4_cl14"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9","CD4_cl21","CD4_cl10","CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl21", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl9","CD4_cl21"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+
+p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = colnames(so)[which(so$annotation_level2 %in% c("CD4_cl10","CD4_cl13", "CD4_cl14", "CD4_cl15", "CD4_cl16", "CD4_cl17", "CD4_cl18", "CD4_cl22", "CD4_cl23"))], highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 0.1, highlight_alpha = 0.1, print_plot1 = T, print_plot2 = T, labelclusters = T)
+p
+dev.off()
+```
+
+**Feature plots**
+```{r}
+so = NormalizeData(so,assay = "RNA", normalization.method = "LogNormalize",verbose = T)
+
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tox", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Gata3", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tbx21", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Rorc", order = T, raster = T, raster.dpi = c(1024,1024))
+FeaturePlot(so, reduction = "mde_incremental", slot = "data", features = "Tox2", order = T, raster = T, raster.dpi = c(1024,1024))
+```
+
+**Downsample seurat object**
+```{r}
+sample_cells = so@meta.data %>%
+  group_by(!!sym("IGTHT")) %>%
+  sample_n(size = min(500, n()), replace = FALSE) %>% 
+    pull(IGT_cellID)
+
+so = so[,sample_cells]
+saveRDS(so, "/Users/david/Desktop/Treg_App/igt1_96_CD4_20250212_downsampled.Rds")
+```
+
+**Figure Tip/BAS**
+
+2a
+```{r}
+pdf(sprintf("%s/MDE_level2.pdf", out_dir), 5,5, useDingbats = F)
+DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1, label = T, label.size = 2, label.box = T) + NoGrid()  + NoLegend()
+p = DimPlot(so, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, raster = T, raster.dpi = c(1024,1024), pt.size = 1, alpha = 1) + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5))
+p
+p + theme_void() + NoLegend() + NoGrid()
+dev.off()
+
+MyFeatureScatter(so,feature1 = "CD62L", feature2 = "CD44")
+
+```
+
+**Figure 2**
+tips percent
+```{r}
+so@meta.data %>% count(annotation_level2, annotation_level2_group)
+mdata = so@meta.data %>% filter(annotation_level2_group == "activated", !(annotation_level2 %in% c("CD4.wN", "CD4.wZ"))) 
+
+mdata %>% count(mdata)
+mdata$tip_mid = "tip"
+mdata$tip_mid[mdata$annotation_level2 %in% c("CD4.G", "CD4.Q")] = "midland"
+mdata$tip_mid[mdata$annotation_level2 %in% c("CD4.R", "CD4.S")] = "th1_tip"
+mdata$tip_mid[mdata$annotation_level2 %in% c("CD4.T", "CD4.U")] = "th2_tip"
+mdata$tip_mid[mdata$annotation_level2 %in% c("CD4.X", "CD4.Y")] = "th17_tip"
+mdata$tip_mid[mdata$annotation_level2 %in% c("CD4.H", "CD4.I")] = "tfhchron_tip"
+mdata %>% count(annotation_level2, tip_mid)
+
+library(dplyr)
+
+summary_df <- mdata %>%
+    group_by(IGTHT, tip_mid) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    # total per sample
+    group_by(IGTHT) %>%
+    mutate(
+        total_cells = sum(n),
+        percent = n / total_cells * 100
+    ) %>%
+    ungroup()
+
+n_categories_gt1 <- summary_df %>% 
+    filter(tip_mid != "midland") %>%
+    group_by(IGTHT) %>%
+    summarise(
+        n_categories_gt1 = sum(percent > 1),
+        .groups = "drop"
+    )
+
+n_categories_gt1 %>% count(n_categories_gt1)
+
+# library(tidyr)
+# wide_counts <- summary_df %>%
+#   select(IGTHT, tip_mid, n) %>%
+#   pivot_wider(names_from = tip_mid, values_from = n, values_fill = 0)
+# wide_percent <- summary_df %>%
+#   select(IGTHT, tip_mid, percent) %>%
+#   pivot_wider(names_from = tip_mid, values_from = percent, values_fill = 0)
+
+n_categories_gt1 %>%
+  count(n_categories_gt1) %>%
+  ggplot(aes(x = factor(n_categories_gt1), y = n)) +
+  geom_col(fill = "grey70", color = "black") +
+  labs(
+    x = "# tip_mid categories (>1%)",
+    y = "# IGTHT samples"
+  ) +
+  theme_classic()
+
+library(dplyr)
+library(ggplot2)
+
+plot_df <- n_categories_gt1 %>%
+  count(n_categories_gt1) %>%
+  mutate(percent = n / sum(n) * 100)
+
+pdf(sprintf("%s/barplot_number_tips_per_sample.pdf", out_dir), 3,6, useDingbats = F)
+ggplot(plot_df, aes(x = factor(n_categories_gt1), y = percent)) +
+  geom_col(fill = "grey70", color = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent)),
+    vjust = -0.3,
+    size = 5
+  ) +
+  labs(
+    x = "# tip (>1%)",
+    y = "% of samples"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.text = element_text(size = 14)
+  ) +
+  expand_limits(y = max(plot_df$percent) * 1.1)
+dev.off()
+```
+
+**Figure 3 - tip signature**
+--> limma_wrapper_20260318_CD4_tips.sh
+limma_contrasts_20260318_CD4_tips.R
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.Rds')
+
+# ttlist = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.txt', sep = "\t", header = T)
+# ttlist["Ifng",]
+
+names(ttlist)
+tmp = ttlist
+
+# i = "RS_vs_TUXYHI"
+
+gene_sig = list()
+
+pdf("/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/volcanos_more_labels.pdf", 15, 15, useDingbats = F)
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1))  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(log2(fc) > 0 & pval < 10^-60) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+
+```
+
+use pseudobulk and AUC so that keep only genes for which the third is at least 1.5 and mean expression in > 0.25 log1pCK10K
+```{r}
+pseudobulk_orig = readRDS(sprintf("%s/igt1_96_pseudobulk_byclusterannotationlevel2_log1pCP10K.Rds", "/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/TF_analysis/20260319"))
+
+# pseudobulk_orig@meta.data %>% filter(grepl("CD4",annotation_level2), annotation_level2 %in% c())
+pseudobulk = pseudobulk_orig[,pseudobulk_orig@meta.data %>% filter(annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) %>% rownames()]
+
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+gene = "Cd48"
+plot_df <- pseudobulk[["RNA"]]$data[gene, , drop = FALSE] %>%
+  as.data.frame() %>%
+  rownames_to_column("gene") %>%
+  tidyr::pivot_longer(
+    cols = -gene,
+    names_to = "cluster",
+    values_to = "expression"
+  )
+ggplot(plot_df, aes(x = cluster, y = expression, fill = cluster)) +
+  geom_col(color = "black") +
+  scale_fill_manual(values = mypal_level2) +
+  theme_classic() +
+  labs(
+    x = NULL,
+    y = "pseudobulk expression"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) + ggtitle(gene)
+ 
+names(gene_sig)
+gene_sig_curated = list()
+min_expr = 0.25
+
+# gene_sig["RS_vs_TUXYHI_up"] %>% unlist() %>% as.character() %>% sort()
+mat <- pseudobulk[["RNA"]]$data[gene_sig["RS_vs_TUXYHI_up"] %>% unlist() %>% as.character(),]
+target_clusters <- c("CD4.R", "CD4.S")
+other_clusters  <- setdiff(colnames(mat), target_clusters)
+max_other <- apply(mat[, other_clusters, drop = FALSE], 1, max)
+enriched_genes <- rownames(mat)[
+  (mat[, target_clusters[1]] >= 1.5 * max_other) & mat[, target_clusters[1]] > min_expr &
+  (mat[, target_clusters[2]] >= 1.5 * max_other) & mat[, target_clusters[2]] > min_expr
+]
+enriched_genes %>% sort()
+gene_sig_curated[["RS_vs_TUXYHI_up"]] = enriched_genes
+
+# gene_sig["TU_vs_RSXYHI_up"] %>% unlist() %>% as.character() %>% sort()
+mat <- pseudobulk[["RNA"]]$data[gene_sig["TU_vs_RSXYHI_up"] %>% unlist() %>% as.character(),]
+target_clusters <- c("CD4.T", "CD4.U")
+other_clusters  <- setdiff(colnames(mat), target_clusters)
+max_other <- apply(mat[, other_clusters, drop = FALSE], 1, max)
+enriched_genes <- rownames(mat)[
+  (mat[, target_clusters[1]] >= 1.5 * max_other) & mat[, target_clusters[1]] > min_expr &
+  (mat[, target_clusters[2]] >= 1.5 * max_other) & mat[, target_clusters[2]] > min_expr
+]
+enriched_genes %>% sort()
+gene_sig_curated[["TU_vs_RSXYHI_up"]] = enriched_genes
+
+# gene_sig["XY_vs_RSTUHI_up"] %>% unlist() %>% as.character() %>% sort()
+mat <- pseudobulk[["RNA"]]$data[gene_sig["XY_vs_RSTUHI_up"] %>% unlist() %>% as.character(),]
+target_clusters <- c("CD4.X", "CD4.Y")
+other_clusters  <- setdiff(colnames(mat), target_clusters)
+max_other <- apply(mat[, other_clusters, drop = FALSE], 1, max)
+enriched_genes <- rownames(mat)[
+  (mat[, target_clusters[1]] >= 1.5 * max_other) & mat[, target_clusters[1]] > min_expr &
+  (mat[, target_clusters[2]] >= 1.5 * max_other) & mat[, target_clusters[2]] > min_expr
+]
+enriched_genes %>% sort()
+gene_sig_curated[["XY_vs_RSTUHI_up"]] = enriched_genes
+
+# gene_sig["HI_vs_RSTUXY_up"] %>% unlist() %>% as.character() %>% sort()
+mat <- pseudobulk[["RNA"]]$data[gene_sig["HI_vs_RSTUXY_up"] %>% unlist() %>% as.character(),]
+target_clusters <- c("CD4.H", "CD4.I")
+other_clusters  <- setdiff(colnames(mat), target_clusters)
+max_other <- apply(mat[, other_clusters, drop = FALSE], 1, max)
+enriched_genes <- rownames(mat)[
+  (mat[, target_clusters[1]] >= 1.5 * max_other) & mat[, target_clusters[1]] > min_expr &
+  (mat[, target_clusters[2]] >= 1.5 * max_other) & mat[, target_clusters[2]] > min_expr
+]
+enriched_genes %>% sort()
+gene_sig_curated[["HI_vs_RSTUXY_up"]] = enriched_genes
+
+#ensure_directory(sprintf("%s/tip_signatures", out_dir))
+for (i in names(gene_sig_curated)) {
+    write.table(gene_sig_curated[[i]], file = sprintf("%s/tip_signatures/%s.txt", out_dir, i), sep = "\t",quote = F, row.names = F, col.names = F)
+}
+```
+
+Export Fig S3
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.Rds')
+
+names(ttlist)
+
+i = "RS_vs_TUXYHI"
+sig = read.table(file = sprintf("%s/tip_signatures/%s_up.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i))[,1]
+ttlist[[i]][sig,]
+write.table(ttlist[[i]][sig,c("SYMBOL", "logFC", "adj.P.Val")], file = sprintf("%s/tip_signatures/%s_table.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i), sep = "\t",quote = F, row.names = F, col.names = T)
+
+
+i = "TU_vs_RSXYHI"
+sig = read.table(file = sprintf("%s/tip_signatures/%s_up.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i))[,1]
+ttlist[[i]][sig,]
+write.table(ttlist[[i]][sig,c("SYMBOL", "logFC", "adj.P.Val")], file = sprintf("%s/tip_signatures/%s_table.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i), sep = "\t",quote = F, row.names = F, col.names = T)
+
+i = "XY_vs_RSTUHI"
+sig = read.table(file = sprintf("%s/tip_signatures/%s_up.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i))[,1]
+ttlist[[i]][sig,]
+write.table(ttlist[[i]][sig,c("SYMBOL", "logFC", "adj.P.Val")], file = sprintf("%s/tip_signatures/%s_table.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i), sep = "\t",quote = F, row.names = F, col.names = T)
+
+i = "HI_vs_RSTUXY"
+sig = read.table(file = sprintf("%s/tip_signatures/%s_up.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i))[,1]
+ttlist[[i]][sig,]
+write.table(ttlist[[i]][sig,c("SYMBOL", "logFC", "adj.P.Val")], file = sprintf("%s/tip_signatures/%s_table.txt", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/", i), sep = "\t",quote = F, row.names = F, col.names = T)
+
+
+```
+
+
+Plotting on the volcano plot the tip signatures
+```{r}
+Vplot = function (vplot, xlab = "FC", xlimits = c(0.1, 10), ylimits = c(10^-300, 1), color = "grey", size = 1, xlab = "FC", ylab = "p value") 
+{
+    requireNamespace("ggplot2", quietly = TRUE)
+    requireNamespace("ggrastr", quietly = TRUE)
+    requireNamespace("scales", quietly = TRUE)
+    p = ggplot(data = vplot) + ggrastr::geom_point_rast(aes(x = .data$fc, 
+        y = .data$pval), colour = color, alpha = I(1), size = size, 
+        raster.dpi = 100) + scale_x_continuous(trans = scales::log_trans(10), 
+        limits = xlimits) + scale_y_continuous(trans = scales::log_trans(10), 
+        breaks = scales::trans_breaks("log10", function(x) 10^x), 
+        labels = scales::trans_format("log10", scales::math_format(10^.x)), 
+        limits = ylimits) + annotation_logticks(sides = "b") + 
+        xlab(xlab) + theme_bw() + ylab(ylab) + theme(axis.text.x = element_text(size = 20, 
+        angle = 0, hjust = 0.5), axis.text.y = element_text(size = 20), 
+        legend.text = element_text(size = 20), axis.title.x = element_text(size = 20), 
+        axis.title.y = element_text(size = 20))
+    return(p)
+}
+
+
+comp_to_plot = c("RS_vs_TUXYHI", "TU_vs_RSXYHI", "XY_vs_RSTUHI", "HI_vs_RSTUXY")
+cols = c("darkorchid", "violetred2", "burlywood2","darkseagreen2" )
+names(cols) = comp_to_plot
+tmp = ttlist
+pdf(sprintf("%s/Volcanos_Tips_signature.pdf", out_dir), 10, 10, useDingbats = F)
+for (i in comp_to_plot) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1), color = cols[i], size = 2)  #c(min(vplot$pval[vplot$pval != 0]),1)
+    highlight_genes = gene_sig_curated[[sprintf("%s_up", i)]]
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+```
+
+
+**Difference between Q.Th1 and RS tip, Q.Th2 and TU tip etc?**
+--> th_modulescores_withannot.Rds
+```{r}
+so_orig = readRDS("/project/zemmour/david/ImmgenT/analysis/data_integration/IGT1_96/igt1_96_withtotalvi20260206_clean.Rds") 
+so = so_orig[,so_orig@meta.data %>% filter(, annotation_level1 == "CD4", organ_simplified != "thymus") %>% row.names()]
+
+th_scores = readRDS("module_score_matrix.Rds") %>% t()
+th_scores[1:2,]
+thr_th1 = 0
+thr_th2 = 0.25
+thr_th17 = 0.25
+thr_tfhchron = 0
+
+# correct binarization
+th_scores_bin <- data.frame(
+  row.names = rownames(th_scores),
+  Th1 = th_scores[, "Th1 program"] > thr_th1,
+  Th2 = th_scores[, "Th2 program"] > thr_th2,
+  Th17 = th_scores[, "Th17 program"] > thr_th17,
+  Tfhchron = th_scores[, "Tfh/Tchron program"] > thr_tfhchron
+)
+
+cell_class <- apply(th_scores_bin, 1, function(x) {
+  pos <- colnames(th_scores_bin)[as.logical(x)]
+  if (length(pos) == 0) "None" else paste(pos, collapse = "")
+})
+
+all(rownames(th_scores_bin) == names(cell_class))
+th_scores_bin$program = cell_class
+
+th_scores = as.data.frame(th_scores)
+all(rownames(th_scores) == names(cell_class))
+th_scores$program = cell_class
+
+th_scores_bin %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
+th_scores %>% group_by(program) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)*100)
+
+# saveRDS(th_scores, sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/"))
+
+```
+
+Barplot of distribution of Th programs
+```{r}
+
+# so <- readRDS(sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/"))
+th_scores_bin = th_scores
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+
+plot_df <- th_scores_bin %>%
+  group_by(program) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(percent = n / sum(n) * 100)
+
+# program_order <- plot_df %>%
+#   arrange(desc(percent)) %>%
+#   pull(program)
+
+program_order <- c(
+  "None",
+  "Th1", "Th2", "Th17", "Tfhchron",
+  "Th1Th2", "Th1Th17", "Th1Tfhchron", "Th2Th17", "Th2Tfhchron", "Th17Tfhchron",
+  "Th1Th2Th17", "Th1Th2Tfhchron", "Th1Th17Tfhchron", "Th2Th17Tfhchron",
+  "Th1Th2Th17Tfhchron"
+)
+
+plot_df$program <- factor(plot_df$program, levels = program_order)
+
+library(stringr)
+heatmap_df <- expand.grid(
+  row = c("Th1", "Th2", "Th17", "Tfhchron"),
+  program = program_order,
+  stringsAsFactors = FALSE
+) %>%
+  rowwise() %>%
+  mutate(
+    members = list(str_extract_all(program, "Tfhchron|Th17|Th2|Th1")[[1]]),
+    filled = as.integer(row %in% members)
+  ) %>%
+  ungroup() %>%
+  select(-members)
+
+heatmap_df$program <- factor(heatmap_df$program, levels = program_order)
+heatmap_df$row <- factor(heatmap_df$row, levels = rev(c("Th1", "Th2", "Th17", "Tfhchron")))
+
+p_bar <- ggplot(plot_df, aes(x = program, y = percent)) +
+  geom_col(fill = "grey70", color = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f", percent)),
+    vjust = -0.25,
+    size = 2.8
+  ) +
+  labs(
+    x = NULL,
+    y = "% of cells"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    axis.text.y = element_text(size = 14)
+  ) +
+  expand_limits(y = max(plot_df$percent) * 1.08)
+
+p_heat <- ggplot(heatmap_df, aes(x = program, y = row, fill = factor(filled))) +
+  geom_tile(color = "black", linewidth = 0.4) +
+  scale_fill_manual(values = c("0" = "white", "1" = "black"), guide = "none") +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12),
+    axis.text.y = element_text(size = 14)
+  )
+
+p = p_bar / p_heat + plot_layout(heights = c(4, 1.2))
+
+p
+
+pdf(sprintf("%s/barplot_polyfunctional.pdf", out_dir), 8,8)
+p
+dev.off()
+
+```
+
+Barplot of distribution of Th programs in G and Q only
+```{r}
+
+so <- readRDS(sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4/"))
+th_scores_bin = th_scores[so@meta.data %>% filter(annotation_level2 %in% c("CD4.G", "CD4.Q")) %>% row.names(),]
+
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+
+plot_df <- th_scores_bin %>%
+  group_by(program) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(percent = n / sum(n) * 100)
+
+# program_order <- plot_df %>%
+#   arrange(desc(percent)) %>%
+#   pull(program)
+
+program_order <- c(
+  "None",
+  "Th1", "Th2", "Th17", "Tfhchron",
+  "Th1Th2", "Th1Th17", "Th1Tfhchron", "Th2Th17", "Th2Tfhchron", "Th17Tfhchron",
+  "Th1Th2Th17", "Th1Th2Tfhchron", "Th1Th17Tfhchron", "Th2Th17Tfhchron",
+  "Th1Th2Th17Tfhchron"
+)
+
+plot_df$program <- factor(plot_df$program, levels = program_order)
+
+# heatmap_df <- expand.grid(
+#   row = c("Th1", "Th2", "Th17", "Tfhchron"),
+#   program = program_order,
+#   stringsAsFactors = FALSE
+# ) %>%
+#   mutate(
+#     filled = case_when(
+#       row == "Th1"      & grepl("Th1", program) ~ 1,
+#       row == "Th2"      & grepl("Th2", program) ~ 1,
+#       row == "Th17"     & grepl("Th17", program) ~ 1,
+#       row == "Tfhchron" & grepl("Tfhchron", program) ~ 1,
+#       TRUE ~ 0
+#     )
+#   )
+
+# heatmap_df <- expand.grid(
+#   row = c("Th1", "Th2", "Th17", "Tfhchron"),
+#   program = program_order,
+#   stringsAsFactors = FALSE
+# ) %>%
+#   rowwise() %>%
+#   mutate(
+#     members = list(c(
+#       if (grepl("Tfhchron", program)) "Tfhchron" else NULL,
+#       if (grepl("Th1", program)) "Th1" else NULL,
+#       if (grepl("Th2", program)) "Th2" else NULL,
+#       if (grepl("Th17", program)) "Th17" else NULL
+#     )),
+#     filled = as.integer(row %in% members)
+#   ) %>%
+#   ungroup() %>%
+#   select(-members)
+
+library(stringr)
+heatmap_df <- expand.grid(
+  row = c("Th1", "Th2", "Th17", "Tfhchron"),
+  program = program_order,
+  stringsAsFactors = FALSE
+) %>%
+  rowwise() %>%
+  mutate(
+    members = list(str_extract_all(program, "Tfhchron|Th17|Th2|Th1")[[1]]),
+    filled = as.integer(row %in% members)
+  ) %>%
+  ungroup() %>%
+  select(-members)
+
+heatmap_df$program <- factor(heatmap_df$program, levels = program_order)
+heatmap_df$row <- factor(heatmap_df$row, levels = rev(c("Th1", "Th2", "Th17", "Tfhchron")))
+
+p_bar <- ggplot(plot_df, aes(x = program, y = percent)) +
+  geom_col(fill = "grey70", color = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f", percent)),
+    vjust = -0.25,
+    size = 2.8
+  ) +
+  labs(
+    x = NULL,
+    y = "% of cells"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    axis.text.y = element_text(size = 14)
+  ) +
+  expand_limits(y = max(plot_df$percent) * 1.08)
+
+p_heat <- ggplot(heatmap_df, aes(x = program, y = row, fill = factor(filled))) +
+  geom_tile(color = "black", linewidth = 0.4) +
+  scale_fill_manual(values = c("0" = "white", "1" = "black"), guide = "none") +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12),
+    axis.text.y = element_text(size = 14)
+  )
+
+p = p_bar / p_heat + plot_layout(heights = c(4, 1.2))
+
+p
+
+pdf(sprintf("%s/barplot_polyfunctional_GQOnly.pdf", out_dir), 8,8)
+p
+dev.off()
+
+
+```
+
+
+Barplot polyfunctional 2
+```{r}
+so <- readRDS(sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so@meta.data %>% count(program)
+so$is_polyfunctional <- !so@meta.data$program %in% c("None", "Tfhchron", "Th1", "Th17", "Th2")
+
+pf <- so@meta.data %>%
+  as.data.frame() %>%
+  mutate(
+    cluster_group = case_when(
+      annotation_level2 == "CD4.G" ~ "G",
+      annotation_level2 == "CD4.H" ~ "HI",
+      annotation_level2 == "CD4.I" ~ "HI",
+      annotation_level2 == "CD4.Q" ~ "Q",
+      annotation_level2 %in% c("CD4.R","CD4.S") ~ "R/S",
+      annotation_level2 %in% c("CD4.T","CD4.U") ~ "T/U",
+      annotation_level2 %in% c("CD4.X","CD4.Y") ~ "X/Y",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(cluster_group))
+
+pf_summary <- pf %>%
+  group_by(cluster_group) %>%
+  summarise(
+    percent_polyfunctional = mean(is_polyfunctional) * 100,
+    n_cells = n()
+  )
+
+p1 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_polyfunctional)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_polyfunctional)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% Polyfunctional cells"
+  )  + coord_cartesian(ylim = c(0,20))
+
+# pdf("polyfunctional_barplot.pdf", width = 8, height = 6, useDingbats = FALSE)
+# print(p)
+# dev.off()
+
+#prop of polyfunctional, coming from each
+pf_sub <- subset(pf, subset = is_polyfunctional== "TRUE")
+
+pf_summary <- pf_sub %>%
+  group_by(cluster_group) %>%
+  summarise(
+    n_cells = n()
+  ) %>%
+  mutate(
+    percent_of_polyfunctional = n_cells / sum(n_cells) * 100
+  )
+
+
+p2 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_of_polyfunctional)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_of_polyfunctional)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% of All Polyfunctional cells"
+  ) + coord_cartesian(ylim = c(0,45))
+
+pdf(sprintf("%s/barplot_polyfunctional_percent.pdf", out_dir), width = 4, height = 8, useDingbats = FALSE)
+print(p1)
+print(p2)
+dev.off()
+```
+
+Barplot Non committed
+```{r}
+so <- readRDS(sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so@meta.data %>% count(program)
+so$is_noncom <- so@meta.data$program %in% c("None")
+
+pf <- so@meta.data %>%
+  as.data.frame() %>%
+  mutate(
+    cluster_group = case_when(
+      annotation_level2 == "CD4.G" ~ "G",
+      annotation_level2 == "CD4.H" ~ "HI",
+      annotation_level2 == "CD4.I" ~ "HI",
+      annotation_level2 == "CD4.Q" ~ "Q",
+      annotation_level2 %in% c("CD4.R","CD4.S") ~ "R/S",
+      annotation_level2 %in% c("CD4.T","CD4.U") ~ "T/U",
+      annotation_level2 %in% c("CD4.X","CD4.Y") ~ "X/Y",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(cluster_group))
+
+pf_summary <- pf %>%
+  group_by(cluster_group) %>%
+  summarise(
+    percent_noncom = mean(is_noncom) * 100,
+    n_cells = n()
+  )
+
+p1 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_noncom)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_noncom)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% Non Committed cells"
+  )  + coord_cartesian(ylim = c(0,100))
+
+# pdf("polyfunctional_barplot.pdf", width = 8, height = 6, useDingbats = FALSE)
+# print(p)
+# dev.off()
+
+#prop of polyfunctional, coming from each
+pf_sub <- subset(pf, subset = is_noncom == "TRUE")
+
+pf_summary <- pf_sub %>%
+  group_by(cluster_group) %>%
+  summarise(
+    n_cells = n()
+  ) %>%
+  mutate(
+    percent_of_noncom = n_cells / sum(n_cells) * 100
+  )
+
+
+p2 <- ggplot(pf_summary, aes(x = cluster_group, y = percent_of_noncom)) +
+  geom_col(fill = "black") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", percent_of_noncom)),
+    vjust = -0.5,
+    size = 4
+  ) +
+  theme_classic() +
+  labs(
+    x = "Cluster",
+    y = "% of All Non Committed cells"
+  ) + coord_cartesian(ylim = c(0,50))
+
+pdf(sprintf("%s/barplot_noncommitted_percent.pdf", out_dir), width = 4, height = 5, useDingbats = FALSE)
+print(p1)
+print(p2)
+dev.off()
+```
+
+
+**Make seurat for DGE limma with program annotation to compare Q_th with tips and G-Th with tips**
+```{r}
+th_scores = readRDS(sprintf("%s/th_modulescores_withannot.Rds", "~/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/CD4"))
+
+so
+so2 = so[,rownames(th_scores)]
+so2@meta.data = data.frame(so2@meta.data, th_scores)
+so2@meta.data %>% count(annotation_level2, program)
+so2$annotation_level2_program = paste(so2$annotation_level2, so2$program, sep = ".")
+so2@meta.data %>% count(annotation_level2, annotation_level2_program)
+
+# saveRDS(so2, file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+
+so = readRDS(file = sprintf("%s/CD4_GHIQRSTUXY_igt1_96_withtotalvi20260206_clean_withThPrograms.Rds", out_dir))
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.H")] = "CD4.H"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.I")] = "CD4.I"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.R")] = "CD4.R"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.S")] = "CD4.S"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.T")] = "CD4.T"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.U")] = "CD4.U"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.X")] = "CD4.X"
+so$annotation_level2_program[so$annotation_level2 %in% c("CD4.Y")] = "CD4.Y"
+
+```
+
+For Q programs vs tips
+-->limma_wrapper_20260320_CD4_ThprogramsQ.sh
+```{r}
+#For Q programs vs tips
+so@meta.data %>% count(annotation_level2, annotation_level2_program)
+so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% count(annotation_level2, annotation_level2_program)
+so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.Q.Th1", "CD4.Q.Th2", "CD4.Q.Th17")) %>% rownames()]
+so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")
+# saveRDS(so2, file = sprintf("%s/CD4_QRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
+
+```
+
+on desktop
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_QprogramsvsTips/ttlist_QprogramsvsTips.Rds')
+tmp = ttlist
+gene_sig = list()
+
+cols = c("darkorchid", "violetred2", "burlywood2" )
+names(cols) = names(tmp)
+
+pdf(sprintf("%s/Volcano_QprogramsvsTips.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+
+
+
+```
+
+For G programs vs tips
+-->limma_wrapper_20260320_CD4_ThprogramsG.sh
+```{r}
+#For G programs vs tips
+so2 = so[,so@meta.data %>% filter(annotation_level2_program %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I", "CD4.G.Th1", "CD4.G.Th2", "CD4.G.Th17", "CD4.G.Tfhchron")) %>% rownames()]
+so2@meta.data %>% count(annotation_level2, annotation_level2_program)
+so2$annotation_level2_program.IGTHT = paste(so2$annotation_level2_program, so2$IGTHT, sep = ".")
+saveRDS(so2, file = sprintf("%s/CD4_GHIRSTUXY_igt1_96_withtotalvi20260206_clean_annotation_level2_program.Rds", out_dir))
+
+```
+
+on desktop
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_GprogramsvsTips/ttlist_GprogramsvsTips.Rds')
+tmp = ttlist
+gene_sig = list()
+
+cols = c("darkorchid", "violetred2", "burlywood2","darkseagreen2" )
+names(cols) = names(tmp)
+
+pdf(sprintf("%s/Volcano_GprogramsvsTips.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-20, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-3) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+
+```
+
+**Heatmap with DGE between different Th clusters**
+Heatmaps show top 10 genes up and top 10 down with abs(log2FC) > 0.5 and p < 10^-10 in at least one comparison
+
+Load signatures
+```{r}
+ttlist1 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.Rds')
+ttlist1 = ttlist1[8:10]
+names(ttlist1)
+ttlist2 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_QprogramsvsTips/ttlist_QprogramsvsTips.Rds')
+names(ttlist2)
+ttlist3 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260320_CD4_GprogramsvsTips/ttlist_GprogramsvsTips.Rds')
+names(ttlist3)
+ttlist3 = ttlist3[1:3]
+names(ttlist3)
+
+```
+
+Genes present in at least 1 comparison
+```{r}
+tmp = list(ttlist2[["RS_vs_Qth1"]], ttlist2[["TU_vs_Qth2"]], ttlist2[["XY_vs_Qth17"]])
+names(tmp) = c( "RS_vs_Qth1", "TU_vs_Qth2", "XY_vs_Qth17")
+
+tmp_list = list()
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("grey", "grey", "grey", "grey" )
+names(cols) = names(tmp)
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.5,  P.Value < 10^-10) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL)
+    # top down
+    down_genes <- df %>% filter(logFC < -0.5,  P.Value < 10^-10) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 1000), head(down_genes, 1000)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+] %>% unique() %>% sort()
+genes_to_label
+
+# genes_to_label_top100 = list()
+# genes_to_label_top100[["Th1"]] = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# # pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Tips_vsQTh_AllGenes.pdf", out_dir), width = 3, 15, useDingbats = F)
+# # pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+# Heatmap(
+#     mat_plot,
+#     name = "log2FC",
+#     col = col_fun,
+#     cluster_columns = FALSE,
+#     cluster_rows = T,
+#     row_names_gp = gpar(fontsize = 6),
+#     column_names_gp = gpar(fontsize = 6),
+#     column_title = "Tips vs QTh clusters"
+# )
+# dev.off()
+
+pdf(sprintf("%s/Heatmap_Tips_vsQTh_AllGenes.pdf", out_dir), width = 3, 5, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize =2),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Tips vs QTh clusters"
+)
+dev.off()
+
+
+###Suppl Table
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(paste(names(tmp), "_log2FC", sep = ""))
+mat_coef = mat_coef[genes_to_label, ]
+mat_pv <- Reduce(cbind, lapply(tmp, function(x) x[,"adj.P.Val"]))
+rownames(mat_pv) = tmp[[1]]$SYMBOL
+colnames(mat_pv) = make.names(paste(names(tmp), "_adj.P.Value", sep = ""))
+mat_pv = mat_pv[genes_to_label, ]
+all(rownames(mat_coef) == rownames(mat_pv))
+
+# write.table(data.frame(SYMBOL = rownames(mat_coef), mat_coef, mat_pv), file = sprintf("%s/Tips_vsQTh_table.txt", out_dir), sep = "\t", quote = F, row.names = F)
+
+
+###FCFC plots
+pdf(sprintf("%s/FCFC_Tips_vsQTh1Th2.pdf", out_dir), width = 30, 30, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+
+vplot = data.frame(fc1 = 2^tmp$RS_vs_Qth1$logFC, fc2 = 2^(tmp$TU_vs_Qth2$logFC), SYMBOL = tmp$RS_vs_Qth1$SYMBOL)
+genes_to_label = c(tmp$RS_vs_Qth1 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100),
+                   tmp$TU_vs_Qth2 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100)) %>% unique()
+                   #     
+                   #     arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$RS_vs_Qth1 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+dev.off()
+
+pdf(sprintf("%s/FCFC_Tips_vsQTh1Th17.pdf", out_dir), width = 30, 30, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+
+vplot = data.frame(fc1 = 2^tmp$RS_vs_Qth1$logFC, fc2 = 2^(tmp$XY_vs_Qth17$logFC), SYMBOL = tmp$RS_vs_Qth1$SYMBOL)
+genes_to_label = c(tmp$RS_vs_Qth1 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100),
+                   tmp$XY_vs_Qth17 %>% filter(abs(logFC) > 0.5,  P.Value < 10^-10) %>% pull(SYMBOL) %>% head(100)) %>% unique()
+                   #     
+                   #     arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$RS_vs_Qth1 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   # tmp$TU_vs_Qth2 %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+dev.off()
+
+```
+
+Genes present in at least 2 comparisons with FDR < 1% and log2FC > 0.5
+```{r}
+library(dplyr)
+library(purrr)
+
+tmp = list(
+  RS_vs_Qth1 = ttlist2[["RS_vs_Qth1"]],
+  TU_vs_Qth2 = ttlist2[["TU_vs_Qth2"]],
+  XY_vs_Qth17 = ttlist2[["XY_vs_Qth17"]]
+)
+
+# combine all comparisons into one long table
+tmp_long <- imap_dfr(tmp, ~{
+  .x %>%
+    select(SYMBOL, logFC, adj.P.Val) %>%
+    mutate(comparison = .y)
+})
+
+# genes strongly up in at least one comparison
+strong_genes_up <- tmp_long %>%
+  filter(logFC > 0.5, adj.P.Val < 10^-2) %>%
+  distinct(SYMBOL) %>%
+  pull(SYMBOL)
+
+# among those, require mild up in at least 2 comparisons
+genes_filt_up <- tmp_long %>%
+  filter(SYMBOL %in% strong_genes_up) %>%
+  mutate(pass_mild = logFC > 0 & adj.P.Val < 10^-2) %>%
+  group_by(SYMBOL) %>%
+  summarise(
+    n_mild = sum(pass_mild),
+    .groups = "drop"
+  ) %>%
+  filter(n_mild >= 2) %>%
+  pull(SYMBOL)
+
+# genes strongly down in at least one comparison
+strong_genes_down <- tmp_long %>%
+  filter(logFC < -0.5, adj.P.Val < 10^-2) %>%
+  distinct(SYMBOL) %>%
+  pull(SYMBOL)
+
+# among those, require mild up in at least 2 comparisons
+genes_filt_down <- tmp_long %>%
+  filter(SYMBOL %in% strong_genes_down) %>%
+  mutate(pass_mild = logFC < 0 & adj.P.Val < 10^-2) %>%
+  group_by(SYMBOL) %>%
+  summarise(
+    n_mild = sum(pass_mild),
+    .groups = "drop"
+  ) %>%
+  filter(n_mild >= 2) %>%
+  pull(SYMBOL)
+
+genes_filt = c(genes_filt_up, genes_filt_down)
+length(genes_filt)
+
+genes_to_label <- genes_filt[
+    !grepl(
+        "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_filt,
+        ignore.case = TRUE
+    )
+] %>% unique() %>% sort()
+genes_filt
+
+
+mat_plot2 = mat_coef[genes_to_label, ]
+range(mat_plot2)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-1.5, 0, 1.5),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_Tips_vsQTh_SharedGenes.pdf", out_dir), width = 3, 6, useDingbats = F)
+Heatmap(
+    mat_plot2,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = T,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Shared Th1 Th2 Th17 tips"
+)
+dev.off()
+
+
+
+```
+
+
+
+Th1
+```{r}
+# tmp = list(ttlist3[["RS_vs_Gth1"]], ttlist2[["RS_vs_Qth1"]], ttlist1[["R_vs_S"]])
+# names(tmp) = c( "RS_vs_Gth1", "RS_vs_Qth1", "R_vs_S")
+tmp = list(ttlist3[["RS_vs_Gth1"]], ttlist2[["RS_vs_Qth1"]], ttlist1[["R_vs_S"]])
+names(tmp) = c( "RS_vs_Gth1", "RS_vs_Qth1", "R_vs_S")
+tmp[["S_vs_R"]] = tmp[["R_vs_S"]]
+tmp[["S_vs_R"]]$logFC = -tmp[["R_vs_S"]]$logFC
+# tmp[["R_vs_S"]] = NULL
+
+tmp[["Gth1_vs_RS"]] = tmp[["RS_vs_Gth1"]]
+tmp[["Gth1_vs_RS"]]$logFC = -tmp[["RS_vs_Gth1"]]$logFC
+tmp[["RS_vs_Gth1"]] = NULL
+
+tmp[["Qth1_vs_RS"]] = tmp[["RS_vs_Qth1"]]
+tmp[["Qth1_vs_RS"]]$logFC = -tmp[["RS_vs_Qth1"]]$logFC
+tmp[["RS_vs_Qth1"]] = NULL
+
+tmp = tmp[c("Gth1_vs_RS", "Qth1_vs_RS","R_vs_S", "S_vs_R")]
+
+tmp_list = list()
+tmp_list[["Th1"]] = tmp
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("grey", "grey", "grey", "grey" )
+names(cols) = names(tmp)
+
+# pdf(sprintf("%s/Volcano_Th1_clusters.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    # print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+# dev.off()
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.5,  P.Value < 10^-10) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL)
+    # top down
+    down_genes <- df %>% filter(logFC < -0.5,  P.Value < 10^-10) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 10), head(down_genes, 10)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+] %>% unique()
+
+# genes_to_label_top100 = list()
+# genes_to_label_top100[["Th1"]] = genes_to_label
+
+genes_to_label_top10 = list()
+genes_to_label_top10[["Th1"]] = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-3, 0, 3),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Th1Clusters_Top100Genes.pdf", out_dir), width = 3, 25, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th1Clusters_Top10Genes.pdf", out_dir), width = 3, 5, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th1 clusters"
+)
+dev.off()
+
+
+
+```
+
+Th2
+```{r}
+tmp = list(ttlist3[["TU_vs_Gth2"]], ttlist2[["TU_vs_Qth2"]], ttlist1[["T_vs_U"]])
+names(tmp) = c( "TU_vs_Gth2", "TU_vs_Qth2", "T_vs_U")
+tmp[["U_vs_T"]] = tmp[["T_vs_U"]]
+tmp[["U_vs_T"]]$logFC = -tmp[["T_vs_U"]]$logFC
+# tmp[["T_vs_U"]] = NULL
+
+tmp[["Gth2_vs_TU"]] = tmp[["TU_vs_Gth2"]]
+tmp[["Gth2_vs_TU"]]$logFC = -tmp[["TU_vs_Gth2"]]$logFC
+tmp[["TU_vs_Gth2"]] = NULL
+
+tmp[["Qth2_vs_TU"]] = tmp[["TU_vs_Qth2"]]
+tmp[["Qth2_vs_TU"]]$logFC = -tmp[["TU_vs_Qth2"]]$logFC
+tmp[["TU_vs_Qth2"]] = NULL
+
+tmp = tmp[c("Gth2_vs_TU", "Qth2_vs_TU","T_vs_U", "U_vs_T")]
+
+tmp_list[["Th2"]] = tmp
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("grey", "grey", "grey", "grey" )
+names(cols) = names(tmp)
+
+# pdf(sprintf("%s/Volcano_Th2_clusters.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    # print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+# dev.off()
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.5,  P.Value < 10^-10) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL)
+    # top down
+    down_genes <- df %>% filter(logFC < -0.5,  P.Value < 10^-10) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 10), head(down_genes, 10)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Tpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+] %>% unique()
+
+genes_to_label_top10[["Th2"]] = genes_to_label
+# genes_to_label_top100[["Th2"]] = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/Heatmap_Th2Clusters_Top100Genes.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th2 clusters"
+)
+dev.off()
+
+```
+
+Th17
+```{r}
+tmp = list(ttlist3[["XY_vs_Gth17"]], ttlist2[["XY_vs_Qth17"]], ttlist1[["X_vs_Y"]])
+names(tmp) = c( "XY_vs_Gth17", "XY_vs_Qth17", "X_vs_Y")
+tmp[["Y_vs_X"]] = tmp[["X_vs_Y"]]
+tmp[["Y_vs_X"]]$logFC = -tmp[["X_vs_Y"]]$logFC
+# tmp[["X_vs_Y"]] = NULL
+
+tmp[["Gth17_vs_XY"]] = tmp[["XY_vs_Gth17"]]
+tmp[["Gth17_vs_XY"]]$logFC = -tmp[["XY_vs_Gth17"]]$logFC
+tmp[["XY_vs_Gth17"]] = NULL
+
+tmp[["Qth17_vs_XY"]] = tmp[["XY_vs_Qth17"]]
+tmp[["Qth17_vs_XY"]]$logFC = -tmp[["XY_vs_Qth17"]]$logFC
+tmp[["XY_vs_Qth17"]] = NULL
+
+tmp = tmp[c("Gth17_vs_XY", "Qth17_vs_XY","X_vs_Y", "Y_vs_X")]
+
+tmp_list[["Th17"]] = tmp
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("grey", "grey", "grey", "grey" )
+names(cols) = names(tmp)
+
+# pdf(sprintf("%s/Volcano_Th17_clusters.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    # print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+# dev.off()
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.5,  P.Value < 10^-10) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL)
+    # top down
+    down_genes <- df %>% filter(logFC < -0.5,  P.Value < 10^-10) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 10), head(down_genes, 10)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Tpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+] %>% unique()
+
+genes_to_label_top10[["Th17"]] = genes_to_label
+# genes_to_label_top100[["Th17"]] = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-3, 0, 3),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/Heatmap_Th17Clusters_Top100Genes.pdf", out_dir), width = 3, 15, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Th17Clusters_Top10Genes.pdf", out_dir), width = 3, 6, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th17 clusters"
+)
+dev.off()
+
+
+
+```
+
+G and Q signature heatmap
+```{r}
+genes_to_label_top100
+genes_to_label0 = genes_to_label_top100 %>% unlist() %>% unique()
+# genes_to_label0 = genes_to_label_top10 %>% unlist() %>% unique()
+
+tmp_all = c(tmp_list[[1]], tmp_list[[2]], tmp_list[[3]])
+tmp = tmp_all
+names(tmp)
+tmp = tmp[c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY", "Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")]
+
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label0, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top100Genes.pdf", out_dir), width = 3, 25, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 8, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = F,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Q and G sig"
+)
+dev.off()
+
+
+#Filter genes just for G and Q
+mat_plot2 = mat_coef[genes_to_label0, ]
+genes_to_label = c(genes_to_label0[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] > 0) ==3],
+                   # genes_to_label[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < 0) ==3],
+                   genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] > 0) ==3]
+                   # genes_to_label[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] < -0) ==3],
+                   #genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY", "Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < -0.5) ==3]
+                   ) %>% unique()
+
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2.5, 0, 1.5),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_G_Q_SharedSig.pdf", out_dir), width = 5, 5, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = T,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "G and Q signatures"
+)
+dev.off()
+
+```
+
+Q only signature heatmap
+```{r}
+genes_to_label_top100
+genes_to_label0 = genes_to_label_top10 %>% unlist() %>% unique()
+
+tmp_all = c(tmp_list[[1]], tmp_list[[2]], tmp_list[[3]])
+tmp = tmp_all
+names(tmp)
+tmp = tmp[c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")]
+
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label0, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top100Genes.pdf", out_dir), width = 3, 20, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Q_Clusters_Top10Genes2.pdf", out_dir), width = 3, 8, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+mat_plot = -mat_plot
+colnames(mat_plot)
+colnames(mat_plot) = c("RS_vs_Qth1", "TU_vsQth2", "XU_vsQTh17")
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = F,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Q.Th vs their tips"
+    
+)
+dev.off()
+
+
+
+```
+
+G only signature heatmap
+```{r}
+genes_to_label_top100
+genes_to_label0 = genes_to_label_top10 %>% unlist() %>% unique()
+
+tmp_all = c(tmp_list[[1]], tmp_list[[2]], tmp_list[[3]])
+tmp = tmp_all
+names(tmp)
+tmp = tmp[c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")]
+
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label0, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_G_Q_Clusters_Top100Genes.pdf", out_dir), width = 3, 20, useDingbats = F)
+pdf(sprintf("%s/Heatmap_G_Clusters_Top10Genes2.pdf", out_dir), width = 3, 8, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = F,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "G.Th vs their tips"
+)
+dev.off()
+
+```
+
+
+Reccurrent genes across comparisons?
+```{r}
+genes_to_label_top100
+genes_to_label0 = genes_to_label_top100 %>% unlist() %>% unique()
+
+tmp_all = c(tmp_list[[1]], tmp_list[[2]], tmp_list[[3]])
+tmp = tmp_all
+names(tmp)
+
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp2[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-3, 0, 3),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_Th1Th2Th117Clusters_Top100Genes.pdf", out_dir), width = 5, 40, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th2Clusters_Top10Genes.pdf", out_dir), width = 3, 4, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th1 Th2 Th17 clusters"
+)
+dev.off()
+
+
+#Filter genes
+mat_plot2 = mat_coef[genes_to_label0, ]
+genes_to_label = c(genes_to_label0[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] > 0) ==3],
+                   # genes_to_label[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < 0) ==3],
+                   genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] > 0) ==3],
+                   # genes_to_label[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] < -0) ==3],
+                   genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY", "Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < -0.5) >=3]) %>% unique()
+
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+write.table(x = genes_to_label, file = sprintf("%s/genesig_fig3l.txt", out_dir), quote = F, row.names = F, col.names = F)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-2, 0, 2),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_Th1Th2Th117Clusters_CommonGQTips.pdf", out_dir), width = 5, 8, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = T,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th1 Th2 Th17 clusters"
+)
+dev.off()
+
+#Filter genes just for G and Q
+mat_plot2 = mat_coef[genes_to_label0, ]
+genes_to_label = c(genes_to_label0[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] > -0) ==3],
+                   # genes_to_label[rowSums(mat_plot2[,c("Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < 0) ==3],
+                   genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] > 0) ==3]
+                   # genes_to_label[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY")] < -0) ==3],
+                   #genes_to_label0[rowSums(mat_plot2[,c("Qth1_vs_RS", "Qth2_vs_TU", "Qth17_vs_XY", "Gth1_vs_RS", "Gth2_vs_TU", "Gth17_vs_XY")] < -0.5) ==3]
+                   ) %>% unique()
+
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-3, 0, 3),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_Th1Th2Th117Clusters_CommonGQ.pdf", out_dir), width = 5, 5, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = T,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Th1 Th2 Th17 clusters"
+)
+dev.off()
+
+```
+
+
+```{r}
+so_orig@meta.data %>% arrange(as.numeric(igt_number)) %>% count(igt_number,exp_name)
+
+so_orig@meta.data %>% filter(IGT %in% c("IGT7", "IGT8", "IGT8"), annotation_level1 == "CD4") %>% count(annotation_level2, organ_simplified)
+
+FindAllMarkers(so_orig[,], ident.1 = "CD4.G", ident.2 = "CD4.Q", group.by = "annotation_level3", test.use = "wilcox", logfc.threshold = 0.1, min.pct = 0.1)
+
+```
+
+
+
+**Heatmap with DGE between 2 tip clusters**
+
+```{r}
+ttlist1 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.Rds')
+ttlist1 = ttlist1[8:10]
+
+tmp = ttlist1
+
+names(tmp) 
+gene_sig = list()
+
+cols = c("darkorchid", "violetred2", "burlywood2" )
+names(cols) = names(tmp)
+
+pdf(sprintf("%s/Volcano_DGE_ClustersWithingEachTip.pdf", out_dir), 15, 15, useDingbats = F)
+for (i in names(tmp)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value + 10^-80, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1),size = 2, color = cols[i])  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0.1 & pval < 10^-5) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    # print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+dev.off()
+
+comp_filt = names(tmp)
+
+genes_to_label <- c()
+for (i in comp_filt) {
+    df <- tmp[[i]] #%>% filter(adj.P.Val < 0.05)
+    # top up
+    up_genes <- df %>% filter(logFC > 0.1,  P.Value < 10^-5) %>% 
+        arrange(desc(logFC)) %>%
+        pull(SYMBOL) 
+    # top down
+    down_genes <- df %>% filter(logFC < -0.1,  P.Value < 10^-5) %>% 
+        arrange(logFC) %>%
+        pull(SYMBOL)
+    # remove genes already selected
+    # up_genes <- setdiff(up_genes, genes_to_label)
+    # down_genes <- setdiff(down_genes, genes_to_label)
+    
+    # add top 20 each
+    genes_to_label <- c(
+        genes_to_label,
+        head(up_genes, 10), head(down_genes, 10)
+        # head(up_genes, 100), head(down_genes, 100)
+    )
+}
+
+genes_to_label <- genes_to_label[
+    !grepl(
+        "^Gm|^mt-|^Tpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+        genes_to_label,
+        ignore.case = TRUE
+    )
+]
+
+genes_to_label = unique(genes_to_label )
+
+#plot heatmap
+# mat_coef <- sapply(tmp, function(tmp) tmp$logFC)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+
+common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+tmp <- lapply(tmp, function(x) {
+  x %>%
+    dplyr::filter(SYMBOL %in% common_genes) %>%
+    dplyr::arrange(match(SYMBOL, common_genes))
+})
+lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+mat_coef <- Reduce(cbind, lapply(tmp, function(x) x[,"logFC"]))
+rownames(mat_coef) = tmp[[1]]$SYMBOL
+colnames(mat_coef) = make.names(names(tmp))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+# tmp[["R_vs_S"]][genes_to_label,1]
+# mat_coef[genes_to_label,"R_vs_S"]
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+    c(-3, 0, 3),
+    c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_DGE_ClustersWithingEachTipTop10genes.pdf", out_dir), width = 5, 5, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_Th17Clusters_Top10Genes.pdf", out_dir), width = 3, 6, useDingbats = F)
+Heatmap(
+    mat_plot,
+    name = "log2FC",
+    col = col_fun,
+    cluster_columns = FALSE,
+    cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+    column_names_gp = gpar(fontsize = 6),
+    column_title = "Top 10 genes between clusters in each tip"
+)
+dev.off()
+
+```
+
+```{r}
+ttlist1 = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/DGE_limma/20260318_tips/ttlist_tips.Rds')
+tmp = ttlist1[8:10]
+names(tmp)
+lapply(tmp, function(x) all(x$SYMBOL == tmp[[1]]$SYMBOL)) ##check that rownames match!!!
+# common_genes <- Reduce(intersect, lapply(tmp, function(x) x$SYMBOL))
+# tmp <- lapply(tmp, function(x) {
+#   x %>%
+#     dplyr::filter(SYMBOL %in% common_genes) %>%
+#     dplyr::arrange(match(SYMBOL, common_genes))
+# })
+# lapply(tmp, function(x) identical(x$SYMBOL, tmp[[1]]$SYMBOL))
+
+vplot = data.frame(fc1 = 2^tmp$R_vs_S$logFC, fc2 = 2^(-tmp$T_vs_U$logFC), SYMBOL = tmp$R_vs_S$SYMBOL)
+genes_to_label = c(tmp$R_vs_S %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   tmp$R_vs_S %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   tmp$T_vs_U %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   tmp$T_vs_U %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+
+vplot = data.frame(fc1 = 2^tmp$R_vs_S$logFC, fc2 = 2^(-tmp$X_vs_Y$logFC), SYMBOL = tmp$R_vs_S$SYMBOL)
+genes_to_label = c(tmp$R_vs_S %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   tmp$R_vs_S %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20),
+                   tmp$X_vs_Y %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% head(20),
+                   tmp$X_vs_Y %>% arrange(desc(logFC)) %>% pull(SYMBOL) %>% tail(20)) %>% unique()
+FCFCplot(vplot = vplot, genes_to_label =  genes_to_label, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+vplot = data.frame(fc1 = 2^tmp$R_vs_S$logFC, fc2 = 2^(-tmp$X_vs_Y$logFC), SYMBOL = tmp$R_vs_S$SYMBOL)
+FCFCplot(vplot = vplot, xlimits = c(1/5,5), ylimits = c(1/5,5) )
+
+vplot = data.frame(fc1 = 2^tmp$T_vs_U$logFC, fc2 = 2^(tmp$X_vs_Y$logFC), SYMBOL = tmp$R_vs_S$SYMBOL)
+FCFCplot(vplot = vplot )
+```
+
+
+
+
+**Figure 3 - CD4 GP analysis**
+```{r}
+mdata_orig = so@meta.data
+
+#option 1 (best): import F1 and L1 from the fit object: 
+L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
+F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
+
+mdata_orig %>% select(IGT, exp_name) %>% unique()
+
+mdata_orig %>% count(organ_simplified)
+
+#c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")
+
+group_list = list(
+#1    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) %>% pull(cellID),  
+         title = "CD4.RS vs CD4.TUXYHI"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) %>% pull(cellID),  
+         title = "CD4.TU vs CD4.RSXYHI"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.X", "CD4.Y")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.H", "CD4.I")) %>% pull(cellID),  
+         title = "CD4.XY vs CD4.RSTUHI"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.H", "CD4.I")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y")) %>% pull(cellID),  
+         title = "CD4.HI vs CD4.RSTUXY"),
+#2    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y")) %>% pull(cellID),  
+         title = "CD4.RS vs CD4.TUXY"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y")) %>% pull(cellID),  
+         title = "CD4.TU vs CD4.RSXY"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.X", "CD4.Y")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U")) %>% pull(cellID),  
+         title = "CD4.XY vs CD4.RSTU"),
+#3    
+        list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.S")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c( "CD4.U", "CD4.Y")) %>% pull(cellID),  
+         title = "CD4.S vs CD4.UY"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.U")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.S", "CD4.Y")) %>% pull(cellID),  
+         title = "CD4.U vs CD4.SY"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c( "CD4.Y")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.S", "CD4.U")) %>% pull(cellID),  
+         title = "CD4.Y vs CD4.SU"),
+#4    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID),  
+         title = "CD4.RS vs CD4.TUXYHI in gut"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y", "CD4.H", "CD4.I") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID),  
+         title = "CD4.TU vs CD4.RSXYHI in gut"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.X", "CD4.Y") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.H", "CD4.I") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID),  
+         title = "CD4.XY vs CD4.RSTUHI in gut"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.H", "CD4.I") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y") & organ_simplified %in% c("colon LP", "small intestine LP")) %>% pull(cellID),  
+         title = "CD4.HI vs CD4.RSTUXY in gut"),
+
+#5    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID),  
+         title = "CD4.RS vs CD4.TUXYHI in SLO"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.T", "CD4.U") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.X", "CD4.Y", "CD4.H", "CD4.I") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID),  
+         title = "CD4.TU vs CD4.RSXYHI in SLO"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.X", "CD4.Y") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.H", "CD4.I") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID),  
+         title = "CD4.XY vs CD4.RSTUHI in SLO"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.H", "CD4.I") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y") & organ_simplified %in% c("spleen", "LN")) %>% pull(cellID),  
+         title = "CD4.HI vs CD4.RSTUXY in SLO"),
+
+#6   
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.G")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I") ) %>% pull(cellID),  
+         title = "CD4.G vs CD4.RSTUXYHI"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.Q")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S", "CD4.T", "CD4.U", "CD4.X", "CD4.Y", "CD4.H", "CD4.I")) %>% pull(cellID),  
+         title = "CD4.Q vs CD4.RSTUXYHI"),
+
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.Q")) %>% pull(cellID), 
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4") & annotation_level2 %in% c("CD4.R", "CD4.S")) %>% pull(cellID),  
+         title = "CD4.Q vs CD4.RS")
+    
+)
+
+results_list = list()
+
+for (i in 1:length(group_list)) {
+    print(group_list[[i]]$title)
+    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
+}
+
+results_list[["CD4.RS vs CD4.TUXY"]]
+
+```
+
+GP in tips
+```{r}
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_tips1.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[1]]$p1
+results_list[[2]]$p1
+results_list[[3]]$p1
+results_list[[4]]$p1
+dev.off()
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_tips2.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[5]]$p1
+results_list[[6]]$p1
+results_list[[7]]$p1
+dev.off()
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_tips3.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[8]]$p1
+results_list[[9]]$p1
+results_list[[10]]$p1
+dev.off()
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_tipsGut.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[11]]$p1
+results_list[[12]]$p1
+results_list[[13]]$p1
+results_list[[14]]$p1
+dev.off()
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_tipsSLO.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[15]]$p1
+results_list[[16]]$p1
+results_list[[17]]$p1
+results_list[[18]]$p1
+dev.off()
+
+pdf(sprintf("%s/FlashierDGE_volcano_GP_Midland.pdf", out_dir), 15,15, useDingbats = F)
+results_list[[19]]$p1
+results_list[[20]]$p1
+results_list[[21]]$p1
+dev.off()
+
+results_list[[11]]$diff_genes["Tbx21",]
+results_list[[12]]$diff_genes["Gata3",]
+results_list[[13]]$diff_genes["Rorc",]
+results_list[[14]]$diff_genes["Bcl6",]
+
+results_list[[11]]$diff_genes["Ifng",]
+results_list[[12]]$diff_genes["Il5",]
+results_list[[13]]$diff_genes["Il17a",]
+results_list[[14]]$diff_genes["Il21",]
+```
+
+```{r}
+
+tt = results_list[5:7]
+
+results_list[[1]]$diff_genes["Tbx21",]
+results_list[[2]]$diff_genes["Gata3",]
+results_list[[3]]$diff_genes["Rorc",]
+results_list[[4]]$diff_genes["Bcl6",]
+
+results_list[[5]]$diff_genes["Tbx21",]
+results_list[[6]]$diff_genes["Gata3",]
+results_list[[7]]$diff_genes["Rorc",]
+
+results_list[[5]]$p1
+results_list[[6]]$p1
+results_list[[7]]$p1
+
+results_list[[8]]$p1
+results_list[[9]]$p1
+results_list[[10]]$p1
+
+plot(results_list[[8]]$diff_genes$log2FC, results_list[[9]]$diff_genes$log2FC)
+
+comp_filt = names(tt)
+# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
+
+# #filter gene names
+# genes_to_label <- c()
+# for (i in comp_filt) {
+#   new_genes <- tt[[i]]$diff_genes %>%
+#     arrange(desc(log2FC)) %>%
+#     # filter(adj.P.Val < 0.05) %>%
+#     pull(SYMBOL)
+#   new_genes <- setdiff(new_genes, genes_to_label)
+#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
+# }
+
+genes_to_label <- c()
+for (i in comp_filt) {
+  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
+  # top up
+  up_genes <- df %>% filter(log2FC > 0.249) %>%
+    arrange(desc(log2FC)) %>%
+    pull(SYMBOL)
+  # top down
+  # down_genes <- df %>%
+  #   arrange(log2FC) %>%
+  #   pull(SYMBOL)
+  # remove genes already selected
+  up_genes <- setdiff(up_genes, genes_to_label)
+  # down_genes <- setdiff(down_genes, genes_to_label)
+
+  # add top 20 each
+  genes_to_label <- c(
+    genes_to_label,
+    head(up_genes, 100)#, head(down_genes, 10)
+  )
+}
+
+genes_to_label <- genes_to_label[
+  !grepl(
+    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+    genes_to_label,
+    ignore.case = TRUE
+  )
+]
+
+#plot heatmap
+# mat_coef <- sapply(tt, function(tt) tt$logFC)
+mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
+rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
+colnames(mat_coef) = make.names(names(tt))
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+  c(-3, 0, 3),
+  c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+# pdf(sprintf("%s/Heatmap_LCMV_SLO_memory_vs_acute_IGT363840.pdf", out_dir2), width = 3, 8, useDingbats = F)
+Heatmap(
+  mat_plot,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in LCMV SLO"
+)
+# dev.off()
+
+# Access the plots and data
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+results$diff_factors  # table for fold changes of gene programs
+results$diff_genes %>% arrange(desc(log2FC)) # table for fold changes of genes
+
+
+```
+
+
+
+
+**Figure 5 - memory **
+--> see CD4_TRBI.Rmd for external datasets
+
+Use new smarta definition!!!
+```{r}
+smarta_citeseq = read.table(sprintf("%s/smarta_citeseq_igt363840_2026.csv","/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/IGT363840_SmartaP14"), header = F)[,1]
+so$smarta_2026 =  colnames(so) %in% smarta_citeseq
+so@meta.data %>% count(Ag_spe, IGT)
+so$Ag_spe[so$Ag_spe == "SMARTA"] = NA
+so$Ag_spe[colnames(so) %in% smarta_citeseq] = "SMARTA"
+
+so$infection_phase2 = NA
+so$infection_phase2[so$IGT == "IGT43" & so$timepoint %in% c("6 dpi", "10 dpi")] = "acute"
+so$infection_phase2[so$IGT == "IGT43" & so$timepoint %in% c("25 dpi", "30 dpi", "60 dpi")] = "cleared"
+so$infection_phase2[so$IGT %in% c("IGT36", "IGT38", "IGT40")] = so$infection_phase[so$IGT %in% c("IGT36", "IGT38", "IGT40")]
+
+so$organ_simplified2 = NA
+so$organ_simplified2[so$organ_simplified %in% c("spleen", "LN", "SLO")] = "SLO"
+so$organ_simplified2[!so$organ_simplified %in% c("spleen", "LN", "SLO")] = "NLT"
+
+mdata_orig = so@meta.data
+
+L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
+F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
+
+
+```
+
+Plot MDE immgenT in LCMV arm and Listeria
+```{r}
+sub = so@meta.data %>% filter(infection_agent %in% c("ActA-deficient Listeria monocytogenes (DPL1942)-2W", "LCMV Armstrong"), organ_simplified %in% c("SLO", "LN", "spleen"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(sample_code, sample_type, organ_simplified)
+tmp = so[,so@meta.data %>% filter(infection_agent %in% c("ActA-deficient Listeria monocytogenes (DPL1942)-2W", "LCMV Armstrong"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% rownames()] #organ_simplified %in% c("SLO", "LN", "spleen")
+tmp$organ_simplified0 = "SLO"
+
+tmp@meta.data %>% count(infection_agent, infection_phase, infection_phase2, timepoint, Ag_spe, organ_simplified2)
+tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% count(timepoint, infection_phase2, organ_simplified2)
+
+tmp@meta.data %>% count(infection_agent, timepoint, Ag_spe)
+
+###LCMV SLO
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong", Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% count(timepoint, infection_phase2, Ag_spe)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% pull(cellID)
+tmp2 = tmp[,sub]
+pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840_SLO.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+# dev.off()
+
+# tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(infection_phase)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% group_by(infection_phase)  %>% ungroup() %>% pull(cellID) #%>% slice_sample(n = 80)
+# tmp2 = tmp[,sub]
+# pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840.pdf.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$infection_phase2)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(infection_phase2 == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+
+###Listeria
+tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% count(timepoint, infection_phase2)
+tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W", organ_simplified2 == "SLO") %>% count(infection_phase2, timepoint, organ_simplified2, Ag_spe)
+# sub = tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% group_by(infection_phase2) %>% slice_sample(n = 500)  %>% ungroup() %>% pull(cellID) 
+sub = tmp@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W", organ_simplified2 == "SLO") %>% pull(cellID) #%>% slice_sample(n = 500) 
+tmp2 = tmp[,sub]
+pdf(sprintf("%s/MDE_Listeria_timecourse_IGT43_SLO.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    nrow(tmp3)
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+
+#To check that the AddEmbeddingRasterBackground was working well
+# for (i in unique(tmp2$timepoint)) {
+#     print(i)
+#     p = MyDimPlotHighlight(seurat_object = so, umap_to_plot = "mde_incremental", cells_to_highlight = tmp2@meta.data %>% filter(timepoint == i) %>% rownames(), highlight_column_name = "annotation_level2", pixels = c(512, 512), mycols = mypal_level2, title = "", highlight_size = 1, highlight_alpha = 1, print_plot1 = T, print_plot2 = F, labelclusters = F)
+#     print(p)
+# }
+
+for (i in na.omit(unique(tmp2$infection_phase2))) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(infection_phase2 == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+###LCMV NLT
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong", Ag_spe == "SMARTA", organ_simplified2 == "NLT") %>% count(timepoint, infection_phase2, Ag_spe, organ_simplified2,organ_simplified)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "NLT") %>% pull(cellID)
+tmp2 = tmp[,sub]
+pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840_NLT.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+# dev.off()
+
+# tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(infection_phase)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% group_by(infection_phase)  %>% ungroup() %>% pull(cellID) #%>% slice_sample(n = 80)
+# tmp2 = tmp[,sub]
+for (i in unique(tmp2$infection_phase2)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(infection_phase2 == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+###LCMV SILP_SMG_prostate
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong", Ag_spe == "SMARTA", organ_simplified2 == "NLT", organ_simplified %in% c("small intestine LP", "submandibular gland", "prostate")) %>% count(timepoint, infection_phase2, Ag_spe, organ_simplified2,organ_simplified)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "NLT", organ_simplified %in% c("small intestine LP", "submandibular gland", "prostate")) %>% pull(cellID)
+tmp2 = tmp[,sub]
+pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840_NLT_SILP_SMG_prostate.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+# dev.off()
+
+# tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(infection_phase)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% group_by(infection_phase)  %>% ungroup() %>% pull(cellID) #%>% slice_sample(n = 80)
+# tmp2 = tmp[,sub]
+for (i in unique(tmp2$infection_phase2)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(infection_phase2 == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+###LCMV Lung bone marrow
+tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong", Ag_spe == "SMARTA", organ_simplified2 == "NLT", organ_simplified %in% c("lung", "bone marrow")) %>% count(timepoint, infection_phase2, Ag_spe, organ_simplified2,organ_simplified)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% group_by(timepoint) %>% slice_sample(n = 121) %>% ungroup() %>% pull(cellID)
+sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "NLT", organ_simplified %in% c("lung", "bone marrow")) %>% pull(cellID)
+tmp2 = tmp[,sub]
+pdf(sprintf("%s/MDE_LCMV_timecourse_IGT363840_NLT_SILP_lung_bonemarrow.pdf",out_dir),7, 7, useDingbats = F)
+for (i in unique(tmp2$timepoint)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(timepoint == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+# dev.off()
+
+# tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA") %>% count(infection_phase)
+# sub = tmp@meta.data %>% filter(infection_agent == "LCMV Armstrong" & Ag_spe == "SMARTA", organ_simplified2 == "SLO") %>% group_by(infection_phase)  %>% ungroup() %>% pull(cellID) #%>% slice_sample(n = 80)
+# tmp2 = tmp[,sub]
+for (i in unique(tmp2$infection_phase2)) {
+    print(i)
+    tmp3 = tmp2[,tmp2@meta.data %>% filter(infection_phase2 == i) %>% rownames()]
+    
+    p = DimPlot(tmp3, reduction = "mde_incremental", group.by = "annotation_level2", cols = mypal_level2, pt.size = 2) + ggtitle(sprintf("%s, %s cells",i, ncol(tmp3)))
+    bg = AddEmbeddingRasterBackground(lineage = "CD4")
+    p$layers = c(list(bg), p$layers)
+    p = p + ggplot2::coord_fixed() + xlim(c(-2.5,4)) + ylim(c(-2.5,2.5)) +theme_void() + NoLegend()
+    print(p)
+}
+dev.off()
+
+```
+
+Cluster proportion LCMV and Listeria acute vs memory
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(scales)
+library(stringr)
+library(tidyr)
+
+cluster_col <- "annotation_level2"   # change if needed
+
+# so@meta.data %>% filter(IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(organ_simplified)
+# so$organ_simplified2 = NA
+# so$organ_simplified2[so$organ_simplified %in% c("spleen", "LN", "SLO")] = "SLO"
+# so$organ_simplified2[!so$organ_simplified %in% c("spleen", "LN", "SLO")] = "NLT"
+
+#checks
+so@meta.data %>% filter(IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), infection_phase2 %in% c("acute", "cleared"), infection_agent %in% c("LCMV Armstrong", "ActA-deficient Listeria monocytogenes (DPL1942)-2W")) %>% count(infection_phase, infection_phase2, IGT, Ag_spe)
+so@meta.data %>% filter(IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), infection_phase2 %in% c("acute", "cleared"), infection_agent %in% c("LCMV Armstrong", "ActA-deficient Listeria monocytogenes (DPL1942)-2W")) %>% count(IGT, organ_simplified, organ_simplified2)
+
+so@meta.data %>% count(infection_agent, infection_phase, infection_phase, timepoint, Ag_spe, organ)
+so@meta.data %>% filter(infection_agent == "ActA-deficient Listeria monocytogenes (DPL1942)-2W") %>% count(timepoint, infection_phase2)
+
+#Make prop table
+so@meta.data %>% filter(infection_phase %in% c("acute", "cleared"),infection_agent %in% c("LCMV Armstrong", "ActA-deficient Listeria monocytogenes (DPL1942)-2W"), Ag_spe %in% c("2WTetp", "SMARTA")) %>% count(sample_code, infection_agent, infection_phase2, organ_simplified2, Ag_spe)
+
+clusters <- levels(so$annotation_level2)[grepl("^CD4", levels(so$annotation_level2))]
+
+df_plot <- so@meta.data %>%
+  filter(
+    infection_phase2 %in% c("acute", "cleared"),
+    infection_agent %in% c("LCMV Armstrong", "ActA-deficient Listeria monocytogenes (DPL1942)-2W"),
+    Ag_spe %in% c("2WTetp", "SMARTA"),
+  ) %>%
+  count(
+    infection_agent, infection_phase2, organ_simplified2, timepoint, #sample_code
+    .data[[cluster_col]],
+    name = "n"
+  ) %>%
+  rename(cluster = all_of(cluster_col)) %>%
+  mutate(cluster = factor(cluster, levels = levels(so$annotation_level2))) %>%
+  group_by(infection_agent, infection_phase2, organ_simplified2, timepoint) %>% #sample_code
+  complete(cluster = clusters, fill = list(n = 0)) %>%
+  mutate(
+    sample_total = sum(n),
+    pct = 100 * n / sample_total
+  ) %>%
+  ungroup()
+
+df_plot2 <- df_plot %>%
+  mutate(
+    cluster_phase = paste(cluster, infection_phase2)
+  )
+
+x_levels <- as.vector(rbind(
+  paste(clusters, "acute"),
+  paste(clusters, "cleared")
+))
+
+df_plot2$cluster_phase <- factor(df_plot2$cluster_phase, levels = x_levels)
+
+#make 
+# df_plot <- so@meta.data %>%
+#   filter(infection_phase2 %in% c("acute", "cleared"), infection_agent %in% c("LCMV Armstrong", "ActA-deficient Listeria monocytogenes (DPL1942)-2W"), Ag_spe %in% c("2WTetp", "SMARTA")) %>%
+#   count(sample_code, infection_agent, infection_phase2,organ_simplified2, timepoint, .data[[cluster_col]], name = "n") %>%
+#   group_by(sample_code, infection_agent, infection_phase2, organ_simplified2) %>%
+#     complete(cluster = clusters, fill = list(n = 0)) %>%
+#   mutate(
+#     sample_total = sum(n),
+#     pct = 100 * n / sample_total
+#   ) %>%
+#   ungroup() %>%
+#   rename(cluster = all_of(cluster_col))
+# df_plot$cluster = factor(df_plot$cluster, levels = levels(so$annotation_level2))
+# 
+# df_plot2 <- df_plot %>%
+#   filter(infection_phase2 %in% c("acute","cleared")) %>%
+#   mutate(
+#     cluster_phase = paste(cluster, infection_phase2)
+#   )
+# clusters <- levels(so$annotation_level2)[grepl("^CD4", levels(so$annotation_level2))]
+# x_levels <- as.vector(
+#   rbind(
+#     paste(clusters, "acute"),
+#     paste(clusters, "cleared")
+#   )
+# )
+# df_plot2$cluster_phase <- factor(df_plot2$cluster_phase, levels = x_levels)
+
+# LCMV SLO
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), infection_agent %in% c("LCMV Armstrong"), organ_simplified2 %in% "SLO")
+df_plot3$cluster = factor(df_plot3$cluster, levels = levels(so$annotation_level2))
+# df_plot3 = df_plot3 %>% filter(sample_total > 10)
+
+# df_plot3 %>% select(sample_code, infection_phase2) %>% unique() %>% count(sample_code, infection_phase2)
+
+p3 = ggplot(df_plot3, aes(cluster, pct, color = infection_phase2, shape = timepoint)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = infection_phase2),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("acute" = "blue", "cleared" = "red")) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3
+
+pdf(sprintf("%s/ClusterProp_LCMV_acute_memory_SLO_IGT363840.pdf", out_dir), 8,5, useDingbats = F)
+p3 + NoGrid()
+dev.off()
+
+# Listeria SLO
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), infection_agent %in% c("ActA-deficient Listeria monocytogenes (DPL1942)-2W"), organ_simplified2 %in% "SLO")
+df_plot3$cluster = factor(df_plot3$cluster, levels = levels(so$annotation_level2))
+# df_plot3 = df_plot3 %>% filter(sample_total > 10)
+
+# df_plot3 %>% select(sample_code, infection_phase2) %>% unique() %>% count(sample_code, infection_phase2)
+
+p3 = ggplot(df_plot3, aes(cluster, pct, color = infection_phase2)) +
+    geom_jitter(
+        position = position_jitterdodge(
+            jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = infection_phase2),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("acute" = "blue", "cleared" = "red")) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3
+
+pdf(sprintf("%s/ClusterProp_Listeria_acute_memory_SLO_IGT43.pdf", out_dir), 8,5, useDingbats = F)
+p3 + NoGrid()
+dev.off()
+
+# LCMV NLT
+df_plot3 = df_plot2 %>% filter(!(cluster %in% c("CD4.wM", "CD4.wN", "CD4.wZ")), infection_agent %in% c("LCMV Armstrong"), organ_simplified2 %in% "NLT")
+df_plot3$cluster = factor(df_plot3$cluster, levels = levels(so$annotation_level2))
+df_plot3 = df_plot3 %>% filter(sample_total > 10)
+
+# df_plot3 %>% select(sample_code, infection_phase2) %>% unique() %>% count(sample_code, infection_phase2)
+
+p3 = ggplot(df_plot3, aes(cluster, pct, color = infection_phase2, shape = timepoint)) +
+    geom_jitter(
+        position = position_jitterdodge(
+             jitter.width = 0.1,
+            dodge.width = 0.6
+        ),
+        size = 3
+    ) +
+    stat_summary(
+        aes(group = infection_phase2),
+        fun = mean,
+        geom = "crossbar",
+        width = 0.5,
+        position = position_dodge(width = 0.6),
+        color = "black"
+    ) +
+    scale_color_manual(values = c("acute" = "blue", "cleared" = "red")) +
+    theme_bw() +
+    theme(
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.grid.major.x = element_blank()
+    ) +
+    labs(
+        x = "Cluster",
+        y = "% cells"
+    )
+p3
+
+pdf(sprintf("%s/ClusterProp_LCMV_acute_memory_NLT_IGT363840.pdf", out_dir), 8,5, useDingbats = F)
+p3 + NoGrid()
+dev.off()
+
+```
+
+TopicDGE LCMV
+```{r}
+
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA", "2WTetp"), organ_simplified2 %in% c("SLO"),infection_phase2 %in% c("acute", "cleared") ) %>% count(infection_agent, timepoint, infection_phase2, organ_simplified2, Ag_spe )
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
+
+group_list = list(
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 memory vs acute in LCMV"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 %in% c("CD4.G"))  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 %in% c("CD4.G") )  %>% pull(cellID),
+         title = "CD4.G memory vs acute in LCMV"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 == "CD4.H" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 == "CD4.H" )  %>% pull(cellID),
+         title = "CD4.H memory vs acute in LCMV")
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 %in% c("CD4.G", "CD4.H"))  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 %in% c("CD4.G", "CD4.H") )  %>% pull(cellID),
+    #      title = "CD4.GH memory vs acute in LCMV"),
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 %in% c("CD4.Q", "CD4.R", "CD4.S"))  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 %in% c("CD4.Q", "CD4.R", "CD4.S") )  %>% pull(cellID),
+    #      title = "CD4.QRS memory vs acute in LCMV")
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 %in% c("CD4.Q"))  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 %in% c("CD4.Q") )  %>% pull(cellID),
+    #      title = "CD4.Q memory vs acute in LCMV")
+
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 ABC memory vs acute in LCMV"),
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 GHI memory vs acute in LCMV"),
+    # 
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 QRS memory vs acute in LCMV")
+
+)
+
+results_list = list()
+
+for (i in 1:length(group_list)) {
+    print(group_list[[i]]$title)
+    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
+}
+
+
+# results$p1  # First plot (MA plot of factors)
+# results$p2  # Second plot (MA plot of genes)
+# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
+# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
+
+results_list_LCMV = results_list
+
+#Heatmap with the results
+tt = results_list 
+
+comp_filt = names(tt)
+# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
+
+# #filter gene names
+# genes_to_label <- c()
+# for (i in comp_filt) {
+#   new_genes <- tt[[i]]$diff_genes %>%
+#     arrange(desc(log2FC)) %>%
+#     # filter(adj.P.Val < 0.05) %>%
+#     pull(SYMBOL)
+#   new_genes <- setdiff(new_genes, genes_to_label)
+#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
+# }
+
+genes_to_label <- c()
+for (i in comp_filt) {
+  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
+  # top up
+  up_genes <- df %>%
+    arrange(desc(log2FC)) %>%
+    pull(SYMBOL)
+  # top down
+  down_genes <- df %>%
+    arrange(log2FC) %>%
+    pull(SYMBOL)
+  # remove genes already selected
+  # up_genes <- setdiff(up_genes, genes_to_label)
+  # down_genes <- setdiff(down_genes, genes_to_label)
+
+  # add top 20 each
+  genes_to_label <- c(
+    genes_to_label,
+    head(up_genes, 20),
+    head(down_genes, 20)
+  )
+}
+
+genes_to_label <- genes_to_label[
+  !grepl(
+    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+    genes_to_label,
+    ignore.case = TRUE
+  )
+] %>% unique()
+
+genes_to_label_LCMV = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tt, function(tt) tt$logFC)
+mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
+rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
+colnames(mat_coef) = make.names(names(tt))
+mat_coef_LCMV = mat_coef
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+  c(-1, 0, 1),
+  c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_LCMV_SLO_memory_vs_acute_IGT363840.pdf", out_dir), width = 3, 8, useDingbats = F)
+Heatmap(
+  mat_plot,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in LCMV SLO"
+)
+dev.off()
+
+
+
+
+```
+
+TopicDGE Listeria
+```{r}
+# mdata_orig = so@meta.data
+# L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
+# F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
+
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO") ) %>% count(infection_phase, annotation_level2)
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
+
+group_list = list(
+    
+        # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "cleared" )  %>% pull(cellID),
+        #  group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), infection_phase == "acute" )  %>% pull(cellID),
+        #  title = "CD4 memory vs acute in Listeria"),
+
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.A","CD4.B", "CD4.C"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 ABC memory vs acute in Listeria"),
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.H", "CD4.I"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 GHI memory vs acute in Listeria"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 G memory vs acute in Listeria"),
+    
+        list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.H"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.H"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 H memory vs acute in Listeria"),
+    
+         #    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.I"), infection_phase == "cleared" )  %>% pull(cellID),
+         # group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.I"), infection_phase == "acute" )  %>% pull(cellID),
+         # title = "CD4 I memory vs acute in Listeria"),
+    
+                list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 Q memory vs acute in Listeria")
+    
+    # list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "cleared" )  %>% pull(cellID),
+    #      group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q","CD4.R", "CD4.S"), infection_phase == "acute" )  %>% pull(cellID),
+    #      title = "CD4 QRS memory vs acute in Listeria")
+)
+
+results_list = list()
+
+for (i in 1:length(group_list)) {
+    print(group_list[[i]]$title)
+    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
+}
+
+
+# results$p1  # First plot (MA plot of factors)
+# results$p2  # Second plot (MA plot of genes)
+# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
+# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
+
+results_list_Lm = results_list
+
+#Heatmap with the results
+tt = results_list 
+
+comp_filt = names(tt)
+# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
+
+#filter gene names
+# genes_to_label <- c()
+# for (i in comp_filt) {
+#   new_genes <- tt[[i]]$diff_genes %>%
+#     arrange(desc(abs(log2FC))) %>%
+#     # filter(adj.P.Val < 0.05) %>%
+#     pull(SYMBOL)
+#   new_genes <- setdiff(new_genes, genes_to_label)
+#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
+# }
+
+genes_to_label <- c()
+for (i in comp_filt) {
+  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
+  # top up
+  up_genes <- df %>%
+    arrange(desc(log2FC)) %>%
+    pull(SYMBOL)
+  # top down
+  down_genes <- df %>%
+    arrange(log2FC) %>%
+    pull(SYMBOL)
+  # remove genes already selected
+  # up_genes <- setdiff(up_genes, genes_to_label)
+  # down_genes <- setdiff(down_genes, genes_to_label)
+
+  # add top 20 each
+  genes_to_label <- c(
+    genes_to_label,
+    head(up_genes, 20),
+    head(down_genes, 20)
+  )
+}
+
+genes_to_label <- genes_to_label[
+  !grepl(
+    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+    genes_to_label,
+    ignore.case = TRUE
+  )
+] %>% unique()
+
+genes_to_label_Lm = genes_to_label
+
+#plot heatmap
+# mat_coef <- sapply(tt, function(tt) tt$logFC)
+mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
+rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
+colnames(mat_coef) = make.names(names(tt))
+mat_coef_Lm = mat_coef
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+  c(-0.5, 0, 0.5),
+  c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_Listeria_SLO_memory_vs_acute_IGT363840_2.pdf", out_dir), width = 3, 7, useDingbats = F)
+Heatmap(
+  mat_plot,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in Listeria SLO"
+)
+ dev.off()
+
+```
+
+Heatmap with LCMV and Listeria together V1
+```{r}
+
+tt = c(results_list_Lm, results_list_LCMV)
+genes_to_label = setdiff(unique(genes_to_label_LCMV, genes_to_label_Lm), c("Cd8b1", "CT010467.1"))
+intersect(genes_to_label_LCMV, genes_to_label_Lm)
+
+all(rownames(mat_coef_LCMV) == rownames(mat_coef_Lm))
+mat_coef =  cbind(mat_coef_LCMV, mat_coef_Lm)
+mat_plot = mat_coef[genes_to_label, ]
+mat_plot_LCMV = mat_coef_LCMV[genes_to_label, ]
+mat_plot_Lm = mat_coef_Lm[genes_to_label, ]
+
+range(mat_plot)
+
+library(ComplexHeatmap)
+library(circlize)
+
+pdf(sprintf("%s/Heatmap_ListeriaLCMV_SLO_memory_vs_acute_IGT36384043_2.pdf", out_dir), width = 3, 8, useDingbats = F)
+col_fun <- circlize::colorRamp2(
+  c(-1, 0, 1),
+  c("#4575B4", "white", "#D73027")
+)
+Heatmap(
+  mat_plot_LCMV,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in Listeria SLO"
+)
+
+col_fun <- circlize::colorRamp2(
+  c(-1, 0, 1),
+  c("#4575B4", "white", "#D73027")
+)
+Heatmap(
+  mat_plot_Lm,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in Listeria SLO"
+)
+
+col_fun <- circlize::colorRamp2(
+  c(-0.75, 0, 0.75),
+  c("#4575B4", "white", "#D73027")
+)
+Heatmap(
+  cbind(mat_plot_Lm, mat_plot_LCMV),
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = T,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "memory vs acute across clusters in Listeria + LCMV"
+)
+dev.off()
+
+```
+
+Heatmap with LCMV and Listeria together V2
+```{r}
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(ComplexHeatmap)
+library(circlize)
+library(grid)
+
+
+group_list = list(
+    
+     list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 %in% c("CD4.G"))  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 %in% c("CD4.G") )  %>% pull(cellID),
+         title = "CD4.G memory vs acute in LCMV"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "cleared", annotation_level2 == "CD4.H" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40"), Ag_spe %in% c("SMARTA"), organ_simplified2 %in% c("SLO"), infection_phase == "acute", annotation_level2 == "CD4.H" )  %>% pull(cellID),
+         title = "CD4.H memory vs acute in LCMV"),
+
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 G memory vs acute in Listeria"),
+    
+        list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.H"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.H"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 H memory vs acute in Listeria"),
+
+    
+                list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("2WTetp"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "acute" )  %>% pull(cellID),
+         title = "CD4 Q memory vs acute in Listeria")
+
+)
+
+results_list = list()
+
+for (i in 1:length(group_list)) {
+    print(group_list[[i]]$title)
+    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
+}
+
+
+
+
+# combine log2FC from all comparisons
+fc_long <- imap_dfr(results_list, function(x, nm) {
+  x$diff_genes %>%
+    select(SYMBOL, log2FC) %>%
+    mutate(comparison = nm)
+})
+
+# genes up in >=2 comparisons
+up_genes <- fc_long %>%
+  filter(log2FC > 0.1) %>%
+  count(SYMBOL, name = "n_up") %>%
+  filter(n_up >= 3) %>%
+  pull(SYMBOL)
+up_genes
+
+# genes down in >=2 comparisons
+down_genes <- fc_long %>%
+  filter(log2FC < -0.3) %>%
+  count(SYMBOL, name = "n_down") %>%
+  filter(n_down >= 3) %>%
+  pull(SYMBOL)
+down_genes
+
+genes_to_label <- unique(c(up_genes, down_genes)) 
+genes_to_label = setdiff(unique(genes_to_label, genes_to_label), c("Cd8b1", "Cd8a", "CT010467.1"))
+
+length(up_genes)
+length(down_genes)
+length(genes_to_label)
+
+mat_coef <- fc_long %>%
+  filter(SYMBOL %in% genes_to_label) %>%
+  pivot_wider(
+    names_from = comparison,
+    values_from = log2FC,
+    values_fill = 0
+  ) %>%
+  as.data.frame()
+
+rownames(mat_coef) <- mat_coef$SYMBOL
+mat_coef$SYMBOL <- NULL
+
+mat_plot2 <- as.matrix(mat_coef)
+
+col_fun <- circlize::colorRamp2(
+  c(-1, 0, 1),
+  c("#4575B4", "white", "#D73027")
+)
+
+pdf(sprintf("%s/Heatmap_ListeriaLCMV_SLO_memory_vs_acute_IGT36384043_3.pdf", out_dir), width = 2, 4, useDingbats = F)
+Heatmap(
+  mat_plot2,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  row_names_gp = gpar(fontsize = 6),
+  column_names_gp = gpar(fontsize = 6),
+  column_title = "Genes shared across memory vs acute comparisons"
+)
+dev.off()
+
+
+```
+
+
+TopicDGE LCMV NLT vs SLO
+```{r}
+mdata_orig = so@meta.data
+
+L1 = readRDS(sprintf('/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/L1.Rds')) #cells x factor
+F1 = readRDS(sprintf("/Users/david/google_drive_uchicago/ImmgenT/analysis/data_integration/IGT1_96/topic/flashier20250215_alldata_backfit/F1.Rds")) #gene x factor
+
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO") ) %>% count(infection_phase, organ_simplified)
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")) ) %>% count(infection_phase, organ_simplified)
+mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43")) %>% count(Ag_spe)
+
+group_list = list(
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G","CD4.Q"), infection_phase == "cleared" ) %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.G","CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
+         title = "SLO vs NLT in GQ, in LCMV at memory timepoint"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" ) %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.G"), infection_phase == "cleared" )  %>% pull(cellID),
+         title = "SLO vs NLT in G, in LCMV at memory timepoint"),
+    
+    list(group1 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), organ_simplified %in% c("spleen", "LN", "SLO"), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" ) %>% pull(cellID),
+         group2 = mdata_orig %>% filter(annotation_level1 %in% c("CD4"), IGT %in% c("IGT36", "IGT38", "IGT40", "IGT43"), Ag_spe %in% c("SMARTA"), !(organ_simplified %in% c("spleen", "LN", "SLO")), annotation_level2 %in% c("CD4.Q"), infection_phase == "cleared" )  %>% pull(cellID),
+         title = "SLO vs NLT in Q, in LCMV at memory timepoint")
+    
+)
+
+results_list = list()
+
+for (i in 1:length(group_list)) {
+    print(group_list[[i]]$title)
+    results_list[[group_list[[i]]$title]] = FlashierDGE(F1, L1, group_list[[i]]$group1, group_list[[i]]$group2, title_plot = group_list[[i]]$title)
+}
+
+# results = results_list[[3]]
+# results$p1  # First plot (MA plot of factors)
+# results$p2  # Second plot (MA plot of genes)
+# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
+# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
+
+pdf(sprintf("%s/Volcano_LCMV_SLO_vs_NLT_IGT363840.pdf", out_dir2), width = 5, 5, useDingbats = F)
+results = results_list[["SLO vs NLT in GQ, in LCMV at memory timepoint"]]
+results$p1  # First plot (MA plot of factors)
+results$p2  # Second plot (MA plot of genes)
+# results$diff_factors  %>% arrange(desc(log2FC)) %>% head(10)
+# results$diff_genes %>% arrange(desc(log2FC))  %>% head(50)# table for fold changes of genes
+dev.off()
+
+#Heatmap with the results
+tt = results_list 
+
+comp_filt = names(tt)
+# comp_filt = comp_filt[grepl("_vs_others", comp_filt)]
+
+# #filter gene names
+# genes_to_label <- c()
+# for (i in comp_filt) {
+#   new_genes <- tt[[i]]$diff_genes %>%
+#     arrange(desc(log2FC)) %>%
+#     # filter(adj.P.Val < 0.05) %>%
+#     pull(SYMBOL)
+#   new_genes <- setdiff(new_genes, genes_to_label)
+#   genes_to_label <- c(genes_to_label, head(new_genes, 20))
+# }
+
+genes_to_label <- c()
+for (i in comp_filt) {
+  df <- tt[[i]]$diff_genes #%>% filter(adj.P.Val < 0.05)
+  # top up
+  up_genes <- df %>%
+    arrange(desc(log2FC)) %>%
+    pull(SYMBOL)
+  # top down
+  down_genes <- df %>%
+    arrange(log2FC) %>%
+    pull(SYMBOL)
+  # remove genes already selected
+  up_genes <- setdiff(up_genes, genes_to_label)
+  down_genes <- setdiff(down_genes, genes_to_label)
+
+  # add top 20 each
+  genes_to_label <- c(
+    genes_to_label,
+    head(up_genes, 10),
+    head(down_genes, 10)
+  )
+}
+
+genes_to_label <- genes_to_label[
+  !grepl(
+    "^Gm|^mt-|^Rpl|^Rps|^Snor|^Mir|^Linc|^Rp[sl]|-ps|Rik$|^Hbb",
+    genes_to_label,
+    ignore.case = TRUE
+  )
+]
+
+
+#plot heatmap
+# mat_coef <- sapply(tt, function(tt) tt$logFC)
+mat_coef <- Reduce(cbind, lapply(tt, function(x) x$diff_genes$log2FC))
+rownames(mat_coef) <- tt[[1]]$diff_genes$SYMBOL
+colnames(mat_coef) = make.names(names(tt))
+mat_coef_LCMV = mat_coef
+mat_plot = mat_coef[genes_to_label, ]
+range(mat_plot)
+
+library(ComplexHeatmap)
+library(circlize)
+
+col_fun <- circlize::colorRamp2(
+  c(-1, 0, 1),
+  c("#4575B4", "white", "#D73027")
+)
+
+# pdf(sprintf("%s/heatmap_memory_vs_acute_SLO_LCMV.pdf", out_dir), width = 3, 8, useDingbats = F)
+pdf(sprintf("%s/Heatmap_LCMV_SLO_vs_NLT_IGT363840.pdf", out_dir2), width = 3, 8, useDingbats = F)
+Heatmap(
+  mat_plot,
+  name = "log2FC",
+  col = col_fun,
+  cluster_columns = FALSE,
+  cluster_rows = T,
+    row_names_gp = gpar(fontsize = 6),
+      column_names_gp = gpar(fontsize = 6),
+  column_title = "SLO vs NLT in GQ, in LCMV"
+)
+dev.off()
+
+
+```
+
+
+**Figure 6: resting vs activated**
+
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20260206_freeze/CD4/DGE_limma/20260206/ttlist_Level2Group.Rds')
+
+names(ttlist)
+tmp = ttlist
+
+i = "Activated_vs_Resting"
+
+# gene_sig = list()
+
+pdf(sprintf("%s/volcanos_Resting_vs_Activated_noLabels.pdf", out_dir), 10, 10, useDingbats = F)
+pdf(sprintf("%s/volcanos_Resting_vs_Activated_Labels.pdf", out_dir), 25, 25, useDingbats = F)
+
+# for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^(-tmp[[i]]$logFC), pval = tmp[[i]]$adj.P.Val + 10^-100, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1), color = "black")  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 1 & pval < 10^-100) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    # gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    print(p)
+    # print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+# }
+dev.off()
+```
+
+```{r}
+ttlist = readRDS('/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/20260206_freeze/CD4/DGE_limma/20260206/ttlist_in_Resting.Rds')
+
+tmp = ttlist
+for (i in names(ttlist)) {
+    print(i)
+    vplot = na.omit(data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^(tmp[[i]]$logFC), pval = tmp[[i]]$P.Value + 10^-100, AveExpr = 2^(tmp[[i]]$AveExpr))) #dealing with NA
+    # vplot = data.frame(SYMBOL = tmp[[i]]$SYMBOL, fc = 2^tmp[[i]]$logFC, pval = tmp[[i]]$P.Value+10^-300, AveExpr = 2^(tmp[[i]]$AveExpr))
+    p = Vplot(vplot = vplot, xlab = names(tmp)[i], xlimits = c(min(vplot$fc[vplot$fc != 0]), max(vplot$fc)), ylimits = c(min(vplot$pval), 1), color = "black")  #c(min(vplot$pval[vplot$pval != 0]),1)
+    sub = vplot %>%
+        filter(abs(log2(fc)) > 0.5 & pval < 10^-10) %>%
+        arrange(desc(log2(fc))) %>%
+        pull(SYMBOL)
+    sub
+    gene_sig[[sprintf("%s_up", i)]] = sub
+    highlight_genes = sub #unique(c(head(sub, 25), tail(sub, 25)))
+    # sub = (log2(vplot$fc) > 0.5 | log2(vplot$fc) < -0.5)  & vplot$pval < 0.05
+    # sub = vplot[sub,] %>% arrange(desc(log2(fc)))
+    # sub1 = sub %>% pull(SYMBOL) %>% head(25) #vplot$SYMBOL %in% as.character(sub2$SYMBOL)[1:200]
+    # sub2 = sub %>% pull(SYMBOL) %>% tail(25)
+    highlight_filter = vplot$SYMBOL %in% highlight_genes
+    # sub = vplot$SYMBOL %in% c(sub1, sub2)#as.character(sub2$SYMBOL)[1:50]
+    library(ggrepel)
+    # print(p)
+    print(p + geom_text_repel(data = vplot[highlight_filter,], aes(x = fc, y = pval, label = SYMBOL)) + ggtitle(i) + xlab(sprintf("FC %s", i)))
+}
+```
+
+
+**Figure 7 flow analysis**
+
+organ comparison in healthy 
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(condition_detailed == "healthy") %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(flow_long$cluster, levels = c("CD4.A","CD4.G","CD4.H","CD4.I","CD4.Q","CD4.RS","CD4.TU","CD4.XY"))
+flow_long$organ_simplified = factor(flow_long$organ_simplified, levels = c("spleen", "lung", "colon"))
+
+# mean per cluster and organ
+mean_df <- flow_long %>%
+  group_by(cluster, organ_simplified) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# ANOVA p-value per cluster
+anova_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = summary(aov(prop ~ organ_simplified))[[1]][["Pr(>F)"]][1],
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = organ_simplified)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.65),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = organ_simplified),
+    position = position_dodge(width = 0.65),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = organ_simplified),
+    position = position_dodge(width = 0.65),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = anova_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+    ggtitle("Healthy organ comparison") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Organ"
+  ) +
+    scale_color_manual(values = c("spleen" = "blue", "lung" = "darkgreen", "colon" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(anova_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_organ_comparison_healthy.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+
+```
+
+colon healthy vs scurfy
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(organ_simplified == "colon", condition_detailed %in% c("healthy", "scurfy")) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(
+  flow_long$cluster,
+  levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.Q", "CD4.RS", "CD4.TU", "CD4.XY")
+)
+
+flow_long$condition_detailed <- factor(
+  flow_long$condition_detailed,
+  levels = c("healthy", "scurfy")
+)
+
+# mean per cluster and condition
+mean_df <- flow_long %>%
+  group_by(cluster, condition_detailed) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# p-value per cluster
+test_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = t.test(prop ~ condition_detailed)$p.value,
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = condition_detailed)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.5),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = test_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+        ggtitle("Healthy vs scurfy in colon") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("healthy" = "black", "scurfy" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(test_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_scurfy_vs_healthy_colon.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+spleen healthy vs scurfy
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(organ_simplified == "spleen", condition_detailed %in% c("healthy", "scurfy")) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(
+  flow_long$cluster,
+  levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.Q", "CD4.RS", "CD4.TU", "CD4.XY")
+)
+
+flow_long$condition_detailed <- factor(
+  flow_long$condition_detailed,
+  levels = c("healthy", "scurfy")
+)
+
+# mean per cluster and condition
+mean_df <- flow_long %>%
+  group_by(cluster, condition_detailed) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# p-value per cluster
+test_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = t.test(prop ~ condition_detailed)$p.value,
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = condition_detailed)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.5),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = test_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+            ggtitle("Healthy vs scurfy in spleen") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("healthy" = "black", "scurfy" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(test_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_scurfy_vs_healthy_spleen.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+Lung healthy vs scurfy
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(organ_simplified == "lung", condition_detailed %in% c("healthy", "scurfy")) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(
+  flow_long$cluster,
+  levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.Q", "CD4.RS", "CD4.TU", "CD4.XY")
+)
+
+flow_long$condition_detailed <- factor(
+  flow_long$condition_detailed,
+  levels = c("healthy", "scurfy")
+)
+
+# mean per cluster and condition
+mean_df <- flow_long %>%
+  group_by(cluster, condition_detailed) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# p-value per cluster
+test_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = t.test(prop ~ condition_detailed)$p.value,
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = condition_detailed)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.5),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = test_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+            ggtitle("Healthy vs scurfy in lung") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("healthy" = "black", "scurfy" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(test_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_scurfy_vs_healthy_lung.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+spleen healthy vs LCMV
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(organ_simplified == "spleen", condition_detailed %in% c("healthy", "LCMV")) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(
+  flow_long$cluster,
+  levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.Q", "CD4.RS", "CD4.TU", "CD4.XY")
+)
+
+flow_long$condition_detailed <- factor(
+  flow_long$condition_detailed,
+  levels = c("healthy", "LCMV")
+)
+
+# mean per cluster and condition
+mean_df <- flow_long %>%
+  group_by(cluster, condition_detailed) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# p-value per cluster
+test_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = t.test(prop ~ condition_detailed)$p.value,
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = condition_detailed)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.5),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = test_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+            ggtitle("Healthy vs LCMV in spleen") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("healthy" = "black", "LCMV" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(test_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_LCMV_vs_healthy_spleen.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+lung healthy vs LCMV
+```{r}
+flow_data = read.table(file = '/Users/david/Library/CloudStorage/GoogleDrive-zemmour@uchicago.edu/My Drive/ImmgenT/analysis/data_integration/IGT1_96/CD4/misc_plots/flow_prop_sample_clusterpertconv.csv', header = T, sep = ",")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(organ_simplified == "lung", condition_detailed %in% c("healthy", "LCMV")) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  )
+
+flow_long$cluster <- factor(
+  flow_long$cluster,
+  levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.Q", "CD4.RS", "CD4.TU", "CD4.XY")
+)
+
+flow_long$condition_detailed <- factor(
+  flow_long$condition_detailed,
+  levels = c("healthy", "LCMV")
+)
+
+# mean per cluster and condition
+mean_df <- flow_long %>%
+  group_by(cluster, condition_detailed) %>%
+  summarise(mean_prop = mean(prop), .groups = "drop")
+
+# p-value per cluster
+test_df <- flow_long %>%
+  group_by(cluster) %>%
+  summarise(
+    p_value = t.test(prop ~ condition_detailed)$p.value,
+    y_pos = max(prop, na.rm = TRUE) * 1.18,
+    label = paste0("p=", signif(p_value, 2)),
+    .groups = "drop"
+  )
+
+p = ggplot(flow_long, aes(x = cluster, y = prop, color = condition_detailed)) +
+  geom_point(
+    position = position_jitterdodge(jitter.width = 0.12, dodge.width = 0.5),
+    size = 3,
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    shape = 95,
+    size = 8
+  ) +
+  geom_text(
+    data = mean_df,
+    aes(x = cluster, y = mean_prop, label = sprintf("%.2f", mean_prop), color = condition_detailed),
+    position = position_dodge(width = 0.5),
+    vjust = -0.7,
+    size = 3
+  ) +
+  geom_text(
+    data = test_df,
+    aes(x = cluster, y = y_pos, label = label),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+            ggtitle("Healthy vs LCMV in lung") +
+  labs(
+    x = NULL,
+    y = "Proportion of CD4 cluster",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("healthy" = "black", "LCMV" = "red")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  expand_limits(y = max(test_df$y_pos) * 1.05)
+
+p
+
+pdf(sprintf("%s/flow_LCMV_vs_healthy_lung.pdf", out_dir), width = 8, height = 5, useDingbats = F)
+print(p)
+dev.off()
+
+```
+
+Dotplot with p values
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+flow_long <- flow_data %>%
+  filter(
+    condition_detailed %in% c("healthy", "scurfy", "LCMV")
+  ) %>%
+  pivot_longer(
+    cols = starts_with("CD4."),
+    names_to = "cluster",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    organ_simplified = factor(organ_simplified, levels = c("spleen", "lung", "colon")),
+    condition_detailed = factor(condition_detailed, levels = c("healthy", "scurfy", "LCMV")),
+    cluster = factor(cluster, levels = c("CD4.A", "CD4.G", "CD4.H", "CD4.I", "CD4.XY", "CD4.Q", "CD4.RS", "CD4.TU"))
+  )
+
+anova_df <- flow_long %>%
+  group_by(cluster, organ_simplified) %>%
+  summarise(
+    pval = {
+      fit <- aov(prop ~ condition_detailed)
+      summary(fit)[[1]][["Pr(>F)"]][1]
+    },
+    .groups = "drop"
+  ) %>%
+  mutate(signif = pval < 0.05)
+
+plot_df <- flow_long %>%
+  group_by(organ_simplified, condition_detailed, cluster) %>%
+  summarise(mean_prop = mean(prop, na.rm = TRUE), .groups = "drop") %>%
+  left_join(anova_df, by = c("cluster", "organ_simplified"))
+
+plot_df$organ_simplified = factor(plot_df$organ_simplified, levels = rev(c("spleen", "lung", "colon")))
+
+cluster_cols <- c(
+  "CD4.A"  = "#3f5ab5",
+  "CD4.G"  = "#8cc63e",
+  "CD4.H"  = "#b7d7a8",
+  "CD4.I"  = "#ef4444",
+  "CD4.XY" = "#ec4899",
+  "CD4.Q"  = "#f59e0b",
+  "CD4.RS" = "#8e44ad",
+  "CD4.TU" = "#ef4444"
+)
+
+p = ggplot(plot_df, aes(x = condition_detailed, y = organ_simplified)) +
+  geom_point(
+    aes(
+      size = mean_prop,
+      fill = cluster,
+      stroke = ifelse(signif, 1.5, 0.3)  # thick border if significant
+    ),
+    shape = 21,
+    color = "black"
+  ) +
+  facet_wrap(~ cluster, nrow = 1) +
+  scale_fill_manual(values = cluster_cols, guide = "none") +
+  scale_size_continuous(
+    name = "Proportion of Tconv",
+    range = c(1, 16)
+  ) +
+  labs(
+    x = NULL,
+    y = "Flow-gated:"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 16),
+    panel.spacing.x = unit(0.8, "lines")
+  )
+
+p 
+
+pdf(sprintf("%s/flow_dotplot_all.pdf", out_dir), width = 18, height = 3, useDingbats = F)
+print(p)
+dev.off()
+```
+
+
+
+
